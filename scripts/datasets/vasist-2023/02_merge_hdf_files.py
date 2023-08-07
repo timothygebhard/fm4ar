@@ -51,8 +51,8 @@ if __name__ == "__main__":
         with h5py.File(file_path, "r") as hdf_file:
 
             # Load data from HDF file
-            thetas = np.array(hdf_file["theta"])
-            spectra = np.array(hdf_file["spectra"])
+            thetas = np.array(hdf_file["theta"]).astype(float)
+            spectra = np.array(hdf_file["spectra"]).astype(float)
 
             # Only keep files with at least one spectrum
             if len(spectra) == 0:
@@ -74,8 +74,8 @@ if __name__ == "__main__":
     spectra = np.concatenate(list_of_spectra)
     file_path = target_dir / "merged.hdf"
     with h5py.File(file_path, "w") as hdf_file:
-        hdf_file.create_dataset(name="theta", data=thetas)
-        hdf_file.create_dataset(name="spectra", data=spectra)
+        hdf_file.create_dataset(name="theta", data=thetas, dtype=float)
+        hdf_file.create_dataset(name="spectra", data=spectra, dtype=float)
         hdf_file.create_dataset(name="wavelengths", data=wavelengths)
     print("Done!\n", flush=True)
 
