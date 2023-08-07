@@ -40,13 +40,13 @@ def build_model(
 
     # Select the model class
     match model_type:
-        case "flow_matching":
+        case "flow_matching" | "fm":
             return FlowMatching(
                 file_path=file_path,
                 config=config,
                 **kwargs,
             )
-        case "neural_posterior_estimation":
+        case "neural_posterior_estimation" | "npe":
             return NormalizingFlow(
                 file_path=file_path,
                 config=config,
