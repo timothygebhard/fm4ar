@@ -1,3 +1,9 @@
+# Datasets
+datasets/**
+
+# jupyter notebooks
+jupyter/
+
 # Data files
 *.hdf
 *.h5
@@ -127,4 +133,3 @@ cython_debug/
 
 # macOS hidden files
 .DS_Store
-._*

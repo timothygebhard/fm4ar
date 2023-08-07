@@ -1,0 +1,111 @@
+# -----------------------------------------------------------------------------
+# BUILD SYSTEM
+# -----------------------------------------------------------------------------
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [
+    "setuptools >=64.0.0",
+    "wheel >=0.40.0",
+]
+
+# -----------------------------------------------------------------------------
+# PROJECT AND DEPENDENCIES
+# -----------------------------------------------------------------------------
+
+[project]
+name = "fm4ar"
+version = "0.0.1"
+description = "Flow matching for atmospheric retrievals of exoplanets."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chainconsumer ~=0.34.0",
+    "coolname",
+    "corner",
+    "gitpython",
+    "glasflow ~=0.2.0",
+    "h5py",
+    "ipython",
+    "joblib",
+    "jupyter",
+    "matplotlib",
+    "nautilus-sampler",
+    "numpy",
+    "pandas",
+    "pyyaml",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "spectres ~=2.2.0",
+    "threadpoolctl",
+    "torch ~=2.0.1",
+    "torchdiffeq ~=0.2.3",
+    "torchvision ~=0.15.2",
+    "tqdm",
+    "wandb",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black[d]",
+    "coverage",
+    "isort",
+    "mypy",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "toml ~=0.10.2",
+    "types-pyyaml",
+    "types-requests",
+    "types-toml",
+]
+petitRADTRANS = [
+    "petitRADTRANS ~=2.6.7",
+]
+
+# -----------------------------------------------------------------------------
+# TOOL CONFIGURATION
+# -----------------------------------------------------------------------------
+
+[tool.black]
+line-length = 79
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = true
+warn_unused_configs = true
+warn_return_any = true
+warn_redundant_casts = true
+warn_unreachable = false
+ignore_missing_imports = true
+disallow_untyped_calls = true
+no_implicit_optional = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+testpaths = [
+    "tests",
+]
+
+[tool.ruff]
+select = [
+    "E",  # pycodestyle rules
+    "F",  # Pyflakes rules
+    "B",  # flake8-bugbear rules
+]
+ignore = [
+    "B019",  # "Use of functools.lru_cache can lead to memory leaks"
+]
+line-length = 79
+target-version = "py310"
+
+[tool.setuptools]
+packages = ["fm4ar"]
