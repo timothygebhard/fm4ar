@@ -35,7 +35,7 @@ def load_config(
 def save_config(
     config: dict,
     experiment_dir: Path,
-    file_name: str = "local_config.yaml",
+    file_name: str = "config.yaml",
 ) -> None:
     """
     Save a configuration dictionary to a YAML file.
