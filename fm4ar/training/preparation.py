@@ -71,6 +71,10 @@ def prepare_new(
         )
         print()
 
+        # Save the name of the run to a file
+        with open(experiment_dir / "wandb" / "name.txt", "w") as txt_file:
+            txt_file.write(wandb.run.name)  # type: ignore
+
     return pm, dataset
 
 
