@@ -1,5 +1,7 @@
-# Datasets
+# Folders with datasets or results
 datasets/**
+experiments/**
+scripts/nested_sampling/*/results/**
 
 # jupyter notebooks
 jupyter/
