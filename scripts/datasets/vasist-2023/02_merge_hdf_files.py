@@ -71,7 +71,9 @@ if __name__ == "__main__":
 
     print("\nMerging HDF files...", end=" ", flush=True)
     thetas = np.concatenate(list_of_thetas)
+    del list_of_thetas
     spectra = np.concatenate(list_of_spectra)
+    del list_of_spectra
     file_path = target_dir / "merged.hdf"
     with h5py.File(file_path, "w") as hdf_file:
         hdf_file.create_dataset(name="theta", data=thetas, dtype=float)
