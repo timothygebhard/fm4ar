@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 
 from fm4ar.nn.resnets import DenseResidualNet
+from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
 
 
 def create_embedding_net(
@@ -39,6 +40,10 @@ def create_embedding_net(
         A 2-tuple, `(embedding_net, output_dim)`, consisting of the
         embedding network and the dimension of the embedding space.
     """
+
+    # Get parameters for freezing weights, or loading weights from a file
+    freeze_weights = embedding_net_kwargs.pop("freeze_weights", False)
+    load_weights = embedding_net_kwargs.pop("load_weights", {})
 
     # Create and collect the embedding net stages
     stages = nn.ModuleDict()
@@ -75,6 +80,13 @@ def create_embedding_net(
         )
     else:
         final_output_dim = int(input_dim[0])
+
+    # Load pre-trained weights or freeze the weights of the flow
+    load_and_or_freeze_model_weights(
+        model=embedding_net,
+        freeze_weights=freeze_weights,
+        load_weights=load_weights,
+    )
 
     return embedding_net, final_output_dim
 

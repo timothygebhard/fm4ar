@@ -11,6 +11,7 @@ from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.nn.resnets import DenseResidualNet
 from fm4ar.utils.torchutils import (
     forward_pass_with_unpacked_tuple,
+    load_and_or_freeze_model_weights,
     validate_dims,
 )
 
@@ -173,16 +174,27 @@ def create_cf_model(model_kwargs: dict) -> ContinuousFlowModel:
     glu_dim = glu_dim if glu_dim > 0 else None
 
     # Construct neural network that predicts the vectorfield
-    match pm_type := model_kwargs["posterior_kwargs"]["model_type"]:
+    pm_type = model_kwargs["posterior_kwargs"]["model_type"]
+    pm_kwargs = model_kwargs["posterior_kwargs"]["kwargs"]
+    freeze_weights = model_kwargs.pop("freeze_weights", False)
+    load_weights = model_kwargs.pop("load_weights", None)
+    match pm_type:
         case "DenseResidualNet":
             vectorfield_net = DenseResidualNet(
                 input_dim=input_dim,
                 output_dim=theta_dim,
                 context_features=glu_dim,
-                **model_kwargs["posterior_kwargs"]["kwargs"],
+                **pm_kwargs,
             )
         case _:
             raise ValueError(f"Invalid model type: {pm_type}!")
+
+    # Load and / or freeze weights of the vectorfield network
+    load_and_or_freeze_model_weights(
+        model=vectorfield_net,
+        freeze_weights=freeze_weights,
+        load_weights=load_weights,
+    )
 
     # Combine embedding networks and continuous flow network to a model
     model = ContinuousFlowModel(

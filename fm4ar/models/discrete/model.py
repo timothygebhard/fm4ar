@@ -11,6 +11,7 @@ from glasflow.nflows import distributions, flows
 from fm4ar.utils.torchutils import forward_pass_with_unpacked_tuple
 from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.nn.nsf import create_transform
+from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
 
 
 class DiscreteFlowModel(nn.Module):
@@ -151,16 +152,26 @@ def create_df_model(model_kwargs: dict) -> DiscreteFlowModel:
     # Construct the actual discrete normalizing flow
     # We set the embedding net to the identity, because we handle the context
     # embedding separately in the `DiscreteFlowModel` wrapper.
-    distribution = distributions.StandardNormal((theta_dim,))
+    posterior_kwargs = model_kwargs["posterior_kwargs"]
+    freeze_weights = posterior_kwargs.pop("freeze_weights", False)
+    load_weights = posterior_kwargs.pop("load_weights", {})
     transform = create_transform(
         theta_dim=theta_dim,
         context_dim=embedded_context_dim,
-        **model_kwargs["posterior_kwargs"],
+        **posterior_kwargs,
     )
+    distribution = distributions.StandardNormal((theta_dim,))
     flow = flows.Flow(
         transform=transform,
         distribution=distribution,
         embedding_net=nn.Identity(),
+    )
+
+    # Load pre-trained weights or freeze the weights of the flow
+    load_and_or_freeze_model_weights(
+        model=flow,
+        freeze_weights=freeze_weights,
+        load_weights=load_weights,
     )
 
     return DiscreteFlowModel(
