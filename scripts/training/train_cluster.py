@@ -90,7 +90,10 @@ if __name__ == "__main__":
             )
 
         # Copy log files and append epoch number
-        copy_logfiles(log_dir=args.experiment_dir / "logs", epoch=pm.epoch)
+        copy_logfiles(
+            log_dir=args.experiment_dir / "logs",
+            label=f"epoch-{pm.epoch:03d}",
+        )
 
         # Check if training is complete (in which case we do not resubmit)
         if complete:

@@ -36,14 +36,14 @@ def test__copy_logfiles(tmp_path: Path) -> None:
         (tmp_path / f"info.42.{suffix}").touch()
 
     # Copy the log files
-    copy_logfiles(log_dir=tmp_path, epoch=3)
+    copy_logfiles(log_dir=tmp_path, label="epoch-003")
 
     # Check that the log files have been copied
     for suffix in ("log", "err", "out"):
         assert (tmp_path / f"info.42.epoch-003.{suffix}").exists()
 
     # Check that files do not get backed up twice
-    copy_logfiles(log_dir=tmp_path, epoch=3)
+    copy_logfiles(log_dir=tmp_path, label="epoch-003")
     assert len(list(tmp_path.glob("info.*"))) == 6
 
 

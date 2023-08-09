@@ -22,18 +22,19 @@ def check_if_on_login_node(start_submission: bool) -> None:
         sys.exit(1)
 
 
-def copy_logfiles(log_dir: Path, epoch: int) -> None:
+def copy_logfiles(log_dir: Path, label: str) -> None:
     """
     Copy the log files to a new file with the epoch number appended.
 
     Args:
         log_dir: Path to the directory containing the log files.
-        epoch: Epoch number to append to the log file names.
+        label: Label to add to the file name, e.g., the epoch number,
+            or the number of the HTCondor job.
     """
 
     # Loop over all log files in the directory
     # Their names should follow the pattern `info.<Process>.{log,err,out}`.
-    # Backup files are named `info.<Process>.epoch-<epoch>.{log,err,out}`.
+    # Backup files are named `info.<Process>.<label>.{log,err,out}`.
     for src in log_dir.glob("info.*"):
 
         # Skip files that already have been copied before
@@ -42,7 +43,7 @@ def copy_logfiles(log_dir: Path, epoch: int) -> None:
             continue
 
         # Copy the file to a new file with the epoch number appended
-        name = ".".join(parts[:-1]) + f".epoch-{epoch:03d}." + parts[-1]
+        name = ".".join(parts[:-1]) + f".{label}." + parts[-1]
         dst = log_dir / name
         try:
             copyfile(src, dst)
