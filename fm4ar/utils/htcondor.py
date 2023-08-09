@@ -133,43 +133,11 @@ def create_submission_file(
         arguments = condor_settings["arguments"]
     lines.append(f'arguments = "{arguments}"\n\n')
 
-    # Set the log files
-    lines.append(f'error = {logs_dir / "info.$(Process).err"}\n')
-    lines.append(f'output = {logs_dir / "info.$(Process).out"}\n')
-    lines.append(f'log = {logs_dir / "info.$(Process).log"}\n\n')
-
-    # Handle automatic restarts to limit the runtime of the job
-    max_runtime = condor_settings.get("max_runtime")
-    max_retries = condor_settings.get("max_retries")
-    if (max_runtime is None) ^ (max_retries is None):
-        raise ValueError(
-            "Either both or none of `max_runtime` and `max_retries` "
-            "must be specified!"
-        )
-    if max_runtime is not None and max_retries is not None:
-        lines.append(f"MaxTime = {max_runtime}\n")
-        lines.append(f"NumRetries = {max_retries}\n")
-        lines.append(
-            "periodic_hold = (JobStatus =?= 2) && "
-            "((CurrentTime - JobCurrentStartDate) >= $(MaxTime))\n"
-        )
-        lines.append(
-            'periodic_hold_reason = ifThenElse(JobRunCount <= $(NumRetries), '
-            '"Job runtime exceeded", ' 
-            '"Job runtime exceeded, no more retries left")\n'
-        )
-        lines.append(
-            "periodic_hold_subcode = "
-            "ifThenElse(JobRunCount <= $(NumRetries), 1, 2)\n"
-        )
-        lines.append(
-            "periodic_release = ( (JobStatus =?= 5) && "
-            "(HoldReasonCode =?= 3) && (HoldReasonSubCode =?= 1) )\n"
-        )
-        lines.append(
-            "periodic_remove = ( (JobStatus =?= 5) && "
-            "(HoldReasonCode =?= 3) && (HoldReasonSubCode =?= 2) )\n\n"
-        )
+    # Set up the log files
+    name = condor_settings.get("log_file_name", "info")
+    lines.append(f'error = {logs_dir / f"{name}.$(Process).err"}\n')
+    lines.append(f'output = {logs_dir / f"{name}.$(Process).out"}\n')
+    lines.append(f'log = {logs_dir / f"{name}.$(Process).log"}\n\n')
 
     # Set the queue
     queue = condor_settings.get("queue", 1)
