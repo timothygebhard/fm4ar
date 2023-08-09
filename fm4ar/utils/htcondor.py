@@ -2,9 +2,9 @@
 Methods for dealing with the HTCondor cluster system.
 """
 
+import socket
 import sys
 
-from socket import gethostname
 from pathlib import Path
 from shutil import copyfile
 from subprocess import run
@@ -17,7 +17,7 @@ def check_if_on_login_node(start_submission: bool) -> None:
     and it's not only to start a submission. If yes, exit with an error.
     """
 
-    if "login" in gethostname() and not start_submission:
+    if "login" in socket.gethostname() and not start_submission:
         print("Did you forget to add the `--start-submission` flag again?\n")
         sys.exit(1)
 
@@ -46,13 +46,19 @@ def copy_logfiles(log_dir: Path, epoch: int) -> None:
         dst = log_dir / name
         try:
             copyfile(src, dst)
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             print(f"Failed to copy file {src} to {dst}: {e}")
 
 
-def condor_submit_bid(file_path: Path, bid: int = 15) -> None:
+def condor_submit_bid(
+    file_path: Path,
+    bid: int = 15,
+) -> None:  # pragma: no cover
     """
     Submit a job to HTCondor using the bid system.
+
+    Note: This function is marked as `no cover` because there is no
+    meaningful way to test it.
 
     Args:
         file_path: Path to the submission file.
@@ -131,10 +137,8 @@ def create_submission_file(
     lines.append(f'log = {logs_dir / "info.$(Process).log"}\n\n')
 
     queue = condor_settings.get("queue", 1)
-    if queue > 1:
-        lines.append(f"queue {queue}")
-    else:
-        lines.append("queue")
+    queue = "" if queue == 1 else queue
+    lines.append(f"queue {queue}")
 
     # Write the submission file
     file_path = experiment_dir / file_name
