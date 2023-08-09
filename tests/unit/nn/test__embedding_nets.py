@@ -20,8 +20,8 @@ def path_to_precomputed_pca_file(tmp_path: Path) -> Path:
     """
 
     data = {
-        "mean": torch.randn(42),
-        "components": torch.randn(42, 42),
+        "mean": torch.randn(42).numpy(),
+        "components": torch.randn(42, 42).numpy(),
     }
 
     file_path = tmp_path / "precomputed_pca.pt"
