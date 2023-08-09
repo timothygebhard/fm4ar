@@ -69,8 +69,8 @@ if __name__ == "__main__":
     ).as_posix()
     arguments = f"{script_path} --run-dir {run_dir.as_posix()} "
     for key, value in args.__dict__.items():
-        if key == "add_noise" and value:
-            arguments += "--add-noise "
+        if key == "add_noise":
+            arguments += "--add-noise " if value else ""
         elif key not in ignored and value is not None:
             if isinstance(value, list):
                 value = " ".join([f"'{v}'" for v in value])
