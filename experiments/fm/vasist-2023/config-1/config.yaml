@@ -98,6 +98,8 @@ training:
     early_stopping:
       patience: 100
       min_delta: 0.0
+    gradient_clipping:
+      max_norm: 1.0
 
 # -----------------------------------------------------------------------------
 # LOCAL SETTINGS
