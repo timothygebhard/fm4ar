@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 
-def get_cli_arguments() -> argparse.Namespace:
+def get_cli_arguments() -> argparse.Namespace:  # pragma: no cover
     """
     Argument parser for training scripts.
     """
