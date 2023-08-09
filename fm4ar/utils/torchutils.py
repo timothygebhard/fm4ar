@@ -2,7 +2,9 @@
 Utility functions for PyTorch.
 """
 
+from collections import OrderedDict
 from math import prod
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import numpy as np
@@ -103,7 +105,7 @@ def get_optimizer_from_kwargs(
 
     # Get optimizer type. We use `pop` to remove the key from the dictionary,
     # so that we can pass the remaining kwargs to the optimizer constructor.
-    optimizer_type = optimizer_kwargs.pop("type")
+    optimizer_type = optimizer_kwargs.pop("type", None)
     if optimizer_type is None:
         raise KeyError("Optimizer type needs to be specified!")
 
@@ -122,7 +124,7 @@ def get_optimizer_from_kwargs(
         case "sgd":
             return torch.optim.SGD(model_parameters, **optimizer_kwargs)
         case _:
-            raise ValueError("No valid optimizer specified!")
+            raise ValueError(f"Invalid optimizer type: `{optimizer_type}`")
 
 
 def get_scheduler_from_kwargs(
@@ -286,28 +288,6 @@ def build_train_and_test_loaders(
     return train_loader, test_loader
 
 
-def set_requires_grad_flag(
-    model: torch.nn.Module,
-    name_startswith: str | None = None,
-    name_contains: str | None = None,
-    requires_grad: bool = True,
-) -> None:
-    """
-    Set `param.requires_grad` of all model parameters whose name starts
-    with `name_startswith`, or whose name contains `name_contains`, to
-    `requires_grad`.
-    """
-
-    for name, param in model.named_parameters():
-        if (
-            name_startswith is not None
-            and name.startswith(name_startswith)
-            or name_contains is not None
-            and name_contains in name
-        ):
-            param.requires_grad = requires_grad
-
-
 def validate_dims(x: torch.Tensor, ndim: int) -> None:
     """
     Validate that `x` has the correct number of dimensions.
@@ -325,5 +305,66 @@ def validate_dims(x: torch.Tensor, ndim: int) -> None:
 
     if x.ndim != ndim:
         raise ValueError(
-            f"Expected `{name}` to have {ndim} dimensions, but found {x.ndim}!"
+            f"Expected `{name}` to have {ndim} dimensions but found {x.ndim}!"
         )
+
+
+def get_weights_from_checkpoint(
+    file_path: Path,
+    prefix: str,
+) -> OrderedDict[str, torch.Tensor]:
+    """
+    Load the weights from a checkpoint file that starts with `prefix`.
+
+    Args:
+        file_path: Path to the checkpoint file.
+        prefix: Prefix that the weights must start with. Usually, this
+            is the name of a model component, e.g., `vectorfield_net`.
+
+    Returns:
+        An OrderecDict with the weights that can be loaded into a model.
+    """
+
+    # Load the full checkpoint
+    checkpoint = torch.load(file_path)
+
+    # Get the weights that start with `prefix`
+    weights = OrderedDict(
+        (key, value) for key, value in checkpoint["model_state_dict"].items()
+        if key.startswith(prefix)
+    )
+
+    return weights
+
+
+def load_and_or_freeze_model_weights(
+    model: torch.nn.Module,
+    freeze_weights: bool = False,
+    load_weights: dict[str, str] | None = None,
+) -> None:
+    """
+    Load and / or freeze weights of the given model, if requested.
+
+    Args:
+        model: The model to be modified.
+        freeze_weights: Whether to freeze all weights of the model.
+        load_weights: A dictionary with the following keys:
+            - `file_path`: Path to the checkpoint file.
+            - `prefix`: Prefix that the weights must start with.
+                Usually, this is the name of a model component, e.g.,
+                "vectorfield_net" or "context_embedding_net".
+            If `None` or `{}` is passed, no weights are loaded.
+    """
+
+    # Load model weights from a file, if requested
+    if load_weights is not None and load_weights:
+        state_dict = get_weights_from_checkpoint(
+            file_path=Path(load_weights["file_path"]),
+            prefix=load_weights["prefix"],
+        )
+        model.load_state_dict(state_dict)
+
+    # Freeze weights, if requested
+    if freeze_weights:
+        for param in model.parameters():
+            param.requires_grad = False
