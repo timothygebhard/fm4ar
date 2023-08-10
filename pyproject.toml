@@ -23,6 +23,7 @@ dependencies = [
     "chainconsumer ~=0.34.0",
     "coolname",
     "corner",
+    "dill",
     "gitpython",
     "glasflow ~=0.2.0",
     "h5py",
