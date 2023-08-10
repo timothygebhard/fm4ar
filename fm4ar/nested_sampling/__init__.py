@@ -2,7 +2,6 @@
 This defined some useful functions for the nested sampling scripts.
 """
 
-import argparse
 from typing import Any
 from pathlib import Path
 from warnings import warn
@@ -13,73 +12,6 @@ import numpy as np
 
 from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, NAMES, LABELS
 from fm4ar.datasets.vasist_2023.simulation import Simulator
-
-
-def get_argument_parser() -> argparse.ArgumentParser:
-    """
-    Get the argument parser for the nested sampling scripts.
-    This is a separate function so that in another script, we can add
-    more arguments to the parser (e.g., HTCondor job settings).
-    """
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--add-noise",
-        action="store_true",
-        default=False,
-        help="Add noise to the simulated spectrum. (Default: False.)",
-    )
-    parser.add_argument(
-        "--n-live-points",
-        type=int,
-        default=1_000,
-        help="Number of live points for the nested sampling algorithm.",
-    )
-    parser.add_argument(
-        "--parameters",
-        nargs="+",
-        default=None,
-        choices=NAMES,
-        help="Parameters to use for the retrieval (None = all).",
-    )
-    parser.add_argument(
-        "--random-seed",
-        type=int,
-        default=42,
-        help="Random seed for the nested sampling algorithm.",
-    )
-    parser.add_argument(
-        "--resolution",
-        type=int,
-        default=1_000,
-        choices=[400, 1_000],
-        help=r"Resolution R = ∆λ/λ to use for simulations.",
-    )
-    parser.add_argument(
-        "--run-dir",
-        type=str,
-        default=None,
-        help="Directory where to save the results.",
-    )
-    parser.add_argument(
-        "--time-limit",
-        type=int,
-        default=10,
-        help="Time limit (in seconds) for simulations.",
-    )
-
-    return parser
-
-
-def get_cli_arguments() -> argparse.Namespace:
-    """
-    Get command line arguments.
-    """
-
-    parser = get_argument_parser()
-    args = parser.parse_args()
-
-    return args
 
 
 def get_target_parameters_and_spectrum(
@@ -145,7 +77,7 @@ def get_subsets(
 
 
 def create_posterior_plot(
-    points: np.ndarray,
+    points: np.ndarray | None,
     weights: np.ndarray | None,
     parameters: list[str] | None = None,
     file_path: Path | None = None,
@@ -155,6 +87,11 @@ def create_posterior_plot(
     """
     Create a corner plot of the posterior.
     """
+
+    # If we did not get any points, we can stop here
+    if points is None:
+        warn("\nNo points to plot!\n", stacklevel=2)
+        return
 
     # Get labels and ranges for the selected parameters
     if parameters is None:
