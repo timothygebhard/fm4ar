@@ -2,13 +2,34 @@
 Methods for dealing with the HTCondor cluster system.
 """
 
+from dataclasses import dataclass
+
 import socket
 import sys
 
 from pathlib import Path
 from shutil import copyfile
 from subprocess import run
-from typing import Any
+
+
+@dataclass
+class CondorSettings:
+    """
+    Dataclass for storing the settings for an HTCondor job.
+    """
+
+    executable: str = sys.executable
+    getenv: bool = True
+    num_cpus: int = 1
+    memory_cpus: int = 4_096
+    num_gpus: int = 0
+    memory_gpus: int = 15_000
+    arguments: str | list[str] = ""
+    max_runtime: int | None = None
+    max_retries: int | None = None
+    log_file_name: str = "info"
+    queue: int = 1
+    bid: int = 15
 
 
 def check_if_on_login_node(start_submission: bool) -> None:
@@ -71,7 +92,7 @@ def condor_submit_bid(
 
 
 def create_submission_file(
-    condor_settings: dict[str, Any],
+    condor_settings: CondorSettings,
     experiment_dir: Path,
     file_name: str = "run.sub",
 ) -> Path:
@@ -79,8 +100,8 @@ def create_submission_file(
     Create a new submission file for HTCondor.
 
     Args:
-        condor_settings: Dictionary containing the settings for the
-            HTCondor job (e.g., number of CPUs, memory, etc.).
+        condor_settings: A `CondorSettings` object containing the
+            settings for the HTCondor job.
         experiment_dir: Path to the experiment directory where the
             submission file will be created.
         file_name: Name to use for the submission file.
@@ -100,48 +121,38 @@ def create_submission_file(
     # Collect contents of the submission file (with reasonable defaults)
     lines = []
 
-    # Unless otherwise specified, use the current executable
-    executable = condor_settings.get("executable", sys.executable)
-    lines.append(f'executable = {executable}\n')
+    # Executable and environment variables
+    lines.append(f'executable = {condor_settings.executable}\n')
+    lines.append(f"getenv = {condor_settings.getenv}\n\n")
 
-    # Unless otherwise specified, copy environment variables
-    getenv = condor_settings.get("getenv", True)
-    lines.append(f"getenv = {getenv}\n\n")
-
-    # Set number of CPUs
-    n_cpus = int(condor_settings.get("num_cpus", 1))
-    lines.append(f'request_cpus = {n_cpus}\n')
-
-    # Set memory requirements (in MB)
-    memory = int(condor_settings.get("memory_cpus", 4096))
-    lines.append(f'request_memory = {memory}\n')
+    # CPUs and memory requirements
+    lines.append(f'request_cpus = {condor_settings.num_cpus}\n')
+    lines.append(f'request_memory = {condor_settings.memory_cpus}\n')
 
     # Set GPU requirements (only add this section if GPUs are requested)
-    n_gpus = int(condor_settings.get("num_gpus", 0))
-    cuda_memory = int(condor_settings.get("memory_gpus", 15_000))
-    if n_gpus > 0:
-        lines.append(f'request_gpus = {n_gpus}\n')
+    if condor_settings.num_gpus > 0:
+        lines.append(f'request_gpus = {condor_settings.num_gpus}\n')
         lines.append(
-            f"requirements = TARGET.CUDAGlobalMemoryMb > {cuda_memory}\n\n"
+            f"requirements = TARGET.CUDAGlobalMemoryMb "
+            f"> {condor_settings.memory_gpus}\n\n"
         )
 
     # Set the arguments
-    # At least one argument must be provided (the script to be run)
-    if isinstance(condor_settings["arguments"], list):
-        arguments = " ".join(condor_settings["arguments"])
-    else:
-        arguments = condor_settings["arguments"]
+    arguments = (
+        " ".join(condor_settings.arguments)
+        if isinstance(condor_settings.arguments, list)
+        else condor_settings.arguments
+    )
     lines.append(f'arguments = "{arguments}"\n\n')
 
     # Set up the log files
-    name = condor_settings.get("log_file_name", "info")
-    lines.append(f'error = {logs_dir / f"{name}.$(Process).err"}\n')
-    lines.append(f'output = {logs_dir / f"{name}.$(Process).out"}\n')
-    lines.append(f'log = {logs_dir / f"{name}.$(Process).log"}\n\n')
+    name = condor_settings.log_file_name
+    lines.append(f'error = {logs_dir / f"{name}.err"}\n')
+    lines.append(f'output = {logs_dir / f"{name}.out"}\n')
+    lines.append(f'log = {logs_dir / f"{name}.log"}\n\n')
 
     # Set the queue
-    queue = condor_settings.get("queue", 1)
-    queue = "" if queue == 1 else queue
+    queue = "" if condor_settings.queue == 1 else condor_settings.queue
     lines.append(f"queue {queue}")
 
     # Write the submission file

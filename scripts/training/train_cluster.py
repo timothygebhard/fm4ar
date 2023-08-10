@@ -20,6 +20,7 @@ from fm4ar.training.stages import train_stages
 from fm4ar.utils.config import load_config
 from fm4ar.utils.git_utils import document_git_status
 from fm4ar.utils.htcondor import (
+    CondorSettings,
     check_if_on_login_node,
     condor_submit_bid,
     copy_logfiles,
@@ -109,15 +110,12 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
 
     # Combine condor arguments with the rest of the condor settings
-    condor_settings = config["local"]["condor"]
-    condor_settings["arguments"] = job_arguments
+    condor_settings = CondorSettings(**config["local"]["condor"])
+    condor_settings.arguments = job_arguments
 
     # Create submission file and submit job
     file_path = create_submission_file(
         condor_settings=condor_settings,
         experiment_dir=args.experiment_dir,
     )
-    condor_submit_bid(
-        bid=condor_settings.get("bid", 15),
-        file_path=file_path,
-    )
+    condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
