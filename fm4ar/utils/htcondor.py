@@ -25,8 +25,9 @@ class CondorSettings:
     num_gpus: int = 0
     memory_gpus: int = 15_000
     arguments: str | list[str] = ""
-    max_runtime: int | None = None
-    max_retries: int | None = None
+    # max_runtime: int | None = None
+    # max_retries: int | None = None
+    retry_on_exit_code: int | None = None
     log_file_name: str = "info"
     queue: int = 1
     bid: int = 15
@@ -150,6 +151,17 @@ def create_submission_file(
     lines.append(f'error = {logs_dir / f"{name}.err"}\n')
     lines.append(f'output = {logs_dir / f"{name}.out"}\n')
     lines.append(f'log = {logs_dir / f"{name}.log"}\n\n')
+
+    # If get get a particular exit code, keep retrying
+    if (exit_code := condor_settings.retry_on_exit_code) is not None:
+        lines.append(f"on_exit_hold = (ExitCode =?= {exit_code})\n")
+        lines.append('on_exit_hold_reason = "Checkpointed, will resume"\n')
+        lines.append("on_exit_hold_subcode = 1\n")
+        lines.append(
+            "periodic_release = ( (JobStatus =?= 5) "
+            "&& (HoldReasonCode =?= 3) "
+            "&& (HoldReasonSubCode =?= 1) )\n\n"
+        )
 
     # Set the queue
     queue = "" if condor_settings.queue == 1 else condor_settings.queue
