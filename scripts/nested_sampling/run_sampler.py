@@ -263,7 +263,7 @@ if __name__ == "__main__":
         try:
             result = simulator(combined_theta)
         except Exception as e:
-            print(e)
+            print(f"{e.__class__.__name__}: {str(e)}", file=sys.stderr)
             return -1e300
 
         # If the simulation timed out, return "-inf"
