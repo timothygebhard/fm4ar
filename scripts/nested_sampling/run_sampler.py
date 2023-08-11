@@ -105,7 +105,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--time-limit",
         type=int,
-        default=10,
+        default=15,
         help="Time limit (in seconds) for simulations (default: 10s).",
     )
     args = parser.parse_args()
@@ -258,21 +258,22 @@ if __name__ == "__main__":
         combined_theta = theta_obs.copy()
         combined_theta[idx] = theta
 
-        # If anything goes wrong, return -inf
+        # If anything goes wrong, return an approximation for "-inf"
+        # (MultiNest can't seem to handle proper -inf values and will complain)
         try:
             result = simulator(combined_theta)
         except Exception as e:
             print(e)
-            return float("-inf")
+            return -1e300
 
-        # If the simulation timed out, return -inf
+        # If the simulation timed out, return "-inf"
         if result is None:
-            return float("-inf")
+            return -1e300
 
-        # If there are NaNs, return -inf
+        # If there are NaNs, return "-inf"
         wavelengths, x = result
         if np.isnan(x).any():
-            return float("-inf")
+            return -1e300
 
         # Otherwise, return the log-likelihood
         # Note: The scaling (`sigma`) does matter here even if it is the
