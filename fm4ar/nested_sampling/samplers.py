@@ -135,7 +135,10 @@ class NautilusSampler(Sampler):
 
         try:
             with timelimit(seconds=max_runtime):
-                self.sampler.run(verbose=verbose)
+                self.sampler.run(
+                    verbose=verbose,
+                    discard_exploration=True,
+                )
         except TimeoutException:
             print("\nTimeout reached, stopping sampler!\n")
             return
