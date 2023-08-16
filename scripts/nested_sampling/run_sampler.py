@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     # Collect arguments for submission file
     if args.sampler == "multinest":
-        executable = "/usr/bin/mpiexec"
+        executable = "/usr/mpi/current/bin/mpiexec"
         job_arguments = [
             f"-n {args.n_cpus}",
             sys.executable,
