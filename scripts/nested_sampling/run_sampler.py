@@ -135,6 +135,10 @@ if __name__ == "__main__":
         executable = "/usr/mpi/current/bin/mpiexec"
         job_arguments = [
             f"-n {args.n_cpus}",
+            "--bind-to core:overload-allowed",
+            "--mca coll ^hcoll",
+            "--mca pml ob1",
+            "--mca btl self,vader,tcp",
             sys.executable,
             Path(__file__).resolve().as_posix(),
         ]
