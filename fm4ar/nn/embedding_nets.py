@@ -397,9 +397,9 @@ class TransformerEmbedding(nn.Module):
     def __init__(
         self,
         output_dim: int,
-        latent_dim: int = 32,
-        n_heads: int = 8,
-        n_blocks: int = 4,
+        latent_dim: int,
+        n_heads: int,
+        n_blocks: int,
     ) -> None:
 
         super().__init__()
