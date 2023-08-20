@@ -400,9 +400,12 @@ class TransformerEmbedding(nn.Module):
         latent_dim: int,
         n_heads: int,
         n_blocks: int,
+        subsampling_fraction: float = 0.25,
     ) -> None:
 
         super().__init__()
+
+        self.subsampling_fraction = subsampling_fraction
 
         # Define "positional encodings"
         # These are the wavelengths, rescaled to the interval [0, 1], and
@@ -451,7 +454,6 @@ class TransformerEmbedding(nn.Module):
             ),
             Mean(dim=1),
             nn.Linear(in_features=latent_dim, out_features=output_dim),
-            nn.GELU(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -460,6 +462,18 @@ class TransformerEmbedding(nn.Module):
         The shape of the input `x` is `(batch_size, n_bins, 2)`, where
         the last dimension contains the flux and the wavelength.
         """
+
+        # Subsample the input
+        # This serves two purposes: First, it reduces the length of the input
+        # sequence, which has a large impact on the memory consumption of the
+        # transformer (which scales quadratically with the sequence length).
+        # Second, it trains the model to be robust against missing data, which
+        # is what we want if the final model ought to cope with spectra at a
+        # different resolution or wavelength range than the training spectra.
+        if self.subsampling_fraction < 1.0:
+            batch_size, n_bins, _ = x.shape
+            mask = self.get_subsampling_matrix(x)
+            x = x[mask].reshape(batch_size, -1, 2)
 
         # Split input into flux and wavelength
         flux, wavelength = x[:, :, 0], x[:, :, 1]
@@ -479,3 +493,19 @@ class TransformerEmbedding(nn.Module):
         x = self.layers(x)
 
         return x
+
+    def get_subsampling_matrix(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Get a subsampling matrix for the given input. This returns a
+        boolean tensor of the same shape as `x` where, for each row,
+        exactly `self.subsampling_fraction * x.shape[1]` entries are
+        True and the remaining entries are False.
+        """
+
+        with torch.no_grad():
+            rand_mat = torch.rand((x.shape[0], x.shape[1]))
+            k = round(self.subsampling_fraction * x.shape[1])
+            k_th_quant = torch.topk(rand_mat, k, largest=False)[0][:, -1:]
+            bool_tensor = rand_mat <= k_th_quant
+
+            return torch.Tensor(bool_tensor)
