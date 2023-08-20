@@ -1,22 +1,24 @@
+"""
+Simple script to run `torchinfo.summary()` on a model.
+"""
+
 from pathlib import Path
 
 import torch
 from torchinfo import summary
 
 from fm4ar.utils.config import load_config
-from fm4ar.models import create_cf_model
-# from fm4ar.dingo.models.df.model import create_df_model
+from fm4ar.models.continuous.model import create_cf_model
+
 
 if __name__ == "__main__":
 
-    experiment_dir = Path(
-        "/experiments/_other_/fm-demo"
-    )
+    experiment_dir = Path("experiments/_other_/fm-demo")
 
     config = load_config(experiment_dir=experiment_dir)
 
     batch_size = 16
-    context_dim = (403, 2)
+    context_dim = (947, 2)
     theta_dim = 7
 
     config["model"]["theta_dim"] = theta_dim
