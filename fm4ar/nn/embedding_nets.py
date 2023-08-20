@@ -9,7 +9,9 @@ from warnings import catch_warnings, filterwarnings
 
 import torch
 import torch.nn as nn
+from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
 
+from fm4ar.nn.modules import Rescale, Unsqueeze, Tile, Mean
 from fm4ar.nn.resnets import DenseResidualNet
 from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
 
@@ -128,6 +130,8 @@ def create_embedding_net_stage(
             stage = SoftClip(**kwargs)
         case "CNPEncoder":
             stage = CNPEncoder(**kwargs)
+        case "TransformerEmbedding":
+            stage = TransformerEmbedding(**kwargs)
         case _:
             raise ValueError(f"Invalid model type: {model_type}!")
 
@@ -383,3 +387,94 @@ class ConvNet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.Tensor(self.layers(x))
+
+
+class TransformerEmbedding(nn.Module):
+    """
+    This implements a transformer-based embedding network.
+    """
+
+    def __init__(
+        self,
+        output_dim: int,
+        latent_dim: int = 32,
+        n_heads: int = 8,
+        n_blocks: int = 4,
+    ) -> None:
+
+        super().__init__()
+
+        # Define "positional encodings"
+        # These are the wavelengths, rescaled to the interval [0, 1], and
+        # tiled along the third dimension to match the latent dimension. We
+        # then apply a positional encoding to each wavelength and add it to
+        # the rescaled and tiled wavelengths.
+        self.positional_encoder = nn.Sequential(
+            Rescale(),
+            Unsqueeze(dim=2),
+            Tile(shape=(1, 1, latent_dim)),
+            Summer(PositionalEncoding1D(latent_dim)),
+        )
+
+        # Define the input encoder
+        # We first unsqueeze the input flux along the third dimension to get
+        # a shape of `(batch_size, n_bins, 1)`, and then apply a linear layer
+        # with 1 input feature. This is equivalent to applying the same linear
+        # layer to each wavelength separately. Then final output of the input
+        # encoder has shape `(batch_size, n_bins, latent_dim)`.
+        self.input_encoder = nn.Sequential(
+            Unsqueeze(dim=2),
+            nn.Linear(
+                in_features=1,
+                out_features=latent_dim,
+            ),
+            nn.GELU(),
+        )
+
+        # Define the transformer layers
+        # These take an input of shape `(batch_size, n_bins, 2 * latent_dim)`,
+        # where the last dimension contains the positional and input encodings,
+        # and return an output of shape `(batch_size, latent_dim)` (computed as
+        # the mean of the transformer output along the wavelength dimension)
+        # that we pass through a final linear layer to get the final output.
+        self.layers = nn.Sequential(
+            nn.TransformerEncoder(  # type: ignore
+                encoder_layer=nn.TransformerEncoderLayer(
+                    d_model=latent_dim,
+                    nhead=n_heads,
+                    dim_feedforward=2048,
+                    activation="gelu",
+                    batch_first=True,
+                ),
+                num_layers=n_blocks,
+            ),
+            Mean(dim=1),
+            nn.Linear(in_features=latent_dim, out_features=output_dim),
+            nn.GELU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the embedding network.
+        The shape of the input `x` is `(batch_size, n_bins, 2)`, where
+        the last dimension contains the flux and the wavelength.
+        """
+
+        # Split input into flux and wavelength
+        flux, wavelength = x[:, :, 0], x[:, :, 1]
+
+        # Compute positional encoding of wavelengths
+        positional_encodings = self.positional_encoder(wavelength)
+
+        # Compute input encoding of flux
+        input_embeddings = self.input_encoder(flux)
+
+        # Add positional and input encodings (alternatively, we could also
+        # concatenate them along the final dimension)
+        x = input_embeddings + positional_encodings
+        # x = torch.cat((positional_encodings, input_embeddings), dim=2)
+
+        # Compute forward pass through transformer layers
+        x = self.layers(x)
+
+        return x
