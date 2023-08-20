@@ -443,7 +443,7 @@ class TransformerEmbedding(nn.Module):
                 encoder_layer=nn.TransformerEncoderLayer(
                     d_model=latent_dim,
                     nhead=n_heads,
-                    dim_feedforward=2048,
+                    dim_feedforward=512,
                     activation="gelu",
                     batch_first=True,
                 ),
