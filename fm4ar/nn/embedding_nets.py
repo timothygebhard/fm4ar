@@ -496,16 +496,15 @@ class TransformerEmbedding(nn.Module):
 
     def get_subsampling_matrix(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Get a subsampling matrix for the given input. This returns a
-        boolean tensor of the same shape as `x` where, for each row,
-        exactly `self.subsampling_fraction * x.shape[1]` entries are
-        True and the remaining entries are False.
+        Get a subsampling matrix for the given input. For simplicity,
+        we use the same mask for all spectra in the batch.
         """
 
         with torch.no_grad():
-            rand_mat = torch.rand((x.shape[0], x.shape[1]))
-            k = round(self.subsampling_fraction * x.shape[1])
-            k_th_quant = torch.topk(rand_mat, k, largest=False)[0][:, -1:]
-            bool_tensor = rand_mat <= k_th_quant
-
-            return torch.Tensor(bool_tensor)
+            mask = torch.zeros(x.shape[1], dtype=torch.bool)
+            mask[:round(x.shape[1] * self.subsampling_fraction)] = True
+            idx = torch.randperm(x.shape[1])
+            mask = mask[idx]
+            mask = mask.unsqueeze(dim=0)
+            mask = mask.repeat(x.shape[0], 1)
+            return torch.Tensor(mask)
