@@ -423,6 +423,7 @@ class TransformerEmbedding(nn.Module):
         # layer to each wavelength separately. Then final output of the input
         # encoder has shape `(batch_size, n_bins, latent_dim)`.
         self.input_encoder = nn.Sequential(
+            SoftClip(100.0),
             Unsqueeze(dim=2),
             nn.Linear(
                 in_features=1,
