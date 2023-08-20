@@ -132,6 +132,8 @@ def create_embedding_net_stage(
             stage = CNPEncoder(**kwargs)
         case "TransformerEmbedding":
             stage = TransformerEmbedding(**kwargs)
+        case "FNetEmbedding":
+            stage = FNetEmbedding(**kwargs)
         case _:
             raise ValueError(f"Invalid model type: {model_type}!")
 
@@ -508,3 +510,98 @@ class TransformerEmbedding(nn.Module):
             mask = mask.unsqueeze(dim=0)
             mask = mask.repeat(x.shape[0], 1)
             return torch.Tensor(mask)
+
+
+class FeedForward(nn.Module):
+    def __init__(
+        self,
+        num_features: int,
+        expansion_factor: int = 2,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        num_hidden = expansion_factor * num_features
+        self.fc1 = nn.Linear(num_features, num_hidden)
+        self.fc2 = nn.Linear(num_hidden, num_features)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.gelu = nn.GELU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.fc1(x)
+        x = self.gelu(x)
+        x = self.dropout1(x)
+        x = self.fc2(x)
+        x = self.dropout2(x)
+        return x
+
+
+class FNetBlock(nn.Module):
+    def __init__(
+        self,
+        latent_dim: int,
+        expansion_factor: int = 2,
+        dropout: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.ff = FeedForward(latent_dim, expansion_factor, dropout)
+        self.norm1 = nn.LayerNorm(latent_dim)
+        self.norm2 = nn.LayerNorm(latent_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        x = torch.fft.fft2(x, dim=(-1, -2)).real
+        x = self.norm1(x + residual)
+        residual = x
+        x = self.ff(x)
+        out = self.norm2(x + residual)
+        return torch.Tensor(out)
+
+
+class FNetEmbedding(nn.Module):
+
+    def __init__(
+        self,
+        latent_dim: int,
+        output_dim: int,
+        n_blocks: int,
+    ) -> None:
+
+        super().__init__()
+
+        self.positional_encoder = nn.Sequential(
+            Rescale(),
+            Unsqueeze(dim=2),
+            Tile(shape=(1, 1, latent_dim)),
+            Summer(PositionalEncoding1D(latent_dim)),
+        )
+
+        self.input_encoder = nn.Sequential(
+            SoftClip(100.0),
+            Unsqueeze(dim=2),
+            nn.Linear(
+                in_features=1,
+                out_features=latent_dim,
+            ),
+        )
+
+        self.layers = nn.Sequential(
+            *[FNetBlock(latent_dim) for _ in range(n_blocks)],
+            Mean(dim=1),
+            nn.Linear(
+                in_features=latent_dim,
+                out_features=output_dim,
+            ),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        flux, wavelength = x[:, :, 0], x[:, :, 1]
+
+        positional_encodings = self.positional_encoder(wavelength)
+        input_embeddings = self.input_encoder(flux)
+
+        x = input_embeddings + positional_encodings
+        x = self.layers(x)
+
+        return x
