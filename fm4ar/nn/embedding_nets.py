@@ -565,11 +565,14 @@ class FNetEmbedding(nn.Module):
         latent_dim: int,
         output_dim: int,
         n_blocks: int,
+        subsampling_fraction: float = 0.9,
     ) -> None:
 
         super().__init__()
 
-        self.soft_clip = SoftClip(100.0)
+        self.subsampling_fraction = subsampling_fraction
+
+        self.soft_clip = SoftClip(10.0)
         self.layers = nn.Sequential(
             nn.Linear(in_features=2, out_features=latent_dim),
             nn.GELU(),
@@ -584,7 +587,19 @@ class FNetEmbedding(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
+        # During training: Subsample the input
+        if self.training:
+            with torch.no_grad():
+                mask = torch.zeros(x.shape[1], dtype=torch.bool)
+                mask[:round(x.shape[1] * self.subsampling_fraction)] = True
+                idx = torch.randperm(x.shape[1])
+                mask = mask[idx]
+                mask = mask.unsqueeze(dim=0)
+                mask = mask.repeat(x.shape[0], 1)
+                x = x[mask].reshape(x.shape[0], -1, 2)
+
         x[:, :, 0] = self.soft_clip(x[:, :, 0])
+        x[:, :, 1] = (x[:, :, 1] - 0.95) / (2.45 - 0.95)
         x = self.layers(x)
 
         return x
