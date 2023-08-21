@@ -569,23 +569,9 @@ class FNetEmbedding(nn.Module):
 
         super().__init__()
 
-        self.positional_encoder = nn.Sequential(
-            Rescale(),
-            Unsqueeze(dim=2),
-            Tile(shape=(1, 1, latent_dim)),
-            Summer(PositionalEncoding1D(latent_dim)),
-        )
-
-        self.input_encoder = nn.Sequential(
-            SoftClip(100.0),
-            Unsqueeze(dim=2),
-            nn.Linear(
-                in_features=1,
-                out_features=latent_dim,
-            ),
-        )
-
+        self.soft_clip = SoftClip(100.0)
         self.layers = nn.Sequential(
+            nn.Linear(in_features=2, out_features=latent_dim),
             *[FNetBlock(latent_dim) for _ in range(n_blocks)],
             Mean(dim=1),
             nn.Linear(
@@ -596,12 +582,7 @@ class FNetEmbedding(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
-        flux, wavelength = x[:, :, 0], x[:, :, 1]
-
-        positional_encodings = self.positional_encoder(wavelength)
-        input_embeddings = self.input_encoder(flux)
-
-        x = input_embeddings + positional_encodings
+        x[:, :, 0] = self.soft_clip(x[:, :, 0])
         x = self.layers(x)
 
         return x
