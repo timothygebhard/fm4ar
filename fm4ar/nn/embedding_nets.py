@@ -572,6 +572,8 @@ class FNetEmbedding(nn.Module):
         self.soft_clip = SoftClip(100.0)
         self.layers = nn.Sequential(
             nn.Linear(in_features=2, out_features=latent_dim),
+            nn.GELU(),
+            nn.Linear(in_features=latent_dim, out_features=latent_dim),
             *[FNetBlock(latent_dim) for _ in range(n_blocks)],
             Mean(dim=1),
             nn.Linear(
