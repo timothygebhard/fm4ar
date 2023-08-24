@@ -196,6 +196,7 @@ class ContinuousFlowBase(Base):
         self,
         theta: torch.Tensor,
         *context_data: torch.Tensor,
+        tolerance: float = 1e-7,
     ) -> torch.Tensor:
         """
         Evaluates log_probs of theta conditional on provided context.
@@ -232,8 +233,8 @@ class ContinuousFlowBase(Base):
             torch.flip(
                 self.integration_range, dims=(0,)
             ),  # integrate backwards in time, [1-eps, 0]
-            atol=1e-7,
-            rtol=1e-7,
+            atol=tolerance,
+            rtol=tolerance,
             method="dopri5",
         )
 
@@ -247,6 +248,7 @@ class ContinuousFlowBase(Base):
         self,
         *context_data: torch.Tensor,
         batch_size: int | None = None,
+        tolerance: float = 1e-7,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Returns conditional samples and their likelihoods for a batch
@@ -289,8 +291,8 @@ class ContinuousFlowBase(Base):
             ),
             theta_and_div_init,
             self.integration_range,  # integrate forwards in time, [0, 1-eps]
-            atol=1e-7,
-            rtol=1e-7,
+            atol=tolerance,
+            rtol=tolerance,
             method="dopri5",
         )
 
