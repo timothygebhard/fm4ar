@@ -315,7 +315,7 @@ def compute_divergence(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """
     Compute the divergence. TODO: Of what exactly?
     """
-    div = torch.Tensor(0.0, device=y.device)
+    div = torch.tensor(0.0, device=y.device)
     with torch.enable_grad():
         y.requires_grad_(True)
         x.requires_grad_(True)
