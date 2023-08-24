@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
     # Load the model
     print("Loading model...", end=" ", flush=True)
-    file_path = experiment_dir / "model_best.pt"
+    file_path = experiment_dir / "model__best.pt"
     if not file_path.exists():
         raise FileNotFoundError(f"Could not find model at {file_path}!")
     model = build_model(file_path=file_path, device=device)
