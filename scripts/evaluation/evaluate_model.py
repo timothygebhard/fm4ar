@@ -106,7 +106,7 @@ if __name__ == "__main__":
         with torch.no_grad():
 
             # Draw samples from the posterior
-            x = x.squeeze().repeat(args.n_posterior_samples, 1).to(device)
+            x = x.expand(args.n_posterior_samples, -1, -1).to(device)
             if isinstance(model, FlowMatching):
                 samples_as_tensor = model.sample_batch(x, tolerance=tolerance)
             else:
