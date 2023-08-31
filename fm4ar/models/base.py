@@ -13,6 +13,7 @@ from typing import Literal
 import torch
 import wandb
 from threadpoolctl import threadpool_limits
+from torch.cuda.amp import GradScaler, autocast
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 
@@ -286,6 +287,7 @@ class Base:
         test_only: bool = False,
         early_stopping_config: dict | None = None,
         gradient_clipping_config: dict | None = None,
+        use_amp: bool = True,
     ) -> None:
         """
         Train the model until the runtime limits are exceeded.
@@ -302,6 +304,7 @@ class Base:
                 set (i.e., skip training).
             gradient_clipping_config: Configuration for gradient
                 clipping (will be passed to `nn.utils.clip_grad_norm_`).
+            use_amp: Whether to use automatic mixed precision.
         """
 
         # ---------------------------------------------------------------------
@@ -337,6 +340,7 @@ class Base:
                     pm=self,
                     dataloader=train_loader,
                     gradient_clipping_config=gradient_clipping_config,
+                    use_amp=use_amp,
                 )
                 train_time = time.time() - time_start
                 print(f"\nDone! This took {train_time:,.2f} seconds.\n")
@@ -497,6 +501,7 @@ def train_epoch(
     pm: Base,
     dataloader: DataLoader,
     gradient_clipping_config: dict | None = None,
+    use_amp: bool = True,
     verbose: bool = True,
 ) -> float:
     """
@@ -511,11 +516,16 @@ def train_epoch(
             Otherwise, it is expected to be a dictionary that can be
             passed to `torch.nn.utils.clip_grad_norm_`. It must at
             least contain the key "max_norm".
+        use_amp: Whether to use automatic mixed precision.
         verbose: Whether to print progress information.
 
     Returns:
         Average loss over the epoch.
     """
+
+    # Check if we can use automatic mixed precision
+    if use_amp and pm.device == torch.device("cpu"):
+        raise RuntimeError("Don't use automatic mixed precision on CPU!")
 
     # Ensure that the model is in training mode
     pm.network.train()
@@ -529,28 +539,54 @@ def train_epoch(
         print_freq=1,
     )
 
+    # Define shortcut
+    clip_gradients = (
+        gradient_clipping_config is not None
+        and gradient_clipping_config
+    )
+
+    # Create scaler for automatic mixed precision
+    scaler = GradScaler()  # type: ignore
+
     # Iterate over the batches
     for batch_idx, data in enumerate(dataloader):
+
         # Move data to device
         data = [d.squeeze().to(pm.device, non_blocking=True) for d in data]
         loss_info.update_timer()
 
-        # Compute loss
         pm.optimizer.zero_grad()
-        loss = pm.loss(data[0], *data[1:])
 
-        # Do backward pass
-        loss.backward()  # type: ignore
+        # No automatic mixed precision
+        if not use_amp:
 
-        # Apply gradient clipping if requested
-        if gradient_clipping_config is not None and gradient_clipping_config:
-            torch.nn.utils.clip_grad_norm_(
-                parameters=pm.network.parameters(),
-                **gradient_clipping_config,
-            )
+            loss = pm.loss(data[0], *data[1:])
+            loss.backward()  # type: ignore
 
-        # Do optimizer step
-        pm.optimizer.step()
+            if clip_gradients:
+                torch.nn.utils.clip_grad_norm_(  # type: ignore
+                    parameters=pm.network.parameters(),
+                    **gradient_clipping_config,
+                )
+
+            pm.optimizer.step()
+
+        # With automatic mixed precision (default)
+        else:
+
+            with autocast():
+                loss = pm.loss(data[0], *data[1:])
+            scaler.scale(loss).backward()  # type: ignore
+
+            if clip_gradients:
+                scaler.unscale_(pm.optimizer)  # type: ignore
+                torch.nn.utils.clip_grad_norm_(  # type: ignore
+                    parameters=pm.network.parameters(),
+                    **gradient_clipping_config,
+                )
+
+            scaler.step(pm.optimizer)  # type: ignore
+            scaler.update()  # type: ignore
 
         # Update loss for history and logging
         loss_info.update(loss.detach().item(), len(data[0]))
