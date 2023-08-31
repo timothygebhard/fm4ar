@@ -188,8 +188,6 @@ class ContinuousFlowBase(Base):
                 method="dopri5",
             )
 
-        self.network.train()
-
         return torch.Tensor(theta_1)
 
     def log_prob_batch(
