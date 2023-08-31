@@ -5,6 +5,7 @@ Methods for preparing a stage and running the training for it.
 from pathlib import Path
 
 import numpy as np
+import torch
 from torch.utils.data import DataLoader
 
 from fm4ar.datasets.dataset import ArDataset
@@ -52,6 +53,10 @@ def initialize_stage(
         pm.optimizer_kwargs = stage_config["optimizer"]
         pm.scheduler_kwargs = stage_config["scheduler"]
         pm.initialize_optimizer_and_scheduler()
+
+    # Set the precision for fp32 matrix multiplication
+    precision = stage_config.get("float32_matmul_precision", "highest")
+    torch.set_float32_matmul_precision(precision)  # type: ignore
 
     return train_loader, test_loader
 
