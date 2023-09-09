@@ -8,10 +8,6 @@ import torch
 from torch.utils.data import Dataset
 
 
-# Set default data type globally
-torch.set_default_dtype(torch.float32)  # type: ignore
-
-
 class ArDataset(Dataset):
     """
     Base class for for all atmospheric retrieval datasets.
@@ -22,11 +18,10 @@ class ArDataset(Dataset):
         theta: torch.Tensor,
         x: torch.Tensor,
         wavelengths: torch.Tensor,
+        noise_levels: float | torch.Tensor,
         n_samples: int | None = None,
         names: list[str] | None = None,
         ranges: list[tuple[float, float]] | None = None,
-        noise_levels: float | torch.Tensor | None = None,
-        return_wavelengths: bool = False,
         standardize_theta: bool = True,
         standardize_x: bool = False,
         add_noise_to_x: bool = False,
@@ -42,22 +37,19 @@ class ArDataset(Dataset):
             wavelengths: Wavelengths of the data (i.e., the spectrum).
                 For now, we assume that all spectra have the same
                 wavelengths. Shape: (dim_x, ).
+            noise_levels: Noise levels. If this is a float, the same
+                noise level is used for all wavelengths. If a tensor,
+                the noise level is wavelength-dependent.
             n_samples: Number of samples to use. If `None`, all samples
                 are used.
             names: Names of the parameters (in order).
             ranges: Ranges of the parameters (in order).
-            noise_levels: Noise levels. If this is a float, the same
-                noise level is used for all wavelengths. If a tensor,
-                the noise level is wavelength-dependent. If `None`,
-                no noise is added.
-            return_wavelengths: If True, the dataset returns (theta, x),
-                where x has two channels (spectrum and wavelengths).
             standardize_theta: If True, standardize the parameters.
             standardize_x: If True, standardize the (context) data.
             add_noise_to_x: If True, add noise to the (context) data.
         """
 
-        super(ArDataset, self).__init__()
+        super().__init__()
 
         # Select samples
         if n_samples is not None:
@@ -79,12 +71,16 @@ class ArDataset(Dataset):
             },
         }
 
+        # Store wavelengths and noise levels
+        self.wavelengths: torch.Tensor = wavelengths.float()
+        self.noise_levels: torch.Tensor = (
+            noise_levels if isinstance(noise_levels, torch.Tensor)
+            else noise_levels * torch.ones_like(wavelengths)
+        ).float()
+
         # Store other parameters
         self.names = names
         self.ranges = ranges
-        self.noise_levels = noise_levels
-        self.wavelengths = wavelengths
-        self.return_wavelengths = return_wavelengths
         self.standardize_theta = standardize_theta
         self.standardize_x = standardize_x
         self.add_noise_to_x = add_noise_to_x
@@ -110,17 +106,26 @@ class ArDataset(Dataset):
     def add_noise(self, x: torch.Tensor) -> torch.Tensor:
         """
         Add noise to the given spectra based on the `noise_levels`.
+
+        Input shape: (n_bins, )
+        Output shape: (n_bins, )
         """
-
-        if self.noise_levels is None:
-            return x
-
         return x + self.noise_levels * torch.randn(x.shape)
 
     def __len__(self) -> int:
+        """
+        Return the number of samples in the dataset.
+        """
         return len(self.theta)
 
     def __getitem__(self, idx: Any) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return the `idx`-th sample from the dataset.
+
+        Output shape:
+            theta: (dim_theta, )
+            stacked: (n_bins, n_features)
+        """
 
         # Get the spectrum and parameters
         x = self.x[idx]
@@ -136,14 +141,21 @@ class ArDataset(Dataset):
         if self.standardize_theta:
             theta = self.standardize(theta, "theta")
 
-        # If needed, return the wavelengths as well
-        if self.return_wavelengths:
-            n = 1 if isinstance(idx, int) else len(idx)
-            x = x.reshape(n, -1)
-            wlen = self.wavelengths.tile(n, 1)
-            x = torch.dstack([x, wlen]).squeeze()
+        # Combine spectra with wavelengths and noise levels along dim=1.
+        # For now, we call this dimension "features".
+        # Note: Ideally, we would return a dictionary here, but this makes
+        # things more complicated when constructing the embedding networks,
+        # and also when caching the contexts (dicts are not hashable).
+        stacked = torch.stack(
+            [
+                x,  # Flux values (possibly standardized)
+                self.wavelengths,  # Corresponding wavelengths
+                self.noise_levels,  # Uncertainties on flux values
+            ],
+            dim=1,
+        )
 
-        return theta.float(), x.float()
+        return theta.float(), stacked.float()
 
     @property
     def theta_dim(self) -> int:
@@ -154,11 +166,12 @@ class ArDataset(Dataset):
         return self.theta.shape[1]
 
     @property
-    def context_dim(self) -> tuple[int, ...]:
+    def context_dim(self) -> tuple[int, int]:
         """
-        Return the dimensionality of the context.
+        Return the dimensionality of the (stacked) context.
         """
 
-        if self.return_wavelengths:
-            return self.x.shape[1], 2
-        return (self.x.shape[1], )
+        n_bins = self.x.shape[1]
+        n_features = 3  # x, wavelengths, noise_levels
+
+        return n_bins, n_features
