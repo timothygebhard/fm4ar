@@ -352,8 +352,12 @@ class Base:
                 test_time = time.time() - time_start
                 print(f"\nDone! This took {test_time:,.2f} seconds.\n")
 
-            # Take a step with the learning rate scheduler
-            perform_scheduler_step(self.scheduler, test_loss)
+            # Take a step with the learning rate scheduler after each epoch
+            perform_scheduler_step(
+                scheduler=self.scheduler,
+                loss=test_loss,
+                end_of="epoch",
+            )
 
             # Write the training history to a log file
             write_history(
@@ -587,6 +591,14 @@ def train_epoch(
 
             scaler.step(pm.optimizer)  # type: ignore
             scaler.update()  # type: ignore
+
+        # Take a step with the learning rate scheduler after each batch.
+        # This is required, e.g., for the OneCycleLR scheduler.
+        perform_scheduler_step(
+            scheduler=pm.scheduler,
+            loss=None,
+            end_of="batch",
+        )
 
         # Update loss for history and logging
         loss_info.update(loss.detach().item(), n=len(data[0]))

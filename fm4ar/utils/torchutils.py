@@ -170,6 +170,7 @@ def get_scheduler_from_kwargs(
 def perform_scheduler_step(
     scheduler: lrs.LRScheduler | lrs.ReduceLROnPlateau,
     loss: Any = None,
+    end_of: Literal["epoch", "batch"] = "epoch",
 ) -> None:
     """
     Wrapper for `scheduler.step()`. If scheduler is `ReduceLROnPlateau`,
@@ -178,11 +179,18 @@ def perform_scheduler_step(
     Args:
         scheduler: Scheduler for learning rate.
         loss: Validation loss (only required for `ReduceLROnPlateau`).
+        end_of: Whether the scheduler is called at the end of an epoch
+            or at the end of a batch.
     """
 
-    if isinstance(scheduler, lrs.ReduceLROnPlateau):
+    # Different schedulers need to be called at different times:
+    if isinstance(scheduler, lrs.CosineAnnealingLR) and end_of == "epoch":
+        scheduler.step()
+    elif isinstance(scheduler, lrs.OneCycleLR) and end_of == "batch":
+        scheduler.step()
+    elif isinstance(scheduler, lrs.ReduceLROnPlateau) and end_of == "epoch":
         scheduler.step(loss)
-    else:
+    elif isinstance(scheduler, lrs.StepLR) and end_of == "epoch":
         scheduler.step()
 
 
