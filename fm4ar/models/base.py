@@ -552,9 +552,9 @@ def train_epoch(
     for batch_idx, data in enumerate(dataloader):
 
         # Move data to device
-        data = [d.squeeze().to(pm.device, non_blocking=True) for d in data]
-        loss_info.update_timer()
+        data = [d.to(pm.device, non_blocking=True) for d in data]
 
+        loss_info.update_timer()
         pm.optimizer.zero_grad()
 
         # No automatic mixed precision
@@ -589,7 +589,7 @@ def train_epoch(
             scaler.update()  # type: ignore
 
         # Update loss for history and logging
-        loss_info.update(loss.detach().item(), len(data[0]))
+        loss_info.update(loss.detach().item(), n=len(data[0]))
 
         if verbose:
             loss_info.print_info(batch_idx)
