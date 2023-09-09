@@ -20,18 +20,15 @@ def load_ardevol_martinez_2022_dataset(config: dict) -> ArDataset:
     """
 
     # Get the subset to load (training or test)
-    if "which" in config["data"]:
-        which = config["data"].pop("which")
-    else:
-        which = "training"
+    which = config["data"].pop("which", "training")
 
     # Load the dataset
     if which == "training":
         return load_ardevol_martinez_2022_training_dataset(config=config)
     elif which == "test":
         return load_ardevol_martinez_2022_test_dataset(config=config)
-    else:
-        raise ValueError(f"Unknown subset: `{which}`")
+
+    raise ValueError(f"Unknown subset: `{which}`")
 
 
 def load_ardevol_martinez_2022_training_dataset(config: dict) -> ArDataset:
@@ -88,10 +85,10 @@ def load_ardevol_martinez_2022_training_dataset(config: dict) -> ArDataset:
     return ArDataset(
         theta=theta,
         x=x,
+        wavelengths=torch.from_numpy(output_wavelengths).float(),
+        noise_levels=1e-4 * noise_levels,  # TODO: check this
         names=metadata["names"][chemistry_model],
         ranges=metadata["ranges"][chemistry_model],
-        noise_levels=1e-4 * noise_levels,  # TODO: check this
-        wavelengths=torch.from_numpy(output_wavelengths).float(),
         **config["data"],
     )
 
@@ -131,9 +128,9 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
     return ArDataset(
         theta=torch.from_numpy(theta).float(),
         x=torch.from_numpy(spectra).float(),
+        wavelengths=torch.from_numpy(wavelengths).float(),
+        noise_levels=noise_levels,
         names=names,
         ranges=ranges,
-        noise_levels=noise_levels,
-        wavelengths=torch.from_numpy(wavelengths).float(),
         **config["data"],
     )

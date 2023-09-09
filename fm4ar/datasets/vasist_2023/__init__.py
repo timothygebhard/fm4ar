@@ -22,10 +22,7 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
     config = deepcopy(config)
 
     # Get the subset to load (training or test)
-    if "which" in config["data"]:
-        which = config["data"].pop("which")
-    else:
-        which = "training"
+    which = config["data"].pop("which", "training")
 
     # Load data from HDF file
     dataset_dir = get_datasets_dir() / "vasist-2023" / which
@@ -47,9 +44,9 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
     return ArDataset(
         theta=torch.from_numpy(theta),
         x=torch.from_numpy(x),
+        wavelengths=torch.from_numpy(wavelengths),
+        noise_levels=noise_levels,
         names=LABELS,
         ranges=list(zip(LOWER, UPPER, strict=True)),
-        noise_levels=noise_levels,
-        wavelengths=torch.from_numpy(wavelengths),
         **config["data"],
     )
