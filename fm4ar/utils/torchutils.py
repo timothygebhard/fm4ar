@@ -5,7 +5,7 @@ Utility functions for PyTorch.
 from collections import OrderedDict
 from math import prod
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Literal
 
 import numpy as np
 import torch
