@@ -5,15 +5,17 @@ Different embedding networks and convenience functions.
 from os.path import expandvars
 from math import pi
 from typing import Any
-from warnings import catch_warnings, filterwarnings
 
+import numpy as np
 import torch
 import torch.nn as nn
-from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
 
-from fm4ar.nn.modules import Rescale, Unsqueeze, Tile, Mean
+from fm4ar.nn.modules import Mean
 from fm4ar.nn.resnets import DenseResidualNet
-from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
+from fm4ar.utils.torchutils import (
+    load_and_or_freeze_model_weights,
+    validate_shape,
+)
 
 
 def create_embedding_net(
@@ -71,10 +73,10 @@ def create_embedding_net(
         for name, stage in stages.items():
             embedding_net.add_module(name, stage)
 
-    # Ensure that the final output dimension is 1-dimensional (n-dimensional
-    # embeddings are currently not supported). We check against `input_dim`
-    # because this always contains the output dimension of the last stage,
-    # even if the embedding net is empty (identity).
+    # Ensure that the final output has shape (embedding_dim, ). [We ignore the
+    # batch dimension here.] Multi-dimensional embeddings are  not supported.
+    # We check against `input_dim` because this always contains  the output
+    # dimension of the last stage, even if the embedding net is the identity.
     if len(input_dim) != 1:
         raise ValueError(
             "The final output dimension of the embedding net "
@@ -111,7 +113,7 @@ def create_embedding_net_stage(
     """
 
     model_type = embedding_net_stage_kwargs["model_type"]
-    kwargs = embedding_net_stage_kwargs["kwargs"]
+    kwargs = embedding_net_stage_kwargs.get("kwargs", {})
 
     # Create the stage
     stage: nn.Module
@@ -119,28 +121,29 @@ def create_embedding_net_stage(
         case "DenseResidualNet":
             if len(input_dim) != 1:
                 raise ValueError("DenseResidualNet only supports 1D inputs!")
-            else:
-                input_dim_as_int = int(input_dim[0])
-            stage = DenseResidualNet(input_dim=input_dim_as_int, **kwargs)
-        case "PositionalEncoding":
-            stage = PositionalEncoding(**kwargs)
+            stage = DenseResidualNet(input_dim=input_dim[0], **kwargs)
         case "PrecomputedPCAEmbedding":
             stage = PrecomputedPCAEmbedding(**kwargs)
+        case "PositionalEncoding":
+            stage = PositionalEncoding(**kwargs)
+        case "RescaleFlux":
+            stage = RescaleFlux(**kwargs)
+        case "RescaleWavelength":
+            stage = RescaleWavelength(**kwargs)
         case "SoftClip":
             stage = SoftClip(**kwargs)
-        case "CNPEncoder":
-            stage = CNPEncoder(**kwargs)
+        case "SubsampleSpectrum":
+            stage = SubsampleSpectrum(**kwargs)
         case "TransformerEmbedding":
-            stage = TransformerEmbedding(**kwargs)
-        case "FNetEmbedding":
-            stage = FNetEmbedding(**kwargs)
+            stage = TransformerEmbedding(input_dim=input_dim[-1], **kwargs)
         case _:
             raise ValueError(f"Invalid model type: {model_type}!")
 
-    # Create some dummy input to determine the output dimension of the stage
-    batch_size = 19
-    dummy_input = torch.zeros((batch_size, *input_dim))
-    output_dim = stage(dummy_input).shape[1:]
+    # Create some dummy input to determine the output dimension of the stage.
+    # Note: Using `device="meta"` seems to break the transformer embedding?
+    batch_size = 19  # arbitrary
+    dummy_input = torch.randn((batch_size, *input_dim))
+    output_dim = stage(dummy_input).shape[1:]  # drop the batch dimension
 
     return stage, output_dim
 
@@ -291,104 +294,30 @@ class PrecomputedPCAEmbedding(nn.Module):
 
 
 class SoftClip(nn.Module):
+    """
+    Soft-clip normalization of the flux based on Vasist et al. (2023).
+    """
+
     def __init__(self, bound: float = 100.0):
         super().__init__()
         self.bound = bound
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x / (1 + abs(x / self.bound))
+        """
+        Input shape: (batch_size, n_bins, n_features)
+        Output shape: (batch_size, n_bins, n_features)
+        """
 
+        # Split input features
+        flux, *other_features = torch.split(x, 1, dim=2)
 
-class CNPEncoder(nn.Module):
+        # Apply the soft clip (only to the flux)
+        flux = flux / (1 + torch.abs(flux / self.bound))
 
-    def __init__(self, **kwargs: Any) -> None:
+        # Reassemble input features
+        x = torch.stack((flux, *other_features), dim=2)
 
-        super().__init__()
-
-        # Define encoder architecture
-        self.layers = DenseResidualNet(
-            input_dim=2,  # Wavelength and flux
-            **kwargs,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-
-        # Construct encoder input: Reshape grid into batch dimension
-        batch_size, n_bins, n_channels = x.shape
-        x_in = x.reshape(batch_size * n_bins, n_channels)
-
-        # Compute forward pass through network
-        x_out = self.layers(x_in)
-        _, latent_size = x_out.shape
-
-        # Reshape to get grid dimension back
-        x_out = x_out.reshape(batch_size, n_bins, latent_size)
-
-        # Aggregate along wavelength dimension to get final representation
-        x_out = torch.mean(x_out, dim=1)
-
-        return torch.Tensor(x_out)
-
-
-class ConvNet(nn.Module):
-    """
-    This implements a convolutional neural network with an architecture
-    similar to the one described by Ardevol Martinez et al. (2022).
-    """
-
-    def __init__(
-        self,
-        input_dim: int,
-        output_dim: int,
-        input_channels: int = 1,
-        **_: Any,
-    ) -> None:
-
-        super().__init__()
-
-        # Define the layers; ignore the warning about LazyLinear
-        with catch_warnings():
-            filterwarnings("ignore", message="Lazy modules are a new feature")
-            self.layers = nn.Sequential(
-                nn.Conv1d(
-                    in_channels=input_channels,
-                    out_channels=16,
-                    kernel_size=17,
-                    padding="same",
-                ),
-                nn.ReLU(),
-                nn.MaxPool1d(kernel_size=2),
-                nn.Conv1d(
-                    in_channels=16,
-                    out_channels=32,
-                    kernel_size=9,
-                    padding="same",
-                ),
-                nn.ReLU(),
-                nn.MaxPool1d(kernel_size=2),
-                nn.Conv1d(
-                    in_channels=32,
-                    out_channels=64,
-                    kernel_size=7,
-                    padding="same",
-                ),
-                nn.ReLU(),
-                nn.MaxPool1d(kernel_size=2),
-                nn.Flatten(),
-                nn.LazyLinear(
-                    out_features=128,
-                ),
-                nn.Linear(
-                    in_features=128,
-                    out_features=output_dim,
-                ),
-            )
-
-        # Do one forward pass to initialize the lazy linear layer
-        self.layers(torch.zeros(1, input_channels, input_dim))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.Tensor(self.layers(x))
+        return x
 
 
 class TransformerEmbedding(nn.Module):
@@ -398,57 +327,38 @@ class TransformerEmbedding(nn.Module):
 
     def __init__(
         self,
-        output_dim: int,
-        latent_dim: int,
+        input_dim: int,  # number of input features (flux, wavelength, noise)
+        latent_dim: int,  # dimension of latent embeddings
+        output_dim: int,   # dimension of output embeddings
         n_heads: int,
         n_blocks: int,
-        subsampling_fraction: float = 0.25,
     ) -> None:
+        """
+        Instantiate a TransformerEmbedding module.
+        """
 
         super().__init__()
 
-        self.subsampling_fraction = subsampling_fraction
-
-        # Define "positional encodings"
-        # These are the wavelengths, rescaled to the interval [0, 1], and
-        # tiled along the third dimension to match the latent dimension. We
-        # then apply a positional encoding to each wavelength and add it to
-        # the rescaled and tiled wavelengths.
-        self.positional_encoder = nn.Sequential(
-            Rescale(),
-            Unsqueeze(dim=2),
-            Tile(shape=(1, 1, latent_dim)),
-            Summer(PositionalEncoding1D(latent_dim)),
-        )
-
-        # Define the input encoder
-        # We first unsqueeze the input flux along the third dimension to get
-        # a shape of `(batch_size, n_bins, 1)`, and then apply a linear layer
-        # with 1 input feature. This is equivalent to applying the same linear
-        # layer to each wavelength separately. Then final output of the input
-        # encoder has shape `(batch_size, n_bins, latent_dim)`.
-        self.input_encoder = nn.Sequential(
-            SoftClip(100.0),
-            Unsqueeze(dim=2),
-            nn.Linear(
-                in_features=1,
-                out_features=latent_dim,
-            ),
-            nn.GELU(),
-        )
+        # Store the parameters
+        self.input_dim = input_dim
+        self.latent_dim = latent_dim
+        self.output_dim = output_dim
+        self.n_heads = n_heads
+        self.n_blocks = n_blocks
 
         # Define the transformer layers
-        # These take an input of shape `(batch_size, n_bins, 2 * latent_dim)`,
-        # where the last dimension contains the positional and input encodings,
-        # and return an output of shape `(batch_size, latent_dim)` (computed as
-        # the mean of the transformer output along the wavelength dimension)
-        # that we pass through a final linear layer to get the final output.
         self.layers = nn.Sequential(
+            nn.Linear(in_features=input_dim, out_features=1024),
+            nn.GELU(),
+            nn.Linear(in_features=1024, out_features=1024),
+            nn.GELU(),
+            nn.Linear(in_features=1024, out_features=latent_dim),
+            nn.GELU(),
             nn.TransformerEncoder(  # type: ignore
                 encoder_layer=nn.TransformerEncoderLayer(
                     d_model=latent_dim,
                     nhead=n_heads,
-                    dim_feedforward=512,
+                    dim_feedforward=1024,
                     activation="gelu",
                     batch_first=True,
                 ),
@@ -461,145 +371,132 @@ class TransformerEmbedding(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the embedding network.
-        The shape of the input `x` is `(batch_size, n_bins, 2)`, where
-        the last dimension contains the flux and the wavelength.
         """
 
-        # Subsample the input
-        # This serves two purposes: First, it reduces the length of the input
-        # sequence, which has a large impact on the memory consumption of the
-        # transformer (which scales quadratically with the sequence length).
-        # Second, it trains the model to be robust against missing data, which
-        # is what we want if the final model ought to cope with spectra at a
-        # different resolution or wavelength range than the training spectra.
-        if self.subsampling_fraction < 1.0:
-            batch_size, n_bins, _ = x.shape
-            mask = self.get_subsampling_matrix(x)
-            x = x[mask].reshape(batch_size, -1, 2)
+        # Expected shape: (batch_size, n_bins, n_features)
+        validate_shape(x, (None, None, self.input_dim))
+        batch_size, n_bins, _ = x.shape
 
-        # Split input into flux and wavelength
-        flux, wavelength = x[:, :, 0], x[:, :, 1]
+        # Apply the embedding network
+        # Expected shape: (batch_size, output_dim)
+        output = self.layers(x)
+        validate_shape(output, (batch_size, self.output_dim))
 
-        # Compute positional encoding of wavelengths
-        positional_encodings = self.positional_encoder(wavelength)
-
-        # Compute input encoding of flux
-        input_embeddings = self.input_encoder(flux)
-
-        # Add positional and input encodings (alternatively, we could also
-        # concatenate them along the final dimension)
-        x = input_embeddings + positional_encodings
-        # x = torch.cat((positional_encodings, input_embeddings), dim=2)
-
-        # Compute forward pass through transformer layers
-        x = self.layers(x)
-
-        return x
-
-    def get_subsampling_matrix(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Get a subsampling matrix for the given input. For simplicity,
-        we use the same mask for all spectra in the batch.
-        """
-
-        with torch.no_grad():
-            mask = torch.zeros(x.shape[1], dtype=torch.bool)
-            mask[:round(x.shape[1] * self.subsampling_fraction)] = True
-            idx = torch.randperm(x.shape[1])
-            mask = mask[idx]
-            mask = mask.unsqueeze(dim=0)
-            mask = mask.repeat(x.shape[0], 1)
-            return torch.Tensor(mask)
+        return torch.tensor(output)
 
 
-class FeedForward(nn.Module):
-    def __init__(
-        self,
-        num_features: int,
-        expansion_factor: int = 2,
-        dropout: float = 0.0,
-    ):
+class RescaleWavelength(nn.Module):
+    """
+    Pre-processing module that rescales the wavelengths to the interval
+    [-1, 1]. This should be used before any proper embedding module.
+    """
+
+    def __init__(self, min_wavelength: float, max_wavelength: float) -> None:
         super().__init__()
-        num_hidden = expansion_factor * num_features
-        self.fc1 = nn.Linear(num_features, num_hidden)
-        self.fc2 = nn.Linear(num_hidden, num_features)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
-        self.gelu = nn.GELU()
+        self.min_wavelength = min_wavelength
+        self.max_wavelength = max_wavelength
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.fc1(x)
-        x = self.gelu(x)
-        x = self.dropout1(x)
-        x = self.fc2(x)
-        x = self.dropout2(x)
-        return x
+        """
+        Input shape: (batch_size, n_bins, n_features)
+        Output shape: (batch_size, n_bins, n_features)
+        """
 
+        # Expected shape: (batch_size, n_bins, n_features)
+        validate_shape(x, (None, None, None))
+        batch_size, n_bins, n_features = x.shape
 
-class FNetBlock(nn.Module):
-    def __init__(
-        self,
-        latent_dim: int,
-        expansion_factor: int = 2,
-        dropout: float = 0.0,
-    ) -> None:
-        super().__init__()
-        self.ff = FeedForward(latent_dim, expansion_factor, dropout)
-        self.norm1 = nn.LayerNorm(latent_dim)
-        self.norm2 = nn.LayerNorm(latent_dim)
+        # Split input features
+        flux, wavelengths, *other_features = torch.split(x, 1, dim=2)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        residual = x
-        x = torch.fft.fft2(x, dim=(-1, -2)).real
-        x = self.norm1(x + residual)
-        residual = x
-        x = self.ff(x)
-        out = self.norm2(x + residual)
-        return torch.Tensor(out)
-
-
-class FNetEmbedding(nn.Module):
-
-    def __init__(
-        self,
-        latent_dim: int,
-        output_dim: int,
-        n_blocks: int,
-        subsampling_fraction: float = 0.9,
-    ) -> None:
-
-        super().__init__()
-
-        self.subsampling_fraction = subsampling_fraction
-
-        self.soft_clip = SoftClip(10.0)
-        self.layers = nn.Sequential(
-            nn.Linear(in_features=2, out_features=latent_dim),
-            nn.GELU(),
-            nn.Linear(in_features=latent_dim, out_features=latent_dim),
-            *[FNetBlock(latent_dim) for _ in range(n_blocks)],
-            Mean(dim=1),
-            nn.Linear(
-                in_features=latent_dim,
-                out_features=output_dim,
-            ),
+        # Rescale wavelengths
+        wavelengths = 2 * (
+            (wavelengths - self.min_wavelength)
+            / (self.max_wavelength - self.min_wavelength)
+            - 0.5
         )
 
+        # Reassemble input features
+        x = torch.cat((flux, wavelengths, *other_features), dim=2)
+        validate_shape(x, (batch_size, n_bins, n_features))
+
+        return x
+
+
+class RescaleFlux(nn.Module):
+    """
+    Pre-processing module to standardize in particular the spectra of
+    the Vasist-2023 dataset, which cover many orders of magnitude.
+    """
+
+    def __init__(self, mode: str, *_: Any, **__: Any) -> None:
+        super().__init__()
+        self.mode = mode
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
-        # During training: Subsample the input
-        if self.training:
-            with torch.no_grad():
-                mask = torch.zeros(x.shape[1], dtype=torch.bool)
-                mask[:round(x.shape[1] * self.subsampling_fraction)] = True
-                idx = torch.randperm(x.shape[1])
-                mask = mask[idx]
-                mask = mask.unsqueeze(dim=0)
-                mask = mask.repeat(x.shape[0], 1)
-                x = x[mask].reshape(x.shape[0], -1, 2)
+        # Expected shape: (batch_size, n_bins, n_features)
+        validate_shape(x, (None, None, None))
+        batch_size, n_bins, n_features = x.shape
 
-        x[:, :, 0] = self.soft_clip(x[:, :, 0])
-        x[:, :, 1] = (x[:, :, 1] - 0.95) / (2.45 - 0.95)
-        x = self.layers(x)
+        # Split input features
+        flux, *other_features = torch.split(x, 1, dim=2)
+
+        if self.mode == "log":
+            flux = torch.log10(1 + flux)  # Flux may be 0 in some bins
+            x = torch.cat((flux, *other_features), dim=2)
+            validate_shape(x, (batch_size, n_bins, n_features))
+            return x
+
+        if self.mode == "tuple":
+
+            # Take mean and std along the wavelength dimension (over all bins)
+            mean = torch.mean(flux, dim=1, keepdim=True).repeat(1, n_bins, 1)
+            std = torch.std(flux, dim=1, keepdim=True).repeat(1, n_bins, 1)
+
+            # Standardize the flux. We use log(1 + ...) to prevent that we get
+            # NaNs if the mean or standard deviation are ever zero. [This has
+            # happened for the Vasist-2023 dataset.]
+            x1 = (flux - mean) / std
+            x2 = torch.log10(1 + mean)
+            x3 = torch.log10(1 + std)
+
+            # Reassemble input features. We add the mean and std of the flux
+            # at the end to keep the interpretation the same as before (i.e.,
+            # x[0] is the flux, x[1] the wavelengths, and x[2] the uncertainty)
+            x = torch.cat([x1, *other_features, x2, x3], dim=2)
+            validate_shape(x, (batch_size, n_bins, n_features + 2))
+            return x
+
+        raise ValueError(f"Invalid mode: {self.mode}!")
+
+
+class SubsampleSpectrum(nn.Module):
+
+    # TODO: Should this functionality be moved to the data loader entirely?
+
+    def __init__(self, min_fraction: float = 0.1):
+        super().__init__()
+        self.min_fraction = min_fraction
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Input shape: (batch_size, n_bins_original, n_features)
+        Output shape: (batch_size, n_bins_subsampled, n_features)
+        """
+
+        # Expected shape: (batch_size, n_bins_original, n_features)
+        validate_shape(x, (None, None, None))
+        batch_size, n_bins, n_features = x.shape
+
+        if self.training:
+            fraction = float(np.random.uniform(self.min_fraction, 1.0))
+            n_bins = x.shape[1]
+            idx = torch.randperm(n_bins)
+            mask = idx < (fraction * n_bins)
+            x = x[:, mask, :]
+
+        # Expected shape: (batch_size, n_bins_resampled, n_features)
+        validate_shape(x, (batch_size, None, n_features))
 
         return x
