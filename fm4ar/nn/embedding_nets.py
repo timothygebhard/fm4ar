@@ -382,7 +382,7 @@ class TransformerEmbedding(nn.Module):
         output = self.layers(x)
         validate_shape(output, (batch_size, self.output_dim))
 
-        return torch.tensor(output)
+        return torch.Tensor(output)
 
 
 class RescaleWavelength(nn.Module):
