@@ -159,6 +159,8 @@ def get_scheduler_from_kwargs(
             return lrs.StepLR(optimizer, **scheduler_kwargs)
         case "cosine":
             return lrs.CosineAnnealingLR(optimizer, **scheduler_kwargs)
+        case "onecycle":
+            return lrs.OneCycleLR(optimizer, **scheduler_kwargs)
         case "reduce_on_plateau":
             return lrs.ReduceLROnPlateau(optimizer, **scheduler_kwargs)
         case _:
