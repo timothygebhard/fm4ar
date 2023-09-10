@@ -14,6 +14,8 @@ from torch.nn import functional
 from torch.optim import lr_scheduler as lrs
 from torch.utils.data import DataLoader
 
+from fm4ar.utils.resampling import resample_spectrum
+
 
 def get_activation_from_string(
     name: str,
@@ -244,6 +246,74 @@ def split_dataset_into_train_and_test(
     return train_dataset, test_dataset
 
 
+def collate_and_corrupt(
+    batch_as_list: list[tuple[torch.Tensor, torch.Tensor]],
+    resampling_std: float = 0.1,
+    min_fraction: float = 0.2,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Collate the given batch and corrupt it by resampling the wavelength
+    grid and randomly selecting a subset of wavelengths.
+
+    This function can be passed as a `collate_fn` to a `DataLoader`.
+
+    Args:
+        batch_as_list: Batch as a list of tuples `(theta_i, x_i)`.
+        resampling_std: Standard deviation of the lognormal distribution
+            from which the resampling factor is drawn.
+        min_fraction: Minimum fraction of wavelengths to be selected.
+
+    Returns:
+        A 2-tuple: `(theta, x)`.
+    """
+
+    # Determine target wavelength grid for resampling
+    # Note: Because the first and last bin usually end up containing NaNs,
+    # this is different from the `new_wlen` below which is the actual grid.
+    resampling_factor = float(10 ** np.random.normal(0, resampling_std))
+    n_bins_original = int(batch_as_list[0][1].shape[0])
+    min_wlen = float(batch_as_list[0][1][:, 1].min())
+    max_wlen = float(batch_as_list[0][1][:, 1].max())
+    n_bins_resampled = int(n_bins_original * resampling_factor)
+    target_wlen = np.linspace(min_wlen, max_wlen, n_bins_resampled)
+
+    # Create the "normal" batch
+    theta_list, x_list = [], []
+    for theta_i, x_i in batch_as_list:
+        theta_list.append(theta_i)
+        x_list.append(x_i)
+    theta = torch.stack(theta_list)
+
+    # Resample to a different wavelength grid
+    resampled_x_list = []
+    for x_i in x_list:
+        old_flux, old_wlen, old_errs = x_i[:, 0], x_i[:, 1], x_i[:, 2]
+        new_wlen, new_flux, new_errs = resample_spectrum(
+            new_wlen=target_wlen,
+            old_wlen=old_wlen.numpy(),
+            old_flux=old_flux.numpy(),
+            old_errs=old_errs.numpy(),
+        )
+        resampled = torch.stack(
+            [
+                torch.from_numpy(new_flux),
+                torch.from_numpy(new_wlen),
+                torch.from_numpy(new_errs),
+            ],
+            dim=1,
+        )
+        resampled_x_list.append(resampled)
+    x = torch.stack(resampled_x_list, dim=0)
+
+    # Randomly select subset of wavelengths
+    fraction = float(np.random.uniform(min_fraction, 1.0))
+    idx = torch.randperm(x.shape[1])
+    mask = idx < (fraction * x.shape[1])
+    x = x[:, mask].reshape(x.shape[0], -1, x.shape[2])
+
+    return theta.float(), x.float()
+
+
 def build_train_and_test_loaders(
     dataset: torch.utils.data.Dataset,
     train_fraction: float,
@@ -251,6 +321,7 @@ def build_train_and_test_loaders(
     num_workers: int,
     drop_last: bool = True,
     random_seed: int = 42,
+    collate_fn: Literal["collate_and_corrupt"] | None = None,
 ) -> tuple[DataLoader, DataLoader]:
     """
     Build train and test `DataLoaders` for the given `dataset`.
@@ -264,6 +335,8 @@ def build_train_and_test_loaders(
         drop_last: Whether to drop the last batch if it is smaller than
             `batch_size`. This is only used for the train loader.
         random_seed: Random seed for reproducibility.
+        collate_fn: Name of a collate function that is passed to the
+            train loader. If `None`, use the default collate function.
 
     Returns:
         A 2-tuple: `(train_loader, test_loader)`.
@@ -276,6 +349,12 @@ def build_train_and_test_loaders(
         random_seed=random_seed,
     )
 
+    # Define collate functions
+    collate_functions = {
+        "collate_and_corrupt": collate_and_corrupt,
+        None: None,
+    }
+
     # Build the corresponding DataLoaders
     train_loader = DataLoader(
         dataset=train_dataset,
@@ -285,6 +364,7 @@ def build_train_and_test_loaders(
         pin_memory=True,
         num_workers=num_workers,
         worker_init_fn=lambda _: np.random.seed(random_seed),
+        collate_fn=collate_functions.get(collate_fn),
     )
     test_loader = DataLoader(
         dataset=test_dataset,
