@@ -29,3 +29,16 @@ def test__resample_spectrum() -> None:
     assert new_wlen.shape == new_flux.shape
     assert np.all(np.isfinite(new_flux))
     assert len(new_wlen) == 51
+
+    # Case 2: With uncertainties
+    old_wlen = np.linspace(1, 2, 101)
+    old_flux = np.random.randn(101)
+    old_errs = np.random.rand(101)
+    new_wlen = np.linspace(1.2, 1.8, 51)
+    new_wlen, new_flux, new_errs = resample_spectrum(
+        new_wlen, old_wlen, old_flux, old_errs
+    )
+    assert new_wlen.shape == new_flux.shape == new_errs.shape
+    assert np.all(np.isfinite(new_flux))
+    assert np.all(np.isfinite(new_errs))
+    assert len(new_wlen) == 51
