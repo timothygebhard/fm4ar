@@ -74,6 +74,8 @@ def get_logprob_of_theta(
     Compute the log probability of `theta` given `x`.
     """
 
+    model.network.eval()
+
     # For some reason, this does occasionally crash with an assertion
     # error: "AssertionError: underflow in dt nan"
     # Idea: Use `dopri8` instead of `dopri5` as the solver?
@@ -109,6 +111,8 @@ def get_samples(
     """
     Draw samples from posterior (with or without log probability).
     """
+
+    model.network.eval()
 
     with (
         torch.autocast(device_type=device),
@@ -189,9 +193,6 @@ if __name__ == "__main__":
     # Evaluate the model
     print("Evaluating model:")
     for theta, x in tqdm(dataloader, ncols=80):
-        # Store theta (in original units)
-        theta = standardize_theta(theta=theta)
-        list_of_thetas.append(theta.numpy())
 
         # Compute log probability of theta
         if args.get_logprob:
@@ -216,6 +217,10 @@ if __name__ == "__main__":
         )
         list_of_samples.append(samples)
         list_of_logprob_samples.append(logprob_samples)
+
+        # Store theta (in original units)
+        theta = standardize_theta(theta=theta)
+        list_of_thetas.append(theta.numpy())
 
     print()
 
