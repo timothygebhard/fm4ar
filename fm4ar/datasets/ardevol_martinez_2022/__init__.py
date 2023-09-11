@@ -102,6 +102,9 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
     instrument = config["data"]["instrument"]
     chemistry_model = config["data"]["type"].split("-")[1]
 
+    # Type hints
+    noise_levels: float | torch.Tensor | np.ndarray
+
     # Load data from HDF file
     file_path = (
         get_datasets_dir()
@@ -112,17 +115,24 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
     with h5py.File(file_path.as_posix(), "r") as hdf_file:
         theta = np.array(hdf_file[instrument][chemistry_model]["theta"])
         spectra = np.array(hdf_file[instrument][chemistry_model]["spectra"])
+        noise = np.array(hdf_file[instrument][chemistry_model]["noise"])
         wavelengths = np.array(hdf_file[instrument]["wavelengths"])
-        _noise_levels = np.array(hdf_file[instrument]["noise_levels"])
+        noise_levels = np.array(hdf_file[instrument]["noise_levels"])
         names = hdf_file[instrument][chemistry_model].attrs["names"]
         ranges = hdf_file[instrument][chemistry_model].attrs["ranges"]
 
+        # Apply scaling factor to noise and uncertainty
+        noise *= 1e-4
+        noise_levels *= 1e-4
+
+        # Add the noise to the spectra
+        spectra += noise
+
     # Convert noise levels to torch.Tensor or float
-    noise_levels: float | torch.Tensor
-    if _noise_levels.ndim == 0:
-        noise_levels = float(_noise_levels)
+    if noise_levels.ndim == 0:
+        noise_levels = float(noise_levels)
     else:
-        noise_levels = torch.from_numpy(_noise_levels).float()
+        noise_levels = torch.from_numpy(noise_levels).float()
 
     # Create dataset
     return ArDataset(
