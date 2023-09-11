@@ -91,9 +91,9 @@ class ContinuousFlowBase(Base):
             = v(f(theta_t, t, context), t, context).
 
         Args:
-            t: Time (noise level).
+            t: Time (controls the noise level).
             theta_t: Noisy parameters, perturbed with noise level `t`.
-            *context_data: List with context data.
+            *context_data: Context data (e.g., observed data).
         """
         raise NotImplementedError()
 
@@ -112,21 +112,14 @@ class ContinuousFlowBase(Base):
         https://arxiv.org/abs/1806.07366 or Appendix C in
         https://arxiv.org/abs/2210.02747.
 
-        Parameters
-        ----------
-        t: float
-            time (noise level)
-        theta_and_div_t: torch.tensor
-            concatenated tensor of (theta_t, div).
-            theta_t: noisy parameters, perturbed with noise level t
-        *context_data: list[torch.tensor]
-            list with context data (GW data)
+        Args:
+            t: Time (controls the noise level).
+            theta_and_div_t: Concatenated tensor of `(theta_t, div)`.
+            *context_data: Context data (e.g., observed data).
 
-        Returns
-        -------
-        torch.tensor
-            vector field that generates the flow and its divergence
-            (required for likelihood evaluation).
+        Returns:
+            The vector field that generates the continuous flow, plus
+            its divergence (required for likelihood evaluation).
         """
         theta_t = theta_and_div_t[:, :-1]  # extract theta_t
         with torch.enable_grad():
@@ -146,6 +139,7 @@ class ContinuousFlowBase(Base):
         *context_data: torch.Tensor,
         batch_size: int | None = None,
         tolerance: float = 1e-7,
+        method: str = "dopri5"
     ) -> torch.Tensor:
         """
         Returns (conditional) samples for a batch of contexts by solving
@@ -158,6 +152,7 @@ class ContinuousFlowBase(Base):
                 batch size from the context data, so this option is only
                 used for unconditional sampling.
             tolerance: Tolerance (atol and rtol) for the ODE solver.
+            method: ODE solver method. Default is "dopri5".
 
         Returns:
             The generated samples.
@@ -185,7 +180,7 @@ class ContinuousFlowBase(Base):
                 t=self.integration_range,
                 atol=tolerance,
                 rtol=tolerance,
-                method="dopri5",
+                method=method,
             )
 
         return torch.Tensor(theta_1)
@@ -195,6 +190,7 @@ class ContinuousFlowBase(Base):
         theta: torch.Tensor,
         *context_data: torch.Tensor,
         tolerance: float = 1e-7,
+        method: str = "dopri5",
     ) -> torch.Tensor:
         """
         Evaluates log_probs of theta conditional on provided context.
@@ -205,16 +201,14 @@ class ContinuousFlowBase(Base):
         uniquely determined by theta) under the base distribution, and
         the integrated divergence of the vectorfield.
 
-        Parameters.
-        ----------
-        theta: torch.tensor
-            parameters (e.g., binary-black hole parameters)
-        *context_data: list[torch.Tensor]
-            context data (e.g., gravitational-wave data)
+        Args:
+            theta: Parameter values for which to evaluate the log_prob.
+            *context_data:  Context data (e.g., observed data).
+            tolerance: Tolerance (atol and rtol) for the ODE solver.
+            method: ODE solver method. Default is "dopri5".
 
-        Returns
-        -------
-
+        Returns:
+            The log probability of `theta`.
         """
         self.network.eval()
 
@@ -230,10 +224,10 @@ class ContinuousFlowBase(Base):
             theta_and_div_init,
             torch.flip(
                 self.integration_range, dims=(0,)
-            ),  # integrate backwards in time, [1-eps, 0]
+            ),  # integrate backwards in time, i.e., from 1 to 0
             atol=tolerance,
             rtol=tolerance,
-            method="dopri5",
+            method=method,
         )
 
         theta_0 = theta_and_div_0[:, :-1]
@@ -247,6 +241,7 @@ class ContinuousFlowBase(Base):
         *context_data: torch.Tensor,
         batch_size: int | None = None,
         tolerance: float = 1e-7,
+        method: str = "dopri5",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Returns conditional samples and their likelihoods for a batch
@@ -258,6 +253,17 @@ class ContinuousFlowBase(Base):
         [theta_0, log p(theta_0)], where theta_0 ~ p_0(theta_0), then
         [phi(1), f(1)] = [theta_1, log p(theta_0) + log p_1(theta_1) -
         log p(theta_0)] = [theta_1, log p_1(theta_1)].
+
+        Args:
+            *context_data: Context data (e.g., observed data).
+            batch_size: Number of posterior samples to generate in the
+                unconditional case. If context_data is provided, the
+                batch_size is automatically determined from the context.
+            tolerance: Tolerance (atol and rtol) for the ODE solver.
+            method: ODE solver method. Default is "dopri5".
+
+        Returns:
+            The generated samples and their log probabilities.
         """
 
         self.network.eval()
@@ -269,9 +275,9 @@ class ContinuousFlowBase(Base):
         elif len(context_data) > 0:
             if batch_size is not None:
                 raise ValueError(
-                    "For conditional sampling, the batch_size can not be set"
-                    " manually as it is automatically determined by the"
-                    " context_data."
+                    "For conditional sampling, the batch_size can not be set "
+                    "manually as it is automatically determined by the "
+                    "context_data."
                 )
             batch_size = len(context_data[0])
 
@@ -291,7 +297,7 @@ class ContinuousFlowBase(Base):
             self.integration_range,  # integrate forwards in time, [0, 1-eps]
             atol=tolerance,
             rtol=tolerance,
-            method="dopri5",
+            method=method,
         )
 
         theta_1, log_prob_1 = theta_and_div_1[:, :-1], theta_and_div_1[:, -1]
@@ -305,7 +311,6 @@ class ContinuousFlowBase(Base):
         For score matching, `eps > 0` is required for stability. For
         flow matching, we can also have `eps = 0`.
         """
-        # return torch.FloatTensor([0.0, 1.0 - self.eps], device=self.device)
         return torch.tensor([0.0, 1.0 - self.eps], device=self.device).float()
 
 
