@@ -122,6 +122,8 @@ def create_embedding_net_stage(
             if len(input_dim) != 1:
                 raise ValueError("DenseResidualNet only supports 1D inputs!")
             stage = DenseResidualNet(input_dim=input_dim[0], **kwargs)
+        case "DropFeatures":
+            stage = DropFeatures()
         case "PrecomputedPCAEmbedding":
             stage = PrecomputedPCAEmbedding(**kwargs)
         case "PositionalEncoding":
@@ -146,6 +148,31 @@ def create_embedding_net_stage(
     output_dim = stage(dummy_input).shape[1:]  # drop the batch dimension
 
     return stage, output_dim
+
+
+class DropFeatures(nn.Module):
+    """
+    A module that drops some of the input features.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Input shape: (batch_size, n_bins, n_features)
+        Output shape: (batch_size, n_bins)
+        """
+
+        # Expected shape: (batch_size, n_bins, n_features)
+        validate_shape(x, (None, None, None))
+        batch_size, n_bins, n_features = x.shape
+
+        # Only keep the first feature (flux)
+        x = x[:, :, 0]
+        validate_shape(x, (batch_size, n_bins))
+
+        return x
 
 
 class PositionalEncoding(nn.Module):
