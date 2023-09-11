@@ -139,7 +139,7 @@ class ContinuousFlowBase(Base):
         *context_data: torch.Tensor,
         batch_size: int | None = None,
         tolerance: float = 1e-7,
-        method: str = "dopri5"
+        method: str = "dopri5",
     ) -> torch.Tensor:
         """
         Returns (conditional) samples for a batch of contexts by solving
