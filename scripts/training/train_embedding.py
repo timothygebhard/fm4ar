@@ -16,6 +16,7 @@ from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
 
 from fm4ar.utils.config import load_config
+from fm4ar.nn.resnets import DenseResidualNet
 from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.datasets import load_dataset
 from fm4ar.utils.torchutils import build_train_and_test_loaders
@@ -26,8 +27,9 @@ if __name__ == "__main__":
     script_start = time.time()
     print("\nTRAIN CONTEXT EMBEDDING NET\n")
 
-    # Set random seed
+    # Set random seed and float precision
     torch.manual_seed(0)
+    torch.set_float32_matmul_precision("high")  # type: ignore
 
     # Define argument parser
     parser = argparse.ArgumentParser()
@@ -53,7 +55,7 @@ if __name__ == "__main__":
     )
     parameter_names = (
         dataset.names if dataset.names is not None
-        else ["Parameter {i}" for i in range(dataset.theta_dim)]
+        else [f"Parameter {i}" for i in range(dataset.theta_dim)]
     )
 
     # Define the model: context embedding net + some linear layers
@@ -63,24 +65,26 @@ if __name__ == "__main__":
     )
     model = torch.nn.Sequential(
         context_embedding_net,
-        torch.nn.Linear(output_dim, 64),
-        torch.nn.GELU(),
-        torch.nn.Linear(64, 32),
-        torch.nn.GELU(),
-        torch.nn.Linear(32, dataset.theta_dim),
+        torch.nn.ELU(),
+        DenseResidualNet(
+            input_dim=output_dim,
+            output_dim=dataset.theta_dim,
+            hidden_dims=(1024, 512, 256, 128, 64, 32, 16, 8),
+            activation="elu",
+            dropout=0.0,
+            batch_norm=False,
+        ),
     ).to(device)
 
     # Define an optimizer and a learning rate scheduler
     optimizer = torch.optim.Adam(
         params=model.parameters(),
-        lr=3.0e-4,
+        lr=5.0e-4,
     )
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
-        mode="min",
-        factor=0.5,
-        patience=5,
-        verbose=True,
+        T_max=args.epochs,
+        eta_min=5.0e-7,
     )
     scaler = GradScaler(enabled=(device.type == "cuda"))  # type: ignore
 
@@ -94,17 +98,15 @@ if __name__ == "__main__":
         model.train()
         print(f"Training epoch {epoch}:")
         train_losses = []
-        with (
-            autocast(enabled=(device.type == "cuda")),
-            tqdm(train_loader, unit=" batches", ncols=80) as tq
-        ):
+        with tqdm(train_loader, unit=" batches", ncols=80) as tq:
             for theta_true, x in tq:
 
                 # Compute the loss for this batch
                 optimizer.zero_grad()
-                theta_true = theta_true.to(device)
-                theta_pred = model(x.to(device))
-                loss = torch.nn.functional.mse_loss(theta_pred, theta_true)
+                theta_true = theta_true.to(device, non_blocking=True)
+                theta_pred = model(x.to(device, non_blocking=True))
+                with autocast(enabled=(device.type == "cuda")):
+                    loss = torch.nn.functional.mse_loss(theta_pred, theta_true)
 
                 # Take a gradient step (with AMP)
                 scaler.scale(loss).backward()  # type: ignore
@@ -127,14 +129,13 @@ if __name__ == "__main__":
         rel_errors = []
         with (
             torch.no_grad(),
-            autocast(enabled=(device.type == "cuda")),
             tqdm(test_loader, unit=" batches", ncols=80) as tq,
         ):
-            for theta_true, spectrum in tq:
+            for theta_true, x in tq:
 
                 # Compute the loss for this batch
-                theta_true = theta_true.to(device)
-                theta_pred = model(spectrum.to(device))
+                theta_true = theta_true.to(device, non_blocking=True)
+                theta_pred = model(x.to(device, non_blocking=True))
                 loss = torch.nn.functional.mse_loss(theta_pred, theta_true)
                 test_losses.append(loss.item())
                 tq.set_postfix(loss=loss.item())
@@ -154,13 +155,13 @@ if __name__ == "__main__":
         print()
 
         # Take a learning rate step
-        scheduler.step(avg_loss)
+        scheduler.step()
 
         # Save the model if it is the best so far
         if avg_loss < best_test_loss:
             print("Saving the trained model...", end=" ")
             file_path = args.experiment_dir / "dummy_model__best.pt"
             torch.save(model.state_dict(), file_path)
-            print("Done!\n")
+            print("Done!\n\n")
 
     print(f"This took {time.time() - script_start:.2f} seconds!\n", flush=True)
