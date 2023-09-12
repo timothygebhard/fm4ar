@@ -7,6 +7,7 @@ that contains all the information needed to predict the parameters.
 
 import argparse
 import time
+from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
@@ -64,16 +65,18 @@ if __name__ == "__main__":
         embedding_net_kwargs=config["model"]["context_embedding_kwargs"],
     )
     model = torch.nn.Sequential(
-        context_embedding_net,
-        torch.nn.ELU(),
-        DenseResidualNet(
-            input_dim=output_dim,
-            output_dim=dataset.theta_dim,
-            hidden_dims=(1024, 512, 256, 128, 64, 32, 16, 8),
-            activation="elu",
-            dropout=0.0,
-            batch_norm=False,
-        ),
+        OrderedDict(
+            context_embedding_net=context_embedding_net,
+            activation=torch.nn.ELU(),
+            dense_resnet=DenseResidualNet(
+                input_dim=output_dim,
+                output_dim=dataset.theta_dim,
+                hidden_dims=(64, 32, 16, 8),
+                activation="elu",
+                dropout=0.0,
+                batch_norm=False,
+            ),
+        )
     ).to(device)
 
     # Define an optimizer and a learning rate scheduler
