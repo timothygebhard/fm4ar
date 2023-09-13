@@ -39,6 +39,7 @@ dependencies = [
     "scikit-learn",
     "scipy",
     "spectres ~=2.2.0",
+    "tabulate",
     "threadpoolctl",
     "torch ~=2.0.1",
     "torchdiffeq ~=0.2.3",
@@ -59,6 +60,7 @@ dev = [
     "toml ~=0.10.2",
     "types-pyyaml",
     "types-requests",
+    "types-tabulate",
     "types-toml",
 ]
 petitRADTRANS = [
