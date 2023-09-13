@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from tabulate import tabulate
 from torch.cuda.amp import GradScaler, autocast
 
 from tqdm import tqdm
@@ -129,7 +130,7 @@ if __name__ == "__main__":
         model.eval()
         print(f"Test epoch {epoch}:")
         test_losses = []
-        rel_errors = []
+        list_of_rel_errors = []
         with (
             torch.no_grad(),
             tqdm(test_loader, unit=" batches", ncols=80) as tq,
@@ -144,17 +145,32 @@ if __name__ == "__main__":
                 tq.set_postfix(loss=loss.item())
 
                 # Compute the relative errors
-                rel_error = torch.abs((theta_pred - theta_true) / theta_true)
-                rel_errors.append(rel_error.cpu().numpy())
+                # We are computing this in the normalized parameter space for
+                # theta, which includes 0, hence we add 1 to the denominator.
+                # Even in the unnormed parameter space, however, there are
+                # parameters that can take on a true value of 0...
+                # TODO: Is there a better metric that we could use here?
+                rel_error = (
+                    torch.abs(theta_pred - theta_true)
+                    / (1 + torch.abs(theta_true))
+                ).cpu().numpy()
+                list_of_rel_errors.append(rel_error)
 
         avg_loss = sum(test_losses) / len(test_losses)
         print(f"Done! Average test loss: {avg_loss:.4f}\n")
 
         # Compute the average relative error
-        avg_rel_error = np.concatenate(rel_errors, axis=0).mean(axis=0)
-        print("Average relative errors:")
-        for name, error in zip(parameter_names, avg_rel_error, strict=True):
-            print(f"{name:<24}: {error:6.3f}")
+        rel_errors = np.concatenate(list_of_rel_errors, axis=0)
+        statistics = {
+            "Parameter": parameter_names,
+            "median": np.median(rel_errors, axis=0),
+            "mean": np.mean(rel_errors, axis=0),
+            "std": np.std(rel_errors, axis=0),
+            "min": np.min(rel_errors, axis=0),
+            "max": np.max(rel_errors, axis=0),
+        }
+        print("Average relative errors:\n")
+        print(tabulate(statistics, headers="keys", floatfmt=".3f"))
         print()
 
         # Take a learning rate step
