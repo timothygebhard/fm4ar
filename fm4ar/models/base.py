@@ -3,12 +3,11 @@ Base class which provides basic functionality for training and
 inference, and from which all posterior models should inherit.
 """
 
-import math
 import shutil
 import time
 from abc import abstractmethod
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, TYPE_CHECKING, Union
 
 import torch
 import wandb
@@ -29,6 +28,10 @@ from fm4ar.utils.tracking import (
     RuntimeLimits,
     write_history,
 )
+
+if TYPE_CHECKING:
+    from fm4ar.models.continuous.flow_matching import FlowMatching
+    from fm4ar.models.discrete.normalizing_flow import NormalizingFlow
 
 
 class Base:
@@ -288,6 +291,7 @@ class Base:
         early_stopping_config: dict | None = None,
         gradient_clipping_config: dict | None = None,
         use_amp: bool = True,
+        get_logprob: bool = False,
     ) -> None:
         """
         Train the model until the runtime limits are exceeded.
@@ -305,6 +309,8 @@ class Base:
             gradient_clipping_config: Configuration for gradient
                 clipping (will be passed to `nn.utils.clip_grad_norm_`).
             use_amp: Whether to use automatic mixed precision.
+            get_logprob: Whether to compute the log probability of the
+                true parameter values during validation.
         """
 
         # ---------------------------------------------------------------------
@@ -348,7 +354,11 @@ class Base:
                 # Run on the test set and measure the time
                 print(f"\nStart testing epoch {self.epoch}:\n")
                 time_start = time.time()
-                test_loss = test_epoch(self, test_loader)
+                test_loss, test_logprob = test_epoch(  # type: ignore
+                    pm=self,
+                    dataloader=test_loader,
+                    get_logprob=get_logprob,
+                )
                 test_time = time.time() - time_start
                 print(f"\nDone! This took {test_time:,.2f} seconds.\n")
 
@@ -364,7 +374,7 @@ class Base:
                 experiment_dir=experiment_dir,
                 epoch=self.epoch,
                 train_loss=train_loss,
-                test_loss=test_loss,
+                test_loss=test_loss,  # type: ignore
                 learning_rates=lr,
             )
 
@@ -386,6 +396,7 @@ class Base:
                         "test_loss": test_loss,
                         "train_time": train_time,
                         "test_time": test_time,
+                        "test_logprob": test_logprob,
                     }
                 )
 
@@ -394,7 +405,7 @@ class Base:
                 # Check if the current model is the best one yet
                 # TODO: This does not work across multiple jobs / restarts;
                 #      we probably need to read the history file for this...
-                is_best_model = early_stopping(val_loss=test_loss)
+                is_best_model = early_stopping(test_loss)  # type: ignore
                 if is_best_model:
                     self.save_model(
                         experiment_dir=experiment_dir,
@@ -413,7 +424,7 @@ class Base:
 def train_epoch(
     pm: Base,
     dataloader: DataLoader,
-    gradient_clipping_config: dict | None = None,
+    gradient_clipping_config: dict[str, Any] | None = None,
     use_amp: bool = True,
     verbose: bool = True,
 ) -> float:
@@ -452,12 +463,6 @@ def train_epoch(
         print_freq=1,
     )
 
-    # Define shortcut
-    clip_gradients = (
-        gradient_clipping_config is not None
-        and gradient_clipping_config
-    )
-
     # Create scaler for automatic mixed precision
     scaler = GradScaler()  # type: ignore
 
@@ -476,8 +481,11 @@ def train_epoch(
             loss = pm.loss(data[0], *data[1:])
             loss.backward()  # type: ignore
 
-            if clip_gradients:
-                torch.nn.utils.clip_grad_norm_(  # type: ignore
+            if (
+                gradient_clipping_config is not None
+                and gradient_clipping_config
+            ):
+                torch.nn.utils.clip_grad_norm_(
                     parameters=pm.network.parameters(),
                     **gradient_clipping_config,
                 )
@@ -491,9 +499,12 @@ def train_epoch(
                 loss = pm.loss(data[0], *data[1:])
             scaler.scale(loss).backward()  # type: ignore
 
-            if clip_gradients:
+            if (
+                gradient_clipping_config is not None
+                and gradient_clipping_config
+            ):
                 scaler.unscale_(pm.optimizer)  # type: ignore
-                torch.nn.utils.clip_grad_norm_(  # type: ignore
+                torch.nn.utils.clip_grad_norm_(
                     parameters=pm.network.parameters(),
                     **gradient_clipping_config,
                 )
@@ -518,16 +529,24 @@ def train_epoch(
     return loss_info.get_avg()
 
 
-def test_epoch(pm: Base, dataloader: DataLoader) -> float:
+def test_epoch(
+    pm: Union[Base, "FlowMatching", "NormalizingFlow"],
+    dataloader: DataLoader,
+    get_logprob: bool = False,
+) -> tuple[float, float | None]:
     """
     Test the posterior model on the test set for one epoch.
 
     Args:
         pm: Posterior model to test.
         dataloader: Dataloader for test data.
+        get_logprob: Whether to compute the log probability of the
+            true parameter values.
 
     Returns:
-        Average test loss over the epoch.
+        A 2-tuple, consisting of:
+        (1) The average test loss over the epoch.
+        (2) The average log probability of the true parameter values.
     """
 
     pm.network.eval()
@@ -543,6 +562,17 @@ def test_epoch(pm: Base, dataloader: DataLoader) -> float:
             print_freq=1,
         )
 
+        # Store all log probabilities in a list
+        list_of_logprob: list[torch.Tensor] = []
+
+        # Additional keyword arguments for log_prob_batch
+        # Note: We can't directly check if `pm` is a `FlowMatching` instance,
+        # since this would create a circular import...
+        log_prob_kwargs: dict[str, Any] = dict()
+        if hasattr(pm, "evaluate_vectorfield"):
+            log_prob_kwargs["tolerance"] = 1e-3
+            log_prob_kwargs["method"] = "dopri8"
+
         # Iterate over the batches
         for batch_idx, data in enumerate(dataloader):
             loss_info.update_timer()
@@ -553,8 +583,22 @@ def test_epoch(pm: Base, dataloader: DataLoader) -> float:
             # Compute test loss
             loss = pm.loss(data[0], *data[1:])
 
-            # update loss for history and logging
+            # Compute log probability of true parameter values
+            if get_logprob:
+                logprob = pm.log_prob_batch(
+                    data[0],
+                    *data[1:],
+                    **log_prob_kwargs
+
+                ).cpu()
+                list_of_logprob.append(logprob)
+
+            # Update loss for history and logging
             loss_info.update(loss.item(), len(data[0]))
             loss_info.print_info(batch_idx)
 
-        return loss_info.get_avg()
+        # Return the average test loss and log probability
+        if not get_logprob:
+            return loss_info.get_avg(), None
+        avg_logprob = float(torch.cat(list_of_logprob).mean().item())
+        return loss_info.get_avg(), avg_logprob
