@@ -55,6 +55,10 @@ def load_ardevol_martinez_2022_training_dataset(config: dict) -> ArDataset:
     theta = torch.from_numpy(np.load(file_path_theta.as_posix()))
     x = torch.from_numpy(np.load(file_path_x.as_posix()))
 
+    # Define parameter names and ranges
+    names = metadata["names"][chemistry_model]
+    ranges = metadata["ranges"][chemistry_model]
+
     # Select input and output wavelengths
     input_wavelengths = metadata["Wavelength"]["NIRSPEC"]
     match (instrument := config["data"].pop("instrument")):
@@ -81,14 +85,22 @@ def load_ardevol_martinez_2022_training_dataset(config: dict) -> ArDataset:
     else:
         noise_levels = float(metadata["Noise"]["WFC3"])
 
+    # Select only a subset of the parameters
+    # TODO: Improve this
+    if config["data"].get("parameters") is not None:
+        parameters = np.array(config["data"]["parameters"], dtype=int)
+        theta = theta[:, parameters]
+        names = [names[i] for i in parameters]
+        ranges = [ranges[i] for i in parameters]
+
     # Create dataset
     return ArDataset(
         theta=theta,
         x=x,
         wavelengths=torch.from_numpy(output_wavelengths).float(),
         noise_levels=1e-4 * noise_levels,  # TODO: check this
-        names=metadata["names"][chemistry_model],
-        ranges=metadata["ranges"][chemistry_model],
+        names=names,
+        ranges=ranges,
         **config["data"],
     )
 
@@ -133,6 +145,14 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
         noise_levels = float(noise_levels)
     else:
         noise_levels = torch.from_numpy(noise_levels).float()
+
+    # Select only a subset of the parameters
+    # TODO: Improve this
+    if config["data"].get("parameters") is not None:
+        parameters = np.array(config["data"]["parameters"], dtype=int)
+        theta = theta[:, parameters]
+        names = [names[i] for i in parameters]
+        ranges = [ranges[i] for i in parameters]
 
     # Create dataset
     return ArDataset(
