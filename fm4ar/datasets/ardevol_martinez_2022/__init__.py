@@ -20,10 +20,10 @@ def load_ardevol_martinez_2022_dataset(config: dict) -> ArDataset:
     """
 
     # Get the subset to load (training or test)
-    which = config["data"].pop("which", "training")
+    which = config["data"].pop("which", "train")
 
     # Load the dataset
-    if which == "training":
+    if which in ("train", "training"):
         return load_ardevol_martinez_2022_training_dataset(config=config)
     elif which == "test":
         return load_ardevol_martinez_2022_test_dataset(config=config)
