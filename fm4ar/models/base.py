@@ -631,6 +631,7 @@ def test_epoch(
 
         # Return the average test loss and log probability
         if (epoch - 1) % logprob_epochs == 0:
+            avg_logprob = float(torch.cat(list_of_logprob).mean().item())
+            return loss_info.get_avg(), avg_logprob
+        else:
             return loss_info.get_avg(), None
-        avg_logprob = float(torch.cat(list_of_logprob).mean().item())
-        return loss_info.get_avg(), avg_logprob
