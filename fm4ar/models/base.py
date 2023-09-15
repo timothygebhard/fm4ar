@@ -503,6 +503,7 @@ def train_epoch(
         # With automatic mixed precision (default)
         else:
 
+            # Note: Backward passes under autocast are not recommended
             with autocast():
                 loss = pm.loss(data[0], *data[1:])
             scaler.scale(loss).backward()  # type: ignore
@@ -549,7 +550,7 @@ def test_epoch(
     Args:
         pm: Posterior model to test.
         dataloader: Dataloader for test data.
-        epoch: Current epoch (count starts at 1).
+        epoch: Current epoch (note: count starts at 1).
         logprob_epochs: Evaluate the log probability of the true
             parameter values every `logprob_epochs` epochs.
             If `None`, a default value is chosen based on `pm`: For
@@ -615,7 +616,7 @@ def test_epoch(
             loss = pm.loss(data[0], *data[1:])
 
             # Compute log probability of true parameter values
-            if logprob_epochs is not None and epoch % logprob_epochs == 0:
+            if (epoch - 1) % logprob_epochs == 0:
                 logprob = pm.log_prob_batch(
                     data[0],
                     *data[1:],
@@ -629,7 +630,7 @@ def test_epoch(
             loss_info.print_info(batch_idx)
 
         # Return the average test loss and log probability
-        if logprob_epochs is not None and epoch % logprob_epochs == 0:
+        if (epoch - 1) % logprob_epochs == 0:
             return loss_info.get_avg(), None
         avg_logprob = float(torch.cat(list_of_logprob).mean().item())
         return loss_info.get_avg(), avg_logprob
