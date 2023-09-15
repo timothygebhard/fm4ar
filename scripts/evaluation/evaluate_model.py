@@ -1,5 +1,9 @@
 """
-Load a trained model and evaluate it on the respective test set.
+Evaluate a trained model either on the training or test set.
+
+This script can either be run directly on a GPU node, or it can be
+invoked using the `--start-submission` flag to prepare a submission
+file and launch a new evaluation job on the cluster.
 """
 
 import argparse
@@ -13,14 +17,26 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from fm4ar.datasets import load_dataset
 from fm4ar.models.build_model import build_model
 from fm4ar.models.continuous.flow_matching import FlowMatching
 from fm4ar.models.discrete.normalizing_flow import NormalizingFlow
-from fm4ar.datasets import load_dataset
 from fm4ar.utils.config import load_config
+from fm4ar.utils.git_utils import get_git_hash
+from fm4ar.utils.hashing import get_sha512sum
+from fm4ar.utils.htcondor import (
+    CondorSettings,
+    check_if_on_login_node,
+    condor_submit_bid,
+    create_submission_file,
+)
 
 
 def get_cli_arguments() -> argparse.Namespace:
+    """
+    Parse command line arguments.
+    """
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--device",
@@ -53,10 +69,26 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Number of samples to draw from posterior.",
     )
     parser.add_argument(
+        "--start-submission",
+        action="store_true",
+        help=(
+            "If this flag is used, the script will prepare the HTCondor "
+            "submission file and launch a new job (but not actually run the "
+            "evaluation itself)."
+        ),
+    )
+    parser.add_argument(
         "--tolerance",
         type=float,
         default=1e-3,
         help="Tolerance for ODE solver (only needed for flow matching).",
+    )
+    parser.add_argument(
+        "--which",
+        type=str,
+        choices=["train", "test"],
+        default="test",
+        help="Which dataset to use for evaluation purposes.",
     )
     args = parser.parse_args()
 
@@ -139,22 +171,53 @@ def get_samples(
     return samples, logprob
 
 
-if __name__ == "__main__":
+def prepare_submission_file_and_launch_job(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+) -> None:
+    """
+    Create a submission file and launch a new job on the cluster, which
+    will run *without* the `--start-submission` flag. This job will then
+    run the actual evaluation.
+    """
+
+    # Collect arguments for the job: Start with the path to this script,
+    # then add all the arguments that we got from the command line
+    job_arguments = [Path(__file__).resolve().as_posix()]
+    for key, value in vars(args).items():
+        if key != "start_submission":
+            job_arguments.append(f"--{key} {value}")
+
+    # Combine condor arguments with the rest of the condor settings
+    condor_settings = CondorSettings(**config["local"]["condor"])
+    condor_settings.log_file_name = f"evaluate_on_{args.which}"
+    condor_settings.arguments = job_arguments
+
+    # Create submission file and submit job
+    file_path = create_submission_file(
+        condor_settings=condor_settings,
+        experiment_dir=args.experiment_dir,
+        file_name=f"evaluate_on_{args.which}.sub",
+    )
+    condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
+
+
+def run_evaluation(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+) -> None:
+    """
+    Run the actual evaluation (either on test or training data).
+    """
 
     script_start = time.time()
-    print("\nEVALUATE MODEL ON TEST SET\n")
 
-    # Parse arguments and define shortcuts
-    args = get_cli_arguments()
-
-    # Load config and update dataset to test set
-    print("Loading config...", end=" ")
-    config = load_config(experiment_dir=args.experiment_dir)
+    # Update the experiment configuration
+    # TODO: Should we add noise to the input spectra here or not?
     config["data"]["which"] = "test"
     config["data"]["add_noise_to_x"] = False
     if args.n_dataset_samples is not None:
         config["data"]["n_samples"] = int(args.n_dataset_samples)
-    print("Done!")
 
     # Load the dataset
     print("Loading dataset...", end=" ")
@@ -174,6 +237,7 @@ if __name__ == "__main__":
     # Load the model
     print("Loading model...", end=" ")
     file_path = args.experiment_dir / "model__best.pt"
+    model_hash = get_sha512sum(file_path=file_path)
     model = build_model(file_path=file_path, device=args.device)
     model.network.eval()
     print("Done!\n")
@@ -232,8 +296,10 @@ if __name__ == "__main__":
 
     # Save the results to an HDF file
     print("Saving results...", end=" ")
-    file_path = args.experiment_dir / "results_on_test_set.hdf"
+    file_path = args.experiment_dir / f"results_on_{args.which}_set.hdf"
     with h5py.File(file_path, "w") as f:
+        f.attr["model_hash"] = model_hash
+        f.attr["git_hash"] = get_git_hash()
         f.create_dataset(name="theta", data=thetas)
         f.create_dataset(name="samples", data=samples)
         if args.get_logprob:
@@ -242,3 +308,22 @@ if __name__ == "__main__":
     print("Done!")
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")
+
+
+if __name__ == "__main__":
+
+    print("\nEVALUATE MODEL ON TEST SET\n")
+
+    # Parse arguments and load experiment configuration
+    args = get_cli_arguments()
+    config = load_config(experiment_dir=args.experiment_dir)
+
+    # Make sure we don't try to run the actual evaluation on the login node
+    check_if_on_login_node(start_submission=args.start_submission)
+
+    # Check if we need to prepare a submission file and launch a new job, or
+    # if we run the actual evaluation
+    if args.start_submission:
+        prepare_submission_file_and_launch_job(args=args, config=config)
+    else:
+        run_evaluation(args=args, config=config)
