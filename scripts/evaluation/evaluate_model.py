@@ -237,7 +237,7 @@ def run_evaluation(
 
     # Update the experiment configuration
     # TODO: Should we add noise to the input spectra here or not?
-    config["data"]["which"] = "test"
+    config["data"]["which"] = args.which
     config["data"]["add_noise_to_x"] = False
     if args.n_dataset_samples is not None:
         config["data"]["n_samples"] = int(args.n_dataset_samples)
