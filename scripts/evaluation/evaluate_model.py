@@ -108,11 +108,15 @@ def get_logprob_of_theta(
 
     model.network.eval()
 
+    # TODO: Computing the log probability with AMP does not seem to work with
+    #   the `NormalizingFlow` models from the glasflow package ... ?!
+    use_amp = isinstance(model, FlowMatching)
+
     # For some reason, this does occasionally crash with an assertion
     # error: "AssertionError: underflow in dt nan"
     # Idea: Use `dopri8` instead of `dopri5` as the solver?
     with (
-        torch.autocast(device_type=args.device),
+        torch.autocast(device_type=args.device, enabled=use_amp),
         torch.no_grad(),
     ):
         try:
@@ -146,8 +150,12 @@ def get_samples(
 
     model.network.eval()
 
+    # TODO: For now, we disable AMP also for posterior sampling when using a
+    #   `NormalizingFlow` model, at least until we understand the issue
+    use_amp = isinstance(model, FlowMatching)
+
     with (
-        torch.autocast(device_type=device),
+        torch.autocast(device_type=device, enabled=use_amp),
         torch.no_grad(),
     ):
         # Prepare input for model
