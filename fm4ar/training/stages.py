@@ -134,7 +134,7 @@ def train_stages(
             early_stopping_config=stage_config.get("early_stopping"),
             gradient_clipping_config=stage_config.get("gradient_clipping"),
             use_amp=stage_config.get("use_amp", False),
-            logprob_epochs=stage_config.get("logprob_epochs", False),
+            logprob_epochs=stage_config.get("logprob_epochs", None),
         )
 
         # if test_only, model should not be saved, and run is complete
