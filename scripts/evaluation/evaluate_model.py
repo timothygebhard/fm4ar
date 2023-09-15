@@ -311,8 +311,8 @@ def run_evaluation(
     print("Saving results...", end=" ")
     file_path = args.experiment_dir / f"results_on_{args.which}_set.hdf"
     with h5py.File(file_path, "w") as f:
-        f.attr["model_hash"] = model_hash
-        f.attr["git_hash"] = get_git_hash()
+        f.attrs["model_hash"] = model_hash
+        f.attrs["git_hash"] = get_git_hash()
         f.create_dataset(name="theta", data=thetas)
         f.create_dataset(name="samples", data=samples)
         if args.get_logprob:
