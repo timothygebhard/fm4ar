@@ -62,4 +62,4 @@ def test__build_fm_model() -> None:
     }
 
     # Build the model
-    model = build_model(config=config)
+    build_model(config=config)

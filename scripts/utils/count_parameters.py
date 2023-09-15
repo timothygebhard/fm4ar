@@ -27,7 +27,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    print(f"Experiment directory:", flush=True)
+    print("Experiment directory:", flush=True)
     print(f"{args.experiment_dir.resolve()}\n", flush=True)
 
     # Load config and update local settings to ensure they work on macOS.

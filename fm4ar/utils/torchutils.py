@@ -419,7 +419,7 @@ def validate_shape(x: torch.Tensor, shape: tuple[int | None, ...]) -> None:
         )
 
     # Check if the size of each dimension is correct
-    for expected, actual in zip(shape, x.shape):
+    for expected, actual in zip(shape, x.shape, strict=True):
         if expected is not None and expected != actual:
             raise ValueError(
                 f"Expected `{name}` to have shape {shape} but found {x.shape}!"

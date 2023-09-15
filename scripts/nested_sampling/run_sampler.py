@@ -183,7 +183,7 @@ if __name__ == "__main__":
             memory_cpus=args.memory,
             arguments=job_arguments,
             retry_on_exit_code=42,
-            log_file_name=f"log.$$([NumJobStarts])",
+            log_file_name="log.$$([NumJobStarts])",
         )
         file_path = create_submission_file(
             condor_settings=condor_settings,
