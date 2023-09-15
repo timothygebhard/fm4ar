@@ -97,7 +97,9 @@ class DiscreteFlowModel(nn.Module):
 
         else:
             context_embedding = self.get_context_embedding(*context)
-            sample, log_prob = self.flow.sample(num_samples, context_embedding)
+            sample, log_prob = self.flow.sample_and_log_prob(
+                num_samples, context_embedding
+            )
 
         return torch.squeeze(sample), torch.squeeze(log_prob)
 
