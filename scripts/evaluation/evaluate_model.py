@@ -65,7 +65,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--n-posterior-samples",
         type=int,
-        default=256,
+        default=1024,
         help="Number of samples to draw from posterior.",
     )
     parser.add_argument(
@@ -325,7 +325,7 @@ def run_evaluation(
 
 if __name__ == "__main__":
 
-    print("\nEVALUATE MODEL ON TEST SET\n")
+    print("\nEVALUATE MODEL\n")
 
     # Parse arguments and load experiment configuration
     args = get_cli_arguments()
