@@ -181,6 +181,8 @@ def prepare_submission_file_and_launch_job(
     run the actual evaluation.
     """
 
+    print("Preparing submission file...", end=" ")
+
     # Collect arguments for the job: Start with the path to this script,
     # then add all the arguments that we got from the command line
     job_arguments = [Path(__file__).resolve().as_posix()]
@@ -199,7 +201,11 @@ def prepare_submission_file_and_launch_job(
         experiment_dir=args.experiment_dir,
         file_name=f"evaluate_on_{args.which}.sub",
     )
+
+    print("Done!")
+    print("Submitting job...", end=" ")
     condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
+    print("Done!\n")
 
 
 def run_evaluation(
