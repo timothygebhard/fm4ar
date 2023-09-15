@@ -188,7 +188,13 @@ def prepare_submission_file_and_launch_job(
     job_arguments = [Path(__file__).resolve().as_posix()]
     for key, value in vars(args).items():
         key = key.replace("_", "-")
-        if key != "start_submission" and value is not None and value:
+        if (
+            key == "start-submission"
+            or (key == "get-logprob" and not value)
+            or value is None
+        ):
+            continue
+        else:
             job_arguments.append(f"--{key} {value}")
 
     # Combine condor arguments with the rest of the condor settings
