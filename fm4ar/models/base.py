@@ -291,7 +291,7 @@ class Base:
         early_stopping_config: dict | None = None,
         gradient_clipping_config: dict | None = None,
         use_amp: bool = True,
-        get_logprob: bool = False,
+        logprob_epochs: int | None = None,
     ) -> None:
         """
         Train the model until the runtime limits are exceeded.
@@ -309,8 +309,9 @@ class Base:
             gradient_clipping_config: Configuration for gradient
                 clipping (will be passed to `nn.utils.clip_grad_norm_`).
             use_amp: Whether to use automatic mixed precision.
-            get_logprob: Whether to compute the log probability of the
-                true parameter values during validation.
+            logprob_epochs: Evaluate the log probability of the true
+                parameter values every `logprob_epochs` epochs. (See
+                `test_epoch()` for details.)
         """
 
         # ---------------------------------------------------------------------
@@ -318,8 +319,14 @@ class Base:
         # ---------------------------------------------------------------------
 
         if test_only:
-            test_loss = test_epoch(self, test_loader)
-            print(f"test loss: {test_loss:.3f}")
+            test_loss, test_logprob = test_epoch(
+                pm=self,
+                dataloader=test_loader,
+                epoch=1,
+                logprob_epochs=1,
+            )
+            print(f"Mean test loss:    {test_loss:.3f}")
+            print(f"Mean test logprob: {test_logprob:.3f}")
             return
 
         # ---------------------------------------------------------------------
@@ -354,10 +361,11 @@ class Base:
                 # Run on the test set and measure the time
                 print(f"\nStart testing epoch {self.epoch}:\n")
                 time_start = time.time()
-                test_loss, test_logprob = test_epoch(  # type: ignore
+                test_loss, test_logprob = test_epoch(
                     pm=self,
                     dataloader=test_loader,
-                    get_logprob=get_logprob,
+                    epoch=self.epoch,
+                    logprob_epochs=logprob_epochs,
                 )
                 test_time = time.time() - time_start
                 print(f"\nDone! This took {test_time:,.2f} seconds.\n")
@@ -374,7 +382,7 @@ class Base:
                 experiment_dir=experiment_dir,
                 epoch=self.epoch,
                 train_loss=train_loss,
-                test_loss=test_loss,  # type: ignore
+                test_loss=test_loss,
                 learning_rates=lr,
             )
 
@@ -405,7 +413,7 @@ class Base:
                 # Check if the current model is the best one yet
                 # TODO: This does not work across multiple jobs / restarts;
                 #      we probably need to read the history file for this...
-                is_best_model = early_stopping(test_loss)  # type: ignore
+                is_best_model = early_stopping(test_loss)
                 if is_best_model:
                     self.save_model(
                         experiment_dir=experiment_dir,
@@ -532,7 +540,8 @@ def train_epoch(
 def test_epoch(
     pm: Union[Base, "FlowMatching", "NormalizingFlow"],
     dataloader: DataLoader,
-    get_logprob: bool = False,
+    epoch: int,
+    logprob_epochs: int | None = None,
 ) -> tuple[float, float | None]:
     """
     Test the posterior model on the test set for one epoch.
@@ -540,8 +549,13 @@ def test_epoch(
     Args:
         pm: Posterior model to test.
         dataloader: Dataloader for test data.
-        get_logprob: Whether to compute the log probability of the
-            true parameter values.
+        epoch: Current epoch (count starts at 1).
+        logprob_epochs: Evaluate the log probability of the true
+            parameter values every `logprob_epochs` epochs.
+            If `None`, a default value is chosen based on `pm`: For
+            `NormalizingFlow` models, the log probability is evaluated
+            every epochs, while for `FlowMatching` models, it is only
+            evaluated every 10 epochs.
 
     Returns:
         A 2-tuple, consisting of:
@@ -549,10 +563,25 @@ def test_epoch(
         (2) The average log probability of the true parameter values.
     """
 
+    # TODO: Maybe we also want to use AMP here to speed up the logprob stuff?
+
     pm.network.eval()
+
+    # Determine the type of the posterior model
+    # Note: We can't directly check if `pm` is a `FlowMatching` instance,
+    # since this would create a circular import...
+    if hasattr(pm, "evaluate_vectorfield"):
+        model_type = "FlowMatching"
+    else:
+        model_type = "NormalizingFlow"
+
+    # Set default value for `logprob_epochs`
+    if logprob_epochs is None:
+        logprob_epochs = 10 if model_type == "FlowMatching" else 1
 
     # We don't need to compute gradients for the test set
     with torch.no_grad():
+
         # Set up a LossInfo object to keep track of the loss and times
         loss_info = LossInfo(
             epoch=pm.epoch,
@@ -566,10 +595,12 @@ def test_epoch(
         list_of_logprob: list[torch.Tensor] = []
 
         # Additional keyword arguments for log_prob_batch
-        # Note: We can't directly check if `pm` is a `FlowMatching` instance,
-        # since this would create a circular import...
+        # Background: It seems that the time-inverse ODE required to compute
+        # the log probability of the true parameter value is sometimes stiffer
+        # than the "forward" ODE, so we need to use a different solver.
+        # TODO: Check this more thoroughly!
         log_prob_kwargs: dict[str, Any] = dict()
-        if hasattr(pm, "evaluate_vectorfield"):
+        if model_type == "FlowMatching":
             log_prob_kwargs["tolerance"] = 1e-3
             log_prob_kwargs["method"] = "dopri8"
 
@@ -584,7 +615,7 @@ def test_epoch(
             loss = pm.loss(data[0], *data[1:])
 
             # Compute log probability of true parameter values
-            if get_logprob:
+            if logprob_epochs is not None and epoch % logprob_epochs == 0:
                 logprob = pm.log_prob_batch(
                     data[0],
                     *data[1:],
@@ -598,7 +629,7 @@ def test_epoch(
             loss_info.print_info(batch_idx)
 
         # Return the average test loss and log probability
-        if not get_logprob:
+        if logprob_epochs is not None and epoch % logprob_epochs == 0:
             return loss_info.get_avg(), None
         avg_logprob = float(torch.cat(list_of_logprob).mean().item())
         return loss_info.get_avg(), avg_logprob
