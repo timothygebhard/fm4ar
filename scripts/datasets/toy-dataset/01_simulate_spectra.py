@@ -123,7 +123,7 @@ if __name__ == "__main__":
     # Create HDF file
     print("Creating HDF file...", end=" ")
     effective_random_seed = args.random_seed + args.offset
-    file_name = output_dir / f"{args.which}__{effective_random_seed:03d}.hdf"
+    file_name = output_dir / f"{args.which}__{effective_random_seed:04d}.hdf"
     with h5py.File(file_name, "w") as hdf_file:
         hdf_file.create_dataset(
             name="wavelengths",
