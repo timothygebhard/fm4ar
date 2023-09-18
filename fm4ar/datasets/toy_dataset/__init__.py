@@ -3,10 +3,14 @@ Methods for a simplistic toy dataset that can be used for debugging.
 """
 
 import warnings
+from copy import deepcopy
 
+import h5py
 import numpy as np
-from scipy.stats import norm
-from nautilus import Prior, Sampler
+import torch
+
+from fm4ar.datasets.dataset import ArDataset
+from fm4ar.utils.paths import get_datasets_dir
 
 
 def simulate_toy_spectrum(
@@ -68,6 +72,13 @@ def get_posterior_samples(
         Samples from the posterior.
     """
 
+    # Delay imports and ignore the "Found Intel OpenMP ('libiomp') and LLVM
+    # OpenMP ('libomp') loaded at the same time" warnings on macOS...
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from scipy.stats import norm
+        from nautilus import Prior, Sampler
+
     resolution = len(true_spectrum)
 
     # Define a prior
@@ -90,9 +101,7 @@ def get_posterior_samples(
         n_live=n_livepoints,
     )
 
-    # Run the sampler.
-    # Ignore warnings to suppress the "Found Intel OpenMP ('libiomp') and
-    # LLVM OpenMP ('libomp') loaded at the same time" issue on macOS...
+    # Run the sampler (see above why we ignore warnings)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         sampler.run(verbose=False, discard_exploration=True)
@@ -107,3 +116,46 @@ def get_posterior_samples(
     samples = samples[idx]
 
     return samples
+
+
+def load_toy_dataset(config: dict) -> ArDataset:
+    """
+    Load the toy dataset.
+    """
+
+    # Do not modify the original config
+    config = deepcopy(config)
+
+    # Get the subset to load (training or test)
+    which = config["data"].pop("which", "train")
+    which = "train" if which == "training" else which
+
+    # Load data from HDF file
+    dataset_dir = get_datasets_dir() / "toy-dataset"
+    file_path = dataset_dir / f"{which}.hdf"
+    with h5py.File(file_path, "r") as hdf_file:
+        if (n_samples := config["data"].get("n_samples")) is None:
+            theta = np.array(hdf_file["theta"])
+            x = np.array(hdf_file["spectra"])
+            wavelengths = np.array(hdf_file["wavelengths"])
+        else:
+            theta = np.array(hdf_file["theta"][:n_samples])
+            x = np.array(hdf_file["spectra"][:n_samples])
+            wavelengths = np.array(hdf_file["wavelengths"])
+
+    # Define noise levels
+    noise_levels = 0.5
+
+    # Get number of parameters
+    ndim = theta.shape[1]
+
+    # Create dataset
+    return ArDataset(
+        theta=torch.from_numpy(theta),
+        x=torch.from_numpy(x),
+        wavelengths=torch.from_numpy(wavelengths),
+        noise_levels=noise_levels,
+        names=[f"$p_{i}$" for i in range(ndim)],
+        ranges=[(-3, 3) for _ in range(ndim)],
+        **config["data"],
+    )
