@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     # Save merged HDF file
     print("Merging HDF files...", end=" ")
-    file_path = target_dir / f"{args.which}.hdf"
+    file_path = target_dir.parent / f"{args.which}.hdf"
     with h5py.File(file_path, "w") as hdf_file:
         hdf_file.create_dataset(name="theta", data=thetas, dtype=float)
         hdf_file.create_dataset(name="flux", data=flux, dtype=float)
