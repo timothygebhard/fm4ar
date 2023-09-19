@@ -72,52 +72,49 @@ if __name__ == "__main__":
     rng = np.random.RandomState(args.random_seed + args.offset)
 
     # Collect spectra and parameters
-    list_of_spectra = []
+    list_of_flux = []
     list_of_theta = []
-    list_of_posterior_samples: list[np.ndarray | None] = []
+    list_of_samples: list[np.ndarray | None] = []
     list_of_noise: list[np.ndarray | None] = []
-    wavelengths = np.full(args.resolution, np.nan)
+    wlen = np.full(args.resolution, np.nan)
 
     # Create spectra and parameters
     print("Generating pseudo-spectra:")
     for _ in tqdm(list(range(args.n_spectra)), ncols=80):
 
-        # Generate a random spectrum
+        # Generate a random spectrum: draw all parameters from N(0, 1)
         theta = rng.normal(0, 1, args.n_parameters)
-        wavelengths, spectrum = simulate_toy_spectrum(theta, args.resolution)
+        wlen, flux = simulate_toy_spectrum(theta, args.resolution)
 
-        # Compute posterior (only for test set)
+        # Run nested sampling to get posterior samples (only for test set)
         if args.which == "test":
             noise = rng.normal(0, args.sigma, args.resolution)
-            noisy_spectrum = spectrum + noise
-            posterior_samples: np.ndarray | None = get_posterior_samples(
-                true_spectrum=noisy_spectrum,
+            samples: np.ndarray | None = get_posterior_samples(
+                true_flux=flux + noise,
                 true_theta=theta,
                 sigma=args.sigma,
                 n_livepoints=1000,
                 n_samples=1000,
             )
-
         else:
-            noise = None
-            posterior_samples = None
+            noise, samples = None, None
 
         # Store everything
         list_of_theta.append(theta)
-        list_of_spectra.append(spectrum)
+        list_of_flux.append(flux)
         list_of_noise.append(noise)
-        list_of_posterior_samples.append(posterior_samples)
+        list_of_samples.append(samples)
 
     print()
 
     # Convert to numpy arrays
-    spectra = np.array(list_of_spectra)
+    flux = np.array(list_of_flux)
     theta = np.array(list_of_theta)
     noise = np.array(list_of_noise)
-    posterior_samples = np.array(list_of_posterior_samples)
+    samples = np.array(list_of_samples)
 
     # Ensure the output directory exists
-    output_dir = get_datasets_dir() / "toy-dataset"
+    output_dir = get_datasets_dir() / "toy-dataset" / args.which
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Create HDF file
@@ -125,32 +122,12 @@ if __name__ == "__main__":
     effective_random_seed = args.random_seed + args.offset
     file_name = output_dir / f"{args.which}__{effective_random_seed:04d}.hdf"
     with h5py.File(file_name, "w") as hdf_file:
-        hdf_file.create_dataset(
-            name="wavelengths",
-            data=wavelengths,
-            dtype=float,
-        )
-        hdf_file.create_dataset(
-            name="spectra",
-            data=spectra,
-            dtype=float,
-        )
-        hdf_file.create_dataset(
-            name="theta",
-            data=theta,
-            dtype=float,
-        )
+        hdf_file.create_dataset(name="wlen", data=wlen, dtype=float)
+        hdf_file.create_dataset(name="flux", data=flux, dtype=float)
+        hdf_file.create_dataset(name="theta", data=theta, dtype=float)
         if args.which == "test":
-            hdf_file.create_dataset(
-                name="noise",
-                data=noise,
-                dtype=float,
-            )
-            hdf_file.create_dataset(
-                name="posterior_samples",
-                data=posterior_samples,
-                dtype=float,
-            )
+            hdf_file.create_dataset(name="noise", data=noise, dtype=float)
+            hdf_file.create_dataset(name="samples", data=samples, dtype=float)
     print("Done!")
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")

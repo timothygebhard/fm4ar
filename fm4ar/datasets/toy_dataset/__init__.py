@@ -7,6 +7,7 @@ import warnings
 import h5py
 import numpy as np
 import torch
+from scipy.stats import norm
 
 from fm4ar.datasets.dataset import ArDataset
 from fm4ar.utils.paths import get_datasets_dir
@@ -31,7 +32,7 @@ def simulate_toy_spectrum(
 
     # Make sure there will be some covariances in the posterior
     p = params.copy()
-    p[0] -= (p[1] * 0.5)
+    p[0] -= p[1] * 0.5
     p[1] /= 3
     p[2] += p[3] ** 3
 
@@ -50,18 +51,19 @@ def simulate_toy_spectrum(
 
 
 def get_posterior_samples(
-    true_spectrum: np.ndarray,
+    true_flux: np.ndarray,
     true_theta: np.ndarray,
-    sigma: float = 0.42,
-    n_livepoints: int = 500,
+    sigma: float = 0.5,
+    n_livepoints: int = 1000,
     n_samples: int = 1000,
 ) -> np.ndarray:
     """
     Run nested sampling to get posterior samples for a given spectrum.
 
     Args:
-        true_spectrum: The "target" spectrum in the likelihood function.
-            Note: This should usually be `simulate(true_theta) + noise`!
+        true_flux: The flux of the "target" spectrum in the likelihood
+            function. Note: This should usually be noisy, that is, the
+            result of `simulator(true_theta) + noise`!
         true_theta: True parameter values.
         sigma: Uncertainty to use in the likelihood; should match the
             standard deviation of the noise added to the spectrum.
@@ -76,23 +78,20 @@ def get_posterior_samples(
     # OpenMP ('libomp') loaded at the same time" warnings on macOS...
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        from scipy.stats import norm
         from nautilus import Prior, Sampler
 
-    resolution = len(true_spectrum)
+    resolution = len(true_flux)
 
-    # Define a prior
+    # Define a prior (we use N(0, 1) for all parameters)
     prior = Prior()
     for i in range(len(true_theta)):
-        prior.add_parameter(f'$p_{i}$', dist=norm(loc=0, scale=1.0))
+        prior.add_parameter(f"$p_{i}$", dist=norm(loc=0, scale=1.0))
 
-    # Define likelihood function
+    # Define likelihood function (simple Gaussian)
     def likelihood(param_dict: dict[str, float]) -> float:
         x = np.array(list(param_dict.values()))
-        _, pred_spectrum = simulate_toy_spectrum(x, resolution=resolution)
-        return float(
-            -0.5 * np.sum(((pred_spectrum - true_spectrum) / sigma) ** 2)
-        )
+        _, pred_flux = simulate_toy_spectrum(x, resolution=resolution)
+        return float(-0.5 * np.sum(((pred_flux - true_flux) / sigma) ** 2))
 
     # Set up the sampler
     sampler = Sampler(
@@ -106,7 +105,7 @@ def get_posterior_samples(
         warnings.simplefilter("ignore")
         sampler.run(verbose=False, discard_exploration=True)
 
-    # Select samples from posterior
+    # Get samples from posterior
     samples: np.ndarray
     samples, _, _ = sampler.posterior(equal_weight=True)
 
