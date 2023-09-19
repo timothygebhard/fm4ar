@@ -24,7 +24,7 @@ if __name__ == "__main__":
         / "goyal-2020"
         / "output"
     )
-    output_dir = get_datasets_dir() / "goyal-2020" / "output"
+    output_dir = get_datasets_dir() / "goyal-2020"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Create the HDF files
