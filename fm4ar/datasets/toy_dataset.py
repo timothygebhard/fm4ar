@@ -148,11 +148,8 @@ def load_toy_dataset(config: dict) -> ArDataset:
 
     # Create dataset
     return ArDataset(
-        theta=torch.from_numpy(theta),
-        x=torch.from_numpy(flux),
-        wavelengths=torch.from_numpy(wlen),
-        noise_levels=noise_levels,
+        theta=torch.from_numpy(theta), flux=torch.from_numpy(flux),
+        wlen=torch.from_numpy(wlen), noise_levels=noise_levels,
         names=[f"$p_{i}$" for i in range(ndim)],
-        ranges=[(-3, 3) for _ in range(ndim)],
-        **config["data"],
-    )
+        ranges=[(-3, 3) for _ in range(ndim)], **config["data"]
+        )

@@ -2,8 +2,6 @@
 Methods for loading the dataset from Vasist et al. (2023).
 """
 
-from copy import deepcopy
-
 import h5py
 import numpy as np
 import torch
@@ -18,24 +16,17 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
     Load the dataset from Vasist et al. (2023).
     """
 
-    # Do not modify the original config
-    config = deepcopy(config)
-
-    # Get the subset to load (training or test)
-    which = config["data"].pop("which", "training")
+    # Define shortcuts
+    which = config["data"]["which"]
+    n_samples = config["data"].get("n_samples")
 
     # Load data from HDF file
     dataset_dir = get_datasets_dir() / "vasist-2023" / which
     file_path = dataset_dir / "merged.hdf"
     with h5py.File(file_path, "r") as hdf_file:
-        if (n_samples := config["data"].get("n_samples")) is None:
-            theta = np.array(hdf_file["theta"])
-            x = np.array(hdf_file["spectra"])
-            wavelengths = np.array(hdf_file["wavelengths"])
-        else:
-            theta = np.array(hdf_file["theta"][:n_samples])
-            x = np.array(hdf_file["spectra"][:n_samples])
-            wavelengths = np.array(hdf_file["wavelengths"])
+        theta = np.array(hdf_file["theta"][:n_samples])
+        flux = np.array(hdf_file["spectra"][:n_samples])
+        wlen = np.array(hdf_file["wavelengths"])
 
     # Define noise levels
     noise_levels = 1.25754e-17 * 1e16
@@ -43,9 +34,10 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
     # Create dataset
     return ArDataset(
         theta=torch.from_numpy(theta),
-        x=torch.from_numpy(x),
-        wavelengths=torch.from_numpy(wavelengths),
+        flux=torch.from_numpy(flux),
+        wlen=torch.from_numpy(wlen),
         noise_levels=noise_levels,
+        noise_floor=0.0,
         names=LABELS,
         ranges=list(zip(LOWER, UPPER, strict=True)),
         **config["data"],

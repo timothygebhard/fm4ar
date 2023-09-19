@@ -1,9 +1,6 @@
 """
 Load a dataset from the given experiment configuration.
-Note: This function is defined here to avoid circular imports.
 """
-
-from copy import deepcopy
 
 from fm4ar.datasets.dataset import ArDataset
 from fm4ar.datasets.ardevol_martinez_2022 import (
@@ -19,10 +16,7 @@ def load_dataset(config: dict) -> ArDataset:
     Load a dataset from the given experiment configuration.
     """
 
-    # Do not modify the original configuration when calling pop()
-    config = deepcopy(config)
-
-    match (name := config["data"].pop("name")):
+    match name := config["data"]["name"]:
         case "ardevol-martinez-2022":
             return load_ardevol_martinez_2022_dataset(config)
         case "goyal-2020":
