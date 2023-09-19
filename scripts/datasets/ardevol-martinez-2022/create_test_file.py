@@ -30,7 +30,7 @@ if __name__ == "__main__":
     # Load metadata (for wavelengths and noise levels)
     print("Loading metadata...", end=" ")
     metadata = pd.read_pickle(dataset_dir / "train" / "metadata.p")
-    print("Done!")
+    print("Done!\n")
 
     # Loop over all combinations of instrument and chemistry model
     for instrument, chemistry_model in product(["NIRSPEC", "WFC3"], [1, 2]):
@@ -53,7 +53,6 @@ if __name__ == "__main__":
             noise = 1e6 * data[:, 2]
             list_of_flux.append(flux)
             list_of_noise.append(noise)
-        print()
 
         # Merge all the fluxes and noises into a single array
         flux = np.array(list_of_flux)
