@@ -116,7 +116,7 @@ def get_logprob_of_theta(
     # error: "AssertionError: underflow in dt nan"
     # Idea: Use `dopri8` instead of `dopri5` as the solver?
     with (
-        torch.autocast(device_type=args.device, enabled=use_amp),
+        torch.autocast(device_type=device, enabled=use_amp),
         torch.no_grad(),
     ):
         try:
@@ -234,6 +234,10 @@ def run_evaluation(
     """
 
     script_start = time.time()
+
+    # Update args: Default to 1000 samples from the training set
+    if args.n_dataset_samples is None and args.which == "train":
+        args.n_dataset_samples = 1000
 
     # Update the experiment configuration
     # TODO: Should we add noise to the input spectra here or not?
