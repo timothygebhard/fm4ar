@@ -32,17 +32,19 @@ def load_ardevol_martinez_2022_train_dataset(config: dict) -> ArDataset:
     Load the train dataset from Ardevol-Martinez et al. (2022).
     """
 
+    # Define shortcuts
+    chemistry_model = config["data"]["type"]
     dataset_dir = get_datasets_dir() / "ardevol-martinez-2022" / "train"
+    n_samples = config["data"].get("n_samples")
 
     # Load metadata
     metadata: dict[str, Any] = pd.read_pickle(dataset_dir / "metadata.p")
 
     # Determine chemistry model; load parameters and fluxes
-    chemistry_model = config["data"]["type"]
     file_path = dataset_dir / f"parameters_type{chemistry_model}.npy"
-    theta = np.array(np.load(file_path.as_posix()))
+    theta = np.array(np.load(file_path.as_posix()))[:n_samples]
     file_path = dataset_dir / f"trans_type{chemistry_model}.npy"
-    flux = np.array(np.load(file_path.as_posix()))
+    flux = np.array(np.load(file_path.as_posix()))[:n_samples]
 
     # Define parameter names and ranges
     names = metadata["names"][chemistry_model]
@@ -99,8 +101,9 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
     """
 
     # Get instrument and chemistry model
-    instrument = config["data"]["instrument"]
     chemistry_model = str(config["data"]["type"])  # str needed for HDF access
+    instrument = config["data"]["instrument"]
+    n_samples = config["data"].get("n_samples")
 
     # Load data from HDF file
     file_path = (
@@ -110,9 +113,15 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
         / "merged.hdf"
     )
     with h5py.File(file_path.as_posix(), "r") as hdf_file:
-        theta = np.array(hdf_file[instrument][chemistry_model]["theta"])
-        flux = np.array(hdf_file[instrument][chemistry_model]["flux"])
-        noise = np.array(hdf_file[instrument][chemistry_model]["noise"])
+        theta = np.array(
+            hdf_file[instrument][chemistry_model]["theta"][:n_samples]
+        )
+        flux = np.array(
+            hdf_file[instrument][chemistry_model]["flux"][:n_samples]
+        )
+        noise = np.array(
+            hdf_file[instrument][chemistry_model]["noise"][:n_samples]
+        )
         wlen = np.array(hdf_file[instrument]["wlen"])
         names = hdf_file[instrument][chemistry_model].attrs["names"]
         ranges = hdf_file[instrument][chemistry_model].attrs["ranges"]
