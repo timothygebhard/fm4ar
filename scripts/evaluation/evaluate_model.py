@@ -139,7 +139,7 @@ def get_samples(
     model: FlowMatching | NormalizingFlow,
     x: torch.Tensor,
     n_samples: int,
-    standardize_theta: Callable[[torch.Tensor], torch.Tensor],
+    inverse_theta: Callable[[torch.Tensor], torch.Tensor],
     device: Literal["cpu", "cuda"],
     get_logprob: bool = False,
     **model_kwargs: Any,
@@ -173,7 +173,7 @@ def get_samples(
             logprob = np.full(shape=n_samples, fill_value=np.nan)
 
         # Map samples back to original units
-        samples_as_tensor = standardize_theta(samples_as_tensor.cpu())
+        samples_as_tensor = inverse_theta(samples_as_tensor.cpu())
         samples = samples_as_tensor.numpy().squeeze()
 
     return samples, logprob
@@ -257,10 +257,6 @@ def run_evaluation(
     )
     print("Done!")
 
-    # Define shorthand for standardizing data
-    def standardize_theta(theta: torch.Tensor) -> torch.Tensor:
-        return dataset.standardize(sample=theta, label="theta", inverse=True)
-
     # Load the model
     print("Loading model...", end=" ")
     file_path = args.experiment_dir / "model__best.pt"
@@ -301,7 +297,7 @@ def run_evaluation(
             model=model,
             x=x,
             n_samples=args.n_posterior_samples,
-            standardize_theta=standardize_theta,
+            inverse_theta=dataset.standardizer.inverse_theta,
             device=args.device,
             get_logprob=args.get_logprob,
             **model_kwargs,
@@ -310,7 +306,7 @@ def run_evaluation(
         list_of_logprob_samples.append(logprob_samples)
 
         # Store theta (in original units)
-        theta = standardize_theta(theta=theta)
+        theta = dataset.standardizer.inverse_theta(theta)
         list_of_thetas.append(theta.numpy())
 
     print()
