@@ -2,10 +2,12 @@
 Wrapper classes for datasets.
 """
 
-from typing import Any, Literal
+from typing import Any
 
 import torch
 from torch.utils.data import Dataset
+
+from fm4ar.datasets.standardization import Standardizer
 
 
 class ArDataset(Dataset):
@@ -22,6 +24,7 @@ class ArDataset(Dataset):
         noise_floor: float = 0.0,
         names: list[str] | None = None,
         ranges: list[tuple[float, float]] | None = None,
+        standardizer: Standardizer | None = None,
         standardize_theta: bool = True,
         standardize_flux: bool = False,
         add_noise_to_flux: bool = False,
@@ -47,6 +50,10 @@ class ArDataset(Dataset):
                 for the Ardevol Martinez et al. (2022) train dataset.]
             names: Names of the parameters (in order).
             ranges: Ranges of the parameters (in order).
+            standardizer: Standardizer to use for standardizing theta
+                and the flux. [Uses pre-computed mean and std.] If None
+                is passed, a default standardizer with mean=0 and std=1
+                is used.
             standardize_theta: If True, standardize the parameters.
             standardize_flux: If True, standardize the flux.
             add_noise_to_flux: If True, add noise to the flux.
@@ -62,22 +69,12 @@ class ArDataset(Dataset):
         self.noise_floor = noise_floor
         self.names = names
         self.ranges = ranges
+        self.standardizer = (
+            standardizer if standardizer is not None else Standardizer()
+        )
         self.standardize_theta = standardize_theta
         self.standardize_flux = standardize_flux
         self.add_noise_to_flux = add_noise_to_flux
-
-        # Compute standardization parameters
-        # TODO: We probably don't want to re-compute this for the test set?
-        self.standardization = {
-            "flux": {
-                "mean": torch.mean(flux, dim=0).float(),
-                "std": torch.std(flux, dim=0).float(),
-            },
-            "theta": {
-                "mean": torch.mean(theta, dim=0).float(),
-                "std": torch.std(theta, dim=0).float(),
-            },
-        }
 
     @property
     def noise_levels_as_tensor(self) -> torch.Tensor:
@@ -89,24 +86,6 @@ class ArDataset(Dataset):
             return torch.ones_like(self.wlen) * self.noise_levels
         else:
             return self.noise_levels
-
-    def standardize(
-        self,
-        sample: torch.Tensor,
-        label: Literal["flux", "theta"],
-        inverse: bool = False,
-    ) -> torch.Tensor:
-        """
-        Standardize the given `sample` using the parameters for `label`.
-        """
-
-        mean = self.standardization[label]["mean"]
-        std = self.standardization[label]["std"]
-
-        if not inverse:
-            return (sample - mean) / std
-        else:
-            return sample * std + mean
 
     def add_noise(self, flux: torch.Tensor) -> torch.Tensor:
         """
@@ -152,11 +131,11 @@ class ArDataset(Dataset):
         if self.add_noise_to_flux:
             flux = self.add_noise(flux)
 
-        # Standardize the parameters and the spectrum
+        # If requested, standardize the flux and the pararameters
         if self.standardize_flux:
-            flux = self.standardize(flux, "flux")
+            flux = self.standardizer.standardize_flux(flux)
         if self.standardize_theta:
-            theta = self.standardize(theta, "theta")
+            theta = self.standardizer.standardize_theta(theta)
 
         # Combine flux with wavelengths and noise levels along dim=1.
         # For now, we call this dimension "features".

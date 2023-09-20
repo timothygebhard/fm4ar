@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 
 from fm4ar.datasets.dataset import ArDataset
+from fm4ar.datasets.standardization import get_standardizer
 from fm4ar.utils.paths import get_datasets_dir
 from fm4ar.utils.resampling import resample_spectrum
 
@@ -75,12 +76,19 @@ def load_ardevol_martinez_2022_train_dataset(config: dict) -> ArDataset:
     else:
         noise_levels = float(metadata["Noise"]["WFC3"])
 
+    # Load standardizer (i.e., standardization parameters based on train set)
+    standardizer = get_standardizer(config=config)
+
     # If requested, select only a subset of the parameters
     if config["data"].get("parameters") is not None:
-        parameters = np.array(config["data"]["parameters"], dtype=int)
+        parameters: list[int] = list(map(int, config["data"]["parameters"]))
         theta = theta[:, parameters]
         names = [names[i] for i in parameters]
         ranges = [ranges[i] for i in parameters]
+        if not isinstance(standardizer.theta_mean, float):
+            standardizer.theta_mean = standardizer.theta_mean[parameters]
+        if not isinstance(standardizer.theta_std, float):
+            standardizer.theta_std = standardizer.theta_std[parameters]
 
     # Create dataset
     return ArDataset(
@@ -91,6 +99,7 @@ def load_ardevol_martinez_2022_train_dataset(config: dict) -> ArDataset:
         noise_floor=5e-4,  # TODO: Check this
         names=names,
         ranges=ranges,
+        standardizer=standardizer,
         **config["data"],
     )
 
@@ -129,12 +138,19 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
     # Add the noise to the flux
     flux += 1e-4 * noise
 
+    # Load standardizer (i.e., standardization parameters based on train set)
+    standardizer = get_standardizer(config=config)
+
     # If requested, select only a subset of the parameters
     if config["data"].get("parameters") is not None:
-        parameters = np.array(config["data"]["parameters"], dtype=int)
+        parameters: list[int] = list(map(int, config["data"]["parameters"]))
         theta = theta[:, parameters]
         names = [names[i] for i in parameters]
         ranges = [ranges[i] for i in parameters]
+        if not isinstance(standardizer.theta_mean, float):
+            standardizer.theta_mean = standardizer.theta_mean[parameters]
+        if not isinstance(standardizer.theta_std, float):
+            standardizer.theta_std = standardizer.theta_std[parameters]
 
     # Create dataset
     return ArDataset(
@@ -145,5 +161,6 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
         noise_floor=0.0,
         names=names,
         ranges=ranges,
+        standardizer=standardizer,
         **config["data"],
     )
