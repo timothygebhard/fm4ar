@@ -53,6 +53,7 @@ if __name__ == "__main__":
         train_fraction=0.95,
         batch_size=args.batch_size,
         num_workers=num_workers,
+        collate_fn="collate_and_corrupt",
     )
     parameter_names = (
         dataset.names if dataset.names is not None
@@ -143,6 +144,10 @@ if __name__ == "__main__":
                 # Take a gradient step (with AMP)
                 scaler.scale(loss).backward()  # type: ignore
                 scaler.unscale_(optimizer)  # type: ignore
+                torch.nn.utils.clip_grad_norm_(
+                    context_embedding_net.parameters(), 1.0
+                )
+                torch.nn.utils.clip_grad_norm_(decoder.parameters(), 1.0)
                 scaler.step(optimizer)  # type: ignore
                 scaler.update()  # type: ignore
 
