@@ -306,10 +306,10 @@ def collate_and_corrupt(
     x = torch.stack(resampled_x_list, dim=0)
 
     # Randomly select subset of wavelengths
-    fraction = float(np.random.uniform(min_fraction, 1.0))
-    idx = torch.randperm(x.shape[1])
-    mask = idx < (fraction * x.shape[1])
-    x = x[:, mask].reshape(x.shape[0], -1, x.shape[2])
+    # fraction = float(np.random.uniform(min_fraction, 1.0))
+    # idx = torch.randperm(x.shape[1])
+    # mask = idx < (fraction * x.shape[1])
+    # x = x[:, mask].reshape(x.shape[0], -1, x.shape[2])
 
     return theta.float(), x.float()
 
