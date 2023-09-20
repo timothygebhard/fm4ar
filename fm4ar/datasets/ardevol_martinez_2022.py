@@ -100,7 +100,7 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
 
     # Get instrument and chemistry model
     instrument = config["data"]["instrument"]
-    chemistry_model = config["data"]["type"]
+    chemistry_model = str(config["data"]["type"])  # str needed for HDF access
 
     # Load data from HDF file
     file_path = (
