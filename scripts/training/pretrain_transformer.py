@@ -111,6 +111,7 @@ if __name__ == "__main__":
 
                 # Move data to the device
                 batch_size, n_bins, _ = x.shape
+                x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
                 x = x.to(device, non_blocking=True)
 
                 # Create a random mask to select a subset of the wavelengths.
@@ -170,6 +171,7 @@ if __name__ == "__main__":
             for theta_true, x in tq:
 
                 batch_size, n_bins, _ = x.shape
+                x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
                 x = x.to(device, non_blocking=True)
 
                 mask = torch.Tensor(torch.rand(n_bins) > 0.9)
