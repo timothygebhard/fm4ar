@@ -10,10 +10,10 @@ from typing import Any, Callable, Iterable, Literal
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn import functional
 from torch.optim import lr_scheduler as lrs
 from torch.utils.data import DataLoader
 
+from fm4ar.nn.modules import Sine
 from fm4ar.utils.resampling import resample_spectrum
 
 
@@ -33,13 +33,15 @@ def get_activation_from_string(
 
     match name.lower():
         case "elu":
-            return functional.elu
-        case "relu":
-            return functional.relu
-        case "leaky_relu":
-            return functional.leaky_relu
+            return torch.nn.ELU()
         case "gelu":
-            return functional.gelu
+            return torch.nn.GELU()
+        case "leaky_relu":
+            return torch.nn.LeakyReLU()
+        case "relu":
+            return torch.nn.ReLU()
+        case "sine":
+            return Sine()
         case _:
             raise ValueError("Invalid activation function!")
 
