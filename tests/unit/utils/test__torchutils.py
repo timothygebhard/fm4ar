@@ -13,7 +13,7 @@ from fm4ar.utils.torchutils import (
     get_activation_from_string,
     get_number_of_model_parameters,
     get_optimizer_from_kwargs,
-    get_weights_from_checkpoint,
+    get_weights_from_pt_file,
     load_and_or_freeze_model_weights,
     validate_dims,
 )
@@ -157,7 +157,7 @@ def test__get_weights_from_checkpoint(tmp_path: Path) -> None:
     torch.save({"model_state_dict": model.state_dict()}, tmp_path / "model.pt")
 
     # Load state dict from checkpoint
-    state_dict = get_weights_from_checkpoint(tmp_path / "model.pt", "layer_1")
+    state_dict = get_weights_from_pt_file(tmp_path / "model.pt", "layer_1")
     assert state_dict.keys() == {"layer_1.weight", "layer_1.bias"}
     assert torch.equal(state_dict["layer_1.weight"], model.layer_1.weight)
     assert torch.equal(state_dict["layer_1.bias"], model.layer_1.bias)

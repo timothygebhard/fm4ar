@@ -45,10 +45,6 @@ def create_embedding_net(
         embedding network and the dimension of the embedding space.
     """
 
-    # Get parameters for freezing weights, or loading weights from a file
-    freeze_weights = embedding_net_kwargs.pop("freeze_weights", False)
-    load_weights = embedding_net_kwargs.pop("load_weights", {})
-
     # Create and collect the embedding net stages
     stages = nn.ModuleDict()
     for stage_name, stage_kwargs in embedding_net_kwargs.items():
@@ -74,8 +70,8 @@ def create_embedding_net(
             embedding_net.add_module(name, stage)
 
     # Ensure that the final output has shape (embedding_dim, ). [We ignore the
-    # batch dimension here.] Multi-dimensional embeddings are  not supported.
-    # We check against `input_dim` because this always contains  the output
+    # batch dimension here.] Multi-dimensional embeddings are not supported.
+    # We check against `input_dim` because this always contains the output
     # dimension of the last stage, even if the embedding net is the identity.
     if len(input_dim) != 1:
         raise ValueError(
@@ -84,13 +80,6 @@ def create_embedding_net(
         )
     else:
         final_output_dim = int(input_dim[0])
-
-    # Load pre-trained weights or freeze the weights of the flow
-    load_and_or_freeze_model_weights(
-        model=embedding_net,
-        freeze_weights=freeze_weights,
-        load_weights=load_weights,
-    )
 
     return embedding_net, final_output_dim
 
@@ -112,8 +101,13 @@ def create_embedding_net_stage(
         net stage and the shape of the output of the stage.
     """
 
+    # Define shortcuts
     model_type = embedding_net_stage_kwargs["model_type"]
     kwargs = embedding_net_stage_kwargs.get("kwargs", {})
+
+    # Get parameters for freezing weights, or loading weights from a file
+    freeze_weights = embedding_net_stage_kwargs.pop("freeze_weights", False)
+    load_weights = embedding_net_stage_kwargs.pop("load_weights", {})
 
     # Create the stage
     stage: nn.Module
@@ -140,6 +134,13 @@ def create_embedding_net_stage(
             stage = TransformerEmbedding(input_dim=input_dim[-1], **kwargs)
         case _:
             raise ValueError(f"Invalid model type: {model_type}!")
+
+    # Load pre-trained weights or freeze the weights of the flow
+    load_and_or_freeze_model_weights(
+        model=stage,
+        freeze_weights=freeze_weights,
+        load_weights=load_weights,
+    )
 
     # Create some dummy input to determine the output dimension of the stage.
     # Note: Using `device="meta"` seems to break the transformer embedding?

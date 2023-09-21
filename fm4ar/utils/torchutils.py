@@ -426,17 +426,20 @@ def validate_shape(x: torch.Tensor, shape: tuple[int | None, ...]) -> None:
             )
 
 
-def get_weights_from_checkpoint(
+def get_weights_from_pt_file(
     file_path: Path,
     prefix: str,
+    drop_prefix: bool = True,
 ) -> OrderedDict[str, torch.Tensor]:
     """
-    Load the weights from a checkpoint file that starts with `prefix`.
+    Load the weights that starts with `prefix` from a *.pt file.
 
     Args:
-        file_path: Path to the checkpoint file.
+        file_path: Path to the *.pt file.
         prefix: Prefix that the weights must start with. Usually, this
             is the name of a model component, e.g., `vectorfield_net`.
+        drop_prefix: Whether to drop the prefix from the keys of the
+            returned dictionary.
 
     Returns:
         An OrderecDict with the weights that can be loaded into a model.
@@ -447,8 +450,10 @@ def get_weights_from_checkpoint(
 
     # Get the weights that start with `prefix`
     weights = OrderedDict(
-        (key, value) for key, value in checkpoint["model_state_dict"].items()
-        if key.startswith(prefix)
+        (
+            key if not drop_prefix else key.removeprefix(prefix + '.'),
+            value
+        ) for key, value in checkpoint.items() if key.startswith(prefix)
     )
 
     return weights
@@ -466,18 +471,21 @@ def load_and_or_freeze_model_weights(
         model: The model to be modified.
         freeze_weights: Whether to freeze all weights of the model.
         load_weights: A dictionary with the following keys:
-            - `file_path`: Path to the checkpoint file.
+            - `file_path`: Path to the checkpoint file (`*.pt`).
             - `prefix`: Prefix that the weights must start with.
                 Usually, this is the name of a model component, e.g.,
                 "vectorfield_net" or "context_embedding_net".
+            - `drop_prefix`: Whether to drop the prefix from the keys.
+                Default is `True`.
             If `None` or `{}` is passed, no weights are loaded.
     """
 
     # Load model weights from a file, if requested
     if load_weights is not None and load_weights:
-        state_dict = get_weights_from_checkpoint(
+        state_dict = get_weights_from_pt_file(
             file_path=Path(load_weights["file_path"]),
             prefix=load_weights["prefix"],
+            drop_prefix=bool(load_weights.get("drop_prefix", True)),
         )
         model.load_state_dict(state_dict)
 
