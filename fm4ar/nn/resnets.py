@@ -63,8 +63,6 @@ class DenseResidualNet(nn.Module):
         self.hidden_dims = hidden_dims
         self.num_res_blocks = len(self.hidden_dims)
 
-        activation_fn = get_activation_from_string(activation)
-
         # The first layer is a simple linear layer that maps the input to
         # the the size of the first hidden layer. We need some special logic
         # here for the case when the number of input features is zero, which
@@ -77,12 +75,16 @@ class DenseResidualNet(nn.Module):
             self.initial_layer = nn.Linear(self.input_dim, hidden_dims[0])
 
         # Create a list of residual blocks
+        # NOTE: We don't assign `get_activation_from_string(activation)` to a
+        # variable because we want to make sure that the activation function is
+        # a separate object in each block (so that we can change the parameters
+        # of each block independently).
         self.residual_blocks = nn.ModuleList(
             [
                 ResidualBlock(
                     features=self.hidden_dims[n],
                     context_features=context_features,
-                    activation=activation_fn,
+                    activation=get_activation_from_string(activation),
                     dropout_probability=dropout,
                     use_batch_norm=batch_norm,
                 )
