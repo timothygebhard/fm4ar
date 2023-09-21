@@ -110,9 +110,12 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
     """
 
     # Get instrument and chemistry model
-    chemistry_model = str(config["data"]["type"])  # str needed for HDF access
+    chemistry_model = config["data"]["type"]
     instrument = config["data"]["instrument"]
     n_samples = config["data"].get("n_samples")
+
+    # Define shortcut
+    key = f"{instrument}/{chemistry_model}"
 
     # Load data from HDF file
     file_path = (
@@ -122,18 +125,26 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
         / "merged.hdf"
     )
     with h5py.File(file_path.as_posix(), "r") as hdf_file:
-        theta = np.array(
-            hdf_file[instrument][chemistry_model]["theta"][:n_samples]
-        )
-        flux = np.array(
-            hdf_file[instrument][chemistry_model]["flux"][:n_samples]
-        )
-        noise = np.array(
-            hdf_file[instrument][chemistry_model]["noise"][:n_samples]
-        )
+
+        # Get parameters, flux, noise realizations, and wavelengths
+        theta = np.array(hdf_file[f"{key}/theta"][:n_samples])
+        flux = np.array(hdf_file[f"{key}/flux"][:n_samples])
+        noise = np.array(hdf_file[f"{key}/noise"][:n_samples])
         wlen = np.array(hdf_file[instrument]["wlen"])
-        names = hdf_file[instrument][chemistry_model].attrs["names"]
-        ranges = hdf_file[instrument][chemistry_model].attrs["ranges"]
+
+        # Note: We need the *noise levels* because they are an input to the
+        # model even if they are not used to add noise to the flux inside the
+        # data loader (because we already add noise here; see below)
+        if instrument == "NIRSPEC":
+            noise_levels: torch.Tensor | float = torch.from_numpy(
+                np.array(hdf_file[instrument]["noise_levels"])
+            ).float()
+        else:
+            noise_levels = float(hdf_file[instrument]["noise_levels"])
+
+        # Get parameter names and ranges
+        names = hdf_file[key].attrs["names"]
+        ranges = hdf_file[key].attrs["ranges"]
 
     # Add the noise to the flux
     flux += 1e-4 * noise
@@ -157,7 +168,7 @@ def load_ardevol_martinez_2022_test_dataset(config: dict) -> ArDataset:
         theta=torch.from_numpy(theta).float(),
         flux=torch.from_numpy(flux).float(),
         wlen=torch.from_numpy(wlen).float(),
-        noise_levels=0.0,  # noise was already added to the flux!
+        noise_levels=1e-4 * noise_levels,
         noise_floor=0.0,
         names=names,
         ranges=ranges,
