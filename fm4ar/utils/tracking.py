@@ -283,6 +283,7 @@ def write_history(
     learning_rates: list[float],
     extra_info: dict | None = None,
     file_name: str = "history.csv",
+    overwrite: bool = False,
 ) -> None:
     """
     Write history of training loss and other information to a text file.
@@ -296,11 +297,13 @@ def write_history(
         extra_info: Dictionary with any extra information or metrics to
             be written to the history file.
         file_name: Name of history file (default: "history.csv").
+        overwrite: Whether to overwrite the history file if it already
+            exists (default: False).
     """
 
-    # Make sure we do not overwrite pre-existing files
+    # Make sure we do not overwrite pre-existing files accidentally
     file_path = experiment_dir / file_name
-    if epoch == 1 and file_path.exists():
+    if epoch == 1 and file_path.exists() and not overwrite:
         raise FileExistsError(f"{file_path} already exists!")
 
     # Write header with column names
