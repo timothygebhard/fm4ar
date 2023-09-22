@@ -316,6 +316,83 @@ def collate_and_corrupt(
     return theta.float(), x.float()
 
 
+def collate_pretrain(
+    batch_as_list: list[tuple[torch.Tensor, torch.Tensor]],
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    This function should a list of the "vanilla" batches: original full
+    resolution and no noise added yet.
+
+    We now need to do the following:
+      - Add some noise to the fluxes (we can do this because the last
+        dimension of the context contains the noise levels)
+      - Resample to a random wavelength grid
+      - Randomly select a subset of wavelengths
+
+    We then return *both* the original batch and the corrupted batch.
+
+    Note: We can throw out the parameters `theta` here, because we will
+    not need them for pre-training (which is all about learning to
+    understand the structure of the spectra).
+    """
+
+    # Define some constants that might require tweaking
+    RESAMPLING_STD = 0.1
+    DISCARD_FRACTION = 0.2  # discard 20% of the wavelengths
+
+    # Determine target wavelength grid for resampling
+    # Note: Because the first and last bin usually end up containing NaNs,
+    # this is different from the `new_wlen` below which is the actual grid.
+    resampling_factor = float(10 ** np.random.normal(0, RESAMPLING_STD))
+    n_bins_original = int(batch_as_list[0][1].shape[0])
+    min_wlen = float(batch_as_list[0][1][:, 1].min())
+    max_wlen = float(batch_as_list[0][1][:, 1].max())
+    n_bins_resampled = int(n_bins_original * resampling_factor)
+    target_wlen = np.linspace(min_wlen, max_wlen, n_bins_resampled)
+
+    # Construct the "vanilla" batch (spectra without corruptions)
+    # Note: This is where we drop theta
+    x_list = []
+    for _, x_i in batch_as_list:
+        x_list.append(x_i)
+    x_vanilla = torch.stack(x_list)
+
+    # Add some noise to the fluxes
+    for x_i in x_list:
+        x_i[:, 0] += torch.randn_like(x_i[:, 2]) * x_i[:, 2]
+
+    # Resample to a different wavelength grid
+    for i in range(len(x_list)):
+        x_i = x_list[i]
+        old_flux, old_wlen, old_errs = x_i[:, 0], x_i[:, 1], x_i[:, 2]
+        new_wlen, new_flux, new_errs = resample_spectrum(
+            new_wlen=target_wlen,
+            old_wlen=old_wlen.numpy(),
+            old_flux=old_flux.numpy(),
+            old_errs=old_errs.numpy(),
+        )
+        x_list[i] = torch.stack(
+            [
+                torch.from_numpy(new_flux),
+                torch.from_numpy(new_wlen),
+                torch.from_numpy(new_errs),
+            ],
+            dim=1,
+        )
+
+    # Stack noisy, resampled spectra into a tensor
+    x_corrupted = torch.stack(x_list)
+
+    # Randomly select subset of wavelengths
+    idx = torch.randperm(x_corrupted.shape[1])
+    mask = idx > (DISCARD_FRACTION * x_corrupted.shape[1])
+    x_corrupted = x_corrupted[:, mask].reshape(
+        x_corrupted.shape[0], -1, x_corrupted.shape[2]
+    )
+
+    return x_vanilla.float(), x_corrupted.float()
+
+
 def build_train_and_test_loaders(
     dataset: torch.utils.data.Dataset,
     train_fraction: float,
@@ -354,6 +431,7 @@ def build_train_and_test_loaders(
     # Define collate functions
     collate_functions = {
         "collate_and_corrupt": collate_and_corrupt,
+        "collate_pretrain": collate_pretrain,
         None: None,
     }
 
@@ -366,7 +444,7 @@ def build_train_and_test_loaders(
         pin_memory=True,
         num_workers=num_workers,
         worker_init_fn=lambda _: np.random.seed(random_seed),
-        collate_fn=collate_functions.get(collate_fn),
+        collate_fn=collate_functions.get(collate_fn),  # type: ignore
     )
     test_loader = DataLoader(
         dataset=test_dataset,
