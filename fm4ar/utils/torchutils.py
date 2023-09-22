@@ -400,7 +400,8 @@ def build_train_and_test_loaders(
     num_workers: int,
     drop_last: bool = True,
     random_seed: int = 42,
-    collate_fn: Literal["collate_and_corrupt"] | None = None,
+    train_collate_fn: str | None = None,
+    test_collate_fn: str | None = None,
 ) -> tuple[DataLoader, DataLoader]:
     """
     Build train and test `DataLoaders` for the given `dataset`.
@@ -414,8 +415,10 @@ def build_train_and_test_loaders(
         drop_last: Whether to drop the last batch if it is smaller than
             `batch_size`. This is only used for the train loader.
         random_seed: Random seed for reproducibility.
-        collate_fn: Name of a collate function that is passed to the
+        train_collate_fn: Name of collate function that is passed to the
             train loader. If `None`, use the default collate function.
+        test_collate_fn: Name of collate function that is passed to the
+            test loader. If `None`, use the default collate function.
 
     Returns:
         A 2-tuple: `(train_loader, test_loader)`.
@@ -444,7 +447,7 @@ def build_train_and_test_loaders(
         pin_memory=True,
         num_workers=num_workers,
         worker_init_fn=lambda _: np.random.seed(random_seed),
-        collate_fn=collate_functions.get(collate_fn),  # type: ignore
+        collate_fn=collate_functions.get(train_collate_fn),  # type: ignore
     )
     test_loader = DataLoader(
         dataset=test_dataset,
@@ -453,6 +456,7 @@ def build_train_and_test_loaders(
         pin_memory=True,
         num_workers=num_workers,
         worker_init_fn=lambda _: np.random.seed(random_seed),
+        collate_fn=collate_functions.get(test_collate_fn),  # type: ignore
     )
 
     return train_loader, test_loader
