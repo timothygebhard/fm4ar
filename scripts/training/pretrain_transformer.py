@@ -10,7 +10,6 @@ import argparse
 import time
 from itertools import chain
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
@@ -30,6 +29,7 @@ from fm4ar.utils.torchutils import (
     get_lr,
     perform_scheduler_step,
 )
+from fm4ar.utils.tracking import write_history
 
 
 class ModelSaver:
@@ -45,7 +45,7 @@ class ModelSaver:
     def __call__(
         self,
         test_loss: float,
-        context_embedding_net: torch.nn.Module,
+        encoder: torch.nn.Module,
         decoder: torch.nn.Module,
     ) -> None:
         """
@@ -58,15 +58,24 @@ class ModelSaver:
 
         print("Saving the trained model...", end=" ")
         self.best_test_loss = test_loss
-        file_path = self.pretrain_dir / "context_embedding_net__best.pt"
-        torch.save(context_embedding_net.state_dict(), file_path)
+        file_path = self.pretrain_dir / "encoder__best.pt"
+        torch.save(encoder.state_dict(), file_path)
         file_path = self.pretrain_dir / "decoder__best.pt"
         torch.save(decoder.state_dict(), file_path)
         print("Done!\n\n")
 
 
+def rescale_wavelength(
+    wlen: torch.Tensor,
+    min_wlen: float = 0.6025,
+    max_wlen: float = 5.2976,
+) -> torch.Tensor:
+
+    return 2 * (wlen - min_wlen) / (max_wlen - min_wlen) - 1
+
+
 def get_optimizer_and_scheduler(
-    context_embedding_net: torch.nn.Module,
+    encoder: torch.nn.Module,
     decoder: torch.nn.Module,
 ) -> tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.OneCycleLR]:
     """
@@ -74,16 +83,16 @@ def get_optimizer_and_scheduler(
     """
 
     # Combine the parameters of the two models
-    params = chain(context_embedding_net.parameters(), decoder.parameters())
+    params = chain(encoder.parameters(), decoder.parameters())
 
     # Define the optimizer and the scheduler
-    optimizer = torch.optim.AdamW(
+    optimizer = torch.optim.Adam(
         params=params,
-        lr=3.0e-4,
+        lr=1.0e-4,
     )
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer=optimizer,
-        max_lr=3.0e-4,
+        max_lr=1.0e-4,
         epochs=args.epochs,
         steps_per_epoch=len(train_loader),
         pct_start=0.1,
@@ -95,7 +104,7 @@ def get_optimizer_and_scheduler(
 def train_batch(
     x: torch.Tensor,
     device: torch.device,
-    context_embedding_net: torch.nn.Module,
+    encoder: torch.nn.Module,
     decoder: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.OneCycleLR,
@@ -112,15 +121,15 @@ def train_batch(
     x = torch.Tensor(x.to(device, non_blocking=True))
 
     # Create a random mask to select a subset of the wavelengths as context
-    mask: torch.Tensor = torch.Tensor(torch.rand(n_bins) > 0.1)
-    n_pred = int((~mask).sum())
+    mask: torch.Tensor = torch.Tensor(torch.rand(n_bins) > -1)
+    n_pred = int((mask).sum())
 
     with autocast(enabled=(device.type == "cuda")):
 
         # Get the context embedding = representations of spectra
         # We reshape this to have one context for each wavelength
         # of each spectrum in the batch (see below).
-        z = context_embedding_net(x[:, mask, :])
+        z = encoder(x[:, mask, :])
         z = torch.nn.Sigmoid()(z)
         z = (
             z
@@ -132,8 +141,10 @@ def train_batch(
         # Predict the flux at the masked-out wavelengths.
         # Note: We need to reshape the wavelength dimension into
         # the batch dimension for the DenseResidualNet to work.
-        true_flux = x[:, ~mask, 0].reshape(batch_size, n_pred)
-        true_wlen = x[:, ~mask, 1].reshape(batch_size * n_pred, 1)
+        true_flux = x[:, mask, 0].reshape(batch_size, n_pred)
+        true_wlen = rescale_wavelength(
+            x[:, mask, 1].reshape(batch_size * n_pred, 1)
+        )
         pred_flux = decoder(x=true_wlen, context=z)
         pred_flux = pred_flux.reshape(batch_size, n_pred)
 
@@ -143,9 +154,7 @@ def train_batch(
     # Take a gradient step (with AMP)
     scaler.scale(loss).backward()  # type: ignore
     scaler.unscale_(optimizer)  # type: ignore
-    torch.nn.utils.clip_grad_norm_(
-        context_embedding_net.parameters(), 1.0
-    )
+    torch.nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
     torch.nn.utils.clip_grad_norm_(decoder.parameters(), 1.0)
     scaler.step(optimizer)  # type: ignore
     scaler.update()  # type: ignore
@@ -165,7 +174,7 @@ def train_batch(
 def train_epoch(
     epoch: int,
     device: torch.device,
-    context_embedding_net: torch.nn.Module,
+    encoder: torch.nn.Module,
     decoder: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.OneCycleLR,
@@ -175,7 +184,7 @@ def train_epoch(
     Train the model for one epoch.
     """
 
-    context_embedding_net.train()
+    encoder.train()
     decoder.train()
 
     train_start = time.time()
@@ -187,7 +196,7 @@ def train_epoch(
             loss = train_batch(
                 x=x,
                 device=device,
-                context_embedding_net=context_embedding_net,
+                encoder=encoder,
                 decoder=decoder,
                 optimizer=optimizer,
                 scheduler=scheduler,
@@ -199,7 +208,7 @@ def train_epoch(
     train_time = time.time() - train_start
     avg_train_loss = float(np.mean(train_losses))
 
-    print(f"Mean train loss: {avg_train_loss:.4f}")
+    print(f"Mean train loss: {avg_train_loss:.9f}")
     print(f"Training time:   {train_time:.2f} seconds\n")
 
     return avg_train_loss, train_time
@@ -208,7 +217,7 @@ def train_epoch(
 def test_batch(
     x: torch.Tensor,
     device: torch.device,
-    context_embedding_net: torch.nn.Module,
+    encoder: torch.nn.Module,
     decoder: torch.nn.Module,
     tq: tqdm,
 ) -> tuple[float, float]:
@@ -219,10 +228,10 @@ def test_batch(
     batch_size, n_bins, _ = x.shape
     x = torch.Tensor(x.to(device, non_blocking=True))
 
-    mask = torch.Tensor(torch.rand(n_bins) > 0.1)
-    n_pred = int((~mask).sum())
+    mask = torch.Tensor(torch.rand(n_bins) > -1)
+    n_pred = int((mask).sum())
 
-    z = context_embedding_net(x[:, mask, :])
+    z = encoder(x[:, mask, :])
     z = torch.nn.Sigmoid()(z)
     z = (
         z
@@ -231,13 +240,22 @@ def test_batch(
         .reshape(batch_size * n_pred, -1)
     )
 
-    true_flux = x[:, ~mask, 0].reshape(batch_size, n_pred)
-    true_wlen = x[:, ~mask, 1].reshape(batch_size * n_pred, 1)
+    true_flux = x[:, mask, 0].reshape(batch_size, n_pred)
+    true_wlen = rescale_wavelength(
+        x[:, mask, 1].reshape(batch_size * n_pred, 1)
+    )
     pred_flux = decoder(x=true_wlen, context=z)
     pred_flux = pred_flux.reshape(batch_size, n_pred)
 
     loss = torch.nn.functional.mse_loss(pred_flux, true_flux).item()
-    r2 = r2_score(input=pred_flux, target=true_flux).item()
+    r2 = float(
+        np.mean(
+            [
+                r2_score(input=pred_flux[i], target=true_flux[i]).item()
+                for i in range(batch_size)
+            ]
+        )
+    )
 
     tq.set_postfix(loss=loss, r2=r2)
 
@@ -247,7 +265,7 @@ def test_batch(
 def test_epoch(
     epoch: int,
     device: torch.device,
-    context_embedding_net: torch.nn.Module,
+    encoder: torch.nn.Module,
     decoder: torch.nn.Module,
     test_loader: DataLoader,
 ) -> tuple[float, float, float]:
@@ -255,7 +273,7 @@ def test_epoch(
     Evaluate the model on the test (= validation) set.
     """
 
-    context_embedding_net.eval()
+    encoder.eval()
     decoder.eval()
 
     test_losses = []
@@ -271,7 +289,7 @@ def test_epoch(
             loss, r2 = test_batch(
                 x=x,
                 device=device,
-                context_embedding_net=context_embedding_net,
+                encoder=encoder,
                 decoder=decoder,
                 tq=tq,
             )
@@ -282,10 +300,55 @@ def test_epoch(
     avg_test_loss = float(np.mean(test_losses))
     avg_test_r2_score = float(np.mean(r2_scores))
 
-    print(f"Mean test loss:  {avg_test_loss:.4f}")
+    print(f"Mean test loss:  {avg_test_loss:.9f}")
     print(f"Test time:       {test_time:.2f} seconds\n")
 
     return avg_test_loss, avg_test_r2_score, test_time
+
+
+def log_metrics(
+    epoch: int,
+    train_loss: float,
+    test_loss: float,
+    learning_rate: float,
+    train_time: float,
+    test_time: float,
+    test_r2_score: float,
+    pretrain_dir: Path,
+    use_wandb: bool = True,
+) -> None:
+    """
+    Log metrics to wandb.
+    """
+
+    # Log to local file
+    write_history(
+        experiment_dir=pretrain_dir,
+        epoch=epoch,
+        train_loss=train_loss,
+        test_loss=test_loss,
+        learning_rates=[learning_rate],
+        extra_info={
+            "train_time": train_time,
+            "test_time": test_time,
+            "test_r2_score": test_r2_score,
+        },
+        overwrite=True,
+    )
+
+    # Log to wandb
+    if use_wandb:
+        wandb.log(
+            {
+                "epoch": epoch,
+                "learning_rate": learning_rate,
+                "train_loss": train_loss,
+                "test_loss": test_loss,
+                "train_time": train_time,
+                "test_time": test_time,
+                "test_r2_score": test_r2_score,
+            }
+        )
 
 
 if __name__ == "__main__":
@@ -299,14 +362,18 @@ if __name__ == "__main__":
 
     # Define argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--disable-wandb", action="store_true")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--experiment-dir", type=Path)
     args = parser.parse_args()
 
     # Check if CUDA is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Define some shortcuts
     num_workers = 4 if device.type == "cuda" else 0
+    use_wandb = not args.disable_wandb
 
     # Load the experiment config
     config = load_config(experiment_dir=args.experiment_dir)
@@ -319,10 +386,10 @@ if __name__ == "__main__":
     dataset = load_dataset(config=config)
     train_loader, test_loader = build_train_and_test_loaders(
         dataset=dataset,
-        train_fraction=0.95,
+        train_fraction=config["data"]["train_fraction"],
         batch_size=args.batch_size,
         num_workers=num_workers,
-        collate_fn="collate_and_corrupt",
+        # collate_fn="collate_and_corrupt",
     )
     parameter_names = (
         dataset.names if dataset.names is not None
@@ -330,46 +397,39 @@ if __name__ == "__main__":
     )
 
     # Construct the embedding network
-    embedding_net_kwargs = config["model"]["context_embedding_kwargs"]
-    context_embedding_net, output_dim = create_embedding_net(
+    encoder_kwargs = config["model"]["context_embedding_kwargs"]
+    encoder, output_dim = create_embedding_net(
         input_dim=dataset.context_dim,
-        embedding_net_kwargs=embedding_net_kwargs,
+        embedding_net_kwargs=encoder_kwargs,
     )
-    context_embedding_net = context_embedding_net.to(device)
+    encoder = encoder.to(device)
 
     # Construct the decoder (which we won't really need after training)
-    decoder_kwargs: dict[str, Any] = dict(
-        input_dim=1,  # wavelength
-        output_dim=1,  # flux
-        hidden_dims=(2, 8, 32, 128, 512, 2048, 512, 128, 32, 8, 2),
-        context_features=output_dim,
-        activation="elu",
-        dropout=0.1,
-        batch_norm=True,
-    )
+    decoder_kwargs = config["model"]["decoder_kwargs"]
+    decoder_kwargs["context_features"] = output_dim
     decoder = DenseResidualNet(**decoder_kwargs).to(device)
+    decoder.residual_blocks[0].activation.w0 = 10.0
+    decoder.residual_blocks[1].activation.w0 = 5.0
 
     # Define an optimizer and a learning rate scheduler
-    optimizer, scheduler = get_optimizer_and_scheduler(
-        context_embedding_net=context_embedding_net,
-        decoder=decoder,
-    )
+    optimizer, scheduler = get_optimizer_and_scheduler(encoder, decoder)
 
     # Initialize wandb
-    wandb.init(
-        project="fm4ar",
-        dir=pretrain_dir,
-        group="pretrain_transformer",
-        config={
-            "batch_size": args.batch_size,
-            "epochs": args.epochs,
-            "experiment_dir": args.experiment_dir,
-            "dataset": config["data"],
-            "embedding_net_kwargs": embedding_net_kwargs,
-            "decoder_kwargs": decoder_kwargs,
-        }
-    )
-    print("\n")
+    if use_wandb:
+        wandb.init(
+            project="fm4ar",
+            dir=pretrain_dir,
+            group="pretrain_transformer",
+            config={
+                "batch_size": args.batch_size,
+                "epochs": args.epochs,
+                "experiment_dir": args.experiment_dir,
+                "dataset": config["data"],
+                "embedding_net_kwargs": encoder_kwargs,
+                "decoder_kwargs": decoder_kwargs,
+            }
+        )
+        print("\n")
 
     # Create a model saver and a scaler for AMP
     model_saver = ModelSaver(pretrain_dir=pretrain_dir)
@@ -382,7 +442,7 @@ if __name__ == "__main__":
         train_loss, train_time = train_epoch(
             epoch=epoch,
             device=device,
-            context_embedding_net=context_embedding_net,
+            encoder=encoder,
             decoder=decoder,
             optimizer=optimizer,
             scheduler=scheduler,
@@ -393,29 +453,25 @@ if __name__ == "__main__":
         test_loss, test_r2_score, test_time = test_epoch(
             epoch=epoch,
             device=device,
-            context_embedding_net=context_embedding_net,
+            encoder=encoder,
             decoder=decoder,
             test_loader=test_loader,
         )
 
         # Save the model if the test loss is better than the best so far
-        model_saver(
-            test_loss=test_loss,
-            context_embedding_net=context_embedding_net,
-            decoder=decoder,
-        )
+        model_saver(test_loss=test_loss, encoder=encoder, decoder=decoder)
 
         # Log metrics to wandb
-        wandb.log(
-            {
-                "epoch": epoch,
-                "learning_rate": get_lr(optimizer)[0],
-                "train_loss": train_loss,
-                "test_loss": test_loss,
-                "train_time": train_time,
-                "test_time": test_time,
-                "test_r2_score": test_r2_score,
-            }
+        log_metrics(
+            epoch=epoch,
+            train_loss=train_loss,
+            test_loss=test_loss,
+            learning_rate=get_lr(optimizer)[0],
+            train_time=train_time,
+            test_time=test_time,
+            test_r2_score=test_r2_score,
+            pretrain_dir=pretrain_dir,
+            use_wandb=use_wandb,
         )
 
         # Take a learning rate step
@@ -425,6 +481,7 @@ if __name__ == "__main__":
             end_of="epoch",
         )
 
-    wandb.finish()
+    if use_wandb:
+        wandb.finish()
 
     print(f"This took {time.time() - script_start:.2f} seconds!\n")
