@@ -616,7 +616,7 @@ def test_epoch(
             loss = pm.loss(data[0], *data[1:])
 
             # Compute log probability of true parameter values
-            if (epoch - 1) % logprob_epochs == 0:
+            if logprob_epochs > 0 and (epoch - 1) % logprob_epochs == 0:
                 logprob = pm.log_prob_batch(
                     data[0],
                     *data[1:],
@@ -630,7 +630,7 @@ def test_epoch(
             loss_info.print_info(batch_idx)
 
         # Return the average test loss and log probability
-        if (epoch - 1) % logprob_epochs == 0:
+        if logprob_epochs > 0 and (epoch - 1) % logprob_epochs == 0:
             avg_logprob = float(torch.cat(list_of_logprob).mean().item())
             return loss_info.get_avg(), avg_logprob
         else:
