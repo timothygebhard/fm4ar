@@ -117,7 +117,15 @@ def get_standardizer(config: dict) -> Standardizer:
             raise NotImplementedError()
 
         case "vasist-2023":
-            raise NotImplementedError()
+            file_name = config["data"].get("file_name", "merged.hdf")
+            suffix = file_name.split('.')[0]
+            file_path = (
+                get_datasets_dir()
+                / "vasist-2023"
+                / "precomputed"
+                / f"standardization_parameters__{suffix}.hdf"
+            )
+            return get_standardizer_from_hdf(file_path)
 
         case _:
             raise ValueError(f"Unknown dataset: `{name}`")
