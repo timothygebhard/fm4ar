@@ -6,8 +6,9 @@ import h5py
 import numpy as np
 import torch
 
-from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, LABELS
 from fm4ar.datasets.dataset import ArDataset
+from fm4ar.datasets.standardization import get_standardizer
+from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, LABELS
 from fm4ar.utils.paths import get_datasets_dir
 
 
@@ -19,10 +20,11 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
     # Define shortcuts
     which = config["data"]["which"]
     n_samples = config["data"].get("n_samples")
+    file_name = config["data"].get("file_name", "merged.hdf")
 
     # Load data from HDF file
     dataset_dir = get_datasets_dir() / "vasist-2023" / which
-    file_path = dataset_dir / "merged.hdf"
+    file_path = dataset_dir / file_name
     with h5py.File(file_path, "r") as hdf_file:
         theta = np.array(hdf_file["theta"][:n_samples])
         flux = np.array(hdf_file["spectra"][:n_samples])
@@ -30,6 +32,9 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
 
     # Define noise levels
     noise_levels = 1.25754e-17 * 1e16
+
+    # Load standardization parameters
+    standardizer = get_standardizer(config)
 
     # Create dataset
     return ArDataset(
@@ -40,5 +45,6 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
         noise_floor=0.0,
         names=LABELS,
         ranges=list(zip(LOWER, UPPER, strict=True)),
+        standardizer=standardizer,
         **config["data"],
     )
