@@ -336,6 +336,8 @@ class SoftClip(nn.Module):
         Output shape: (batch_size, n_bins, n_features)
         """
 
+        validate_shape(x, (None, None, None))
+
         # Split input features
         flux, *other_features = torch.split(x, 1, dim=2)
 
@@ -343,7 +345,9 @@ class SoftClip(nn.Module):
         flux = flux / (1 + torch.abs(flux / self.bound))
 
         # Reassemble input features
-        x = torch.stack((flux, *other_features), dim=2)
+        x = torch.stack((flux, *other_features), dim=2).squeeze(3)
+
+        validate_shape(x, (None, None, None))
 
         return x
 
