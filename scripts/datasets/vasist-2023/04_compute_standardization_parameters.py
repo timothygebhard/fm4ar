@@ -16,7 +16,6 @@ from fm4ar.utils.paths import get_datasets_dir
 def get_standardization_parameters(
     file_path: Path,
     key: str,
-    progress_bar: bool = True,
     buffer_size: int = 4096,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -26,7 +25,6 @@ def get_standardization_parameters(
     Args:
         file_path: Path to the HDF file containing the train dataset.
         key: Key of the dataset in the HDF file.
-        progress_bar: Whether to show a progress bar.
         buffer_size: Size of the buffer to use when computing the
             mean and std.
 
@@ -52,12 +50,8 @@ def get_standardization_parameters(
             else np.array([0, n])
         )
 
-        if progress_bar:
-            limits = tqdm(list(zip(idx[:-1], idx[1:], strict=True)))
-        else:
-            limits = list(zip(idx[:-1], idx[1:], strict=True))
-
-        for a, b in limits:
+        limits = list(zip(idx[:-1], idx[1:], strict=True))
+        for a, b in tqdm(limits, ncols=80):
             x = np.array(hdf_file[key][a:b])
             s0 += len(x)
             s1 += np.sum(x, axis=0)
@@ -101,6 +95,7 @@ if __name__ == "__main__":
         file_path=train_dir / args.input_file_name,
         key="spectra",
     )
+    print()
 
     # Save the standardization parameters for theta
     print("Computing standardization parameters for theta:")
@@ -108,6 +103,7 @@ if __name__ == "__main__":
         file_path=train_dir / args.input_file_name,
         key="theta",
     )
+    print()
 
     # Create a new HDF file for the standardization parameters
     print("Saving standardization parameters...", end=" ")
