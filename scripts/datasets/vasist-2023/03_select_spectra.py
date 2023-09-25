@@ -2,6 +2,7 @@
 Select spectra from the Vasist-2023 dataset that meet certain criteria.
 """
 
+import argparse
 import time
 
 import h5py
@@ -16,10 +17,27 @@ if __name__ == "__main__":
     script_start = time.time()
     print("\nSELECT SPECTRA\n")
 
-    train_dir = get_datasets_dir() / "vasist-2023" / "train"
+    # Get command line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--output-file-name",
+        type=str,
+        default="selected.hdf",
+        help="Name of the output HDF file with the selected spectra.",
+    )
+    parser.add_argument(
+        "--which",
+        type=str,
+        choices=["train", "test"],
+        default="train",
+        help="Which dataset to select spectra from (train or test).",
+    )
+    args = parser.parse_args()
+
+    train_dir = get_datasets_dir() / "vasist-2023" / args.which
 
     # Open the HDF file with all the spectra
-    with h5py.File(train_dir / "selected.hdf", "w") as dst:
+    with h5py.File(train_dir / args.output_file_name, "w") as dst:
         with h5py.File(train_dir / "merged.hdf", "r") as src:
 
             # Copy over wavelengths; prepare datasets for spectra and theta
