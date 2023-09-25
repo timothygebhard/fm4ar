@@ -1,5 +1,5 @@
 """
-Compute the standardization parameters for the dataset.
+Compute the standardization parameters from the training dataset.
 """
 
 import argparse
