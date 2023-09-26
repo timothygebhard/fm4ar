@@ -592,8 +592,9 @@ def test_epoch(
             print_freq=1,
         )
 
-        # Store all log probabilities in a list
-        list_of_logprob: list[torch.Tensor] = []
+        # Store average logprob: We only compute this from the first batch,
+        # because it otherwise takes extremely long for flow matching models.
+        avg_logprob = None
 
         # Additional keyword arguments for log_prob_batch
         # Background: It seems that the time-inverse ODE required to compute
@@ -615,23 +616,23 @@ def test_epoch(
             # Compute test loss
             loss = pm.loss(data[0], *data[1:])
 
-            # Compute log probability of true parameter values
-            if logprob_epochs > 0 and (epoch - 1) % logprob_epochs == 0:
+            # Compute log probability of true parameter values of first batch
+            if (
+                logprob_epochs > 0
+                and (epoch - 1) % logprob_epochs == 0
+                and batch_idx == 0
+            ):
                 logprob = pm.log_prob_batch(
                     data[0],
                     *data[1:],
                     **log_prob_kwargs
 
                 ).cpu()
-                list_of_logprob.append(logprob)
+                avg_logprob = float(logprob.mean().item())
 
             # Update loss for history and logging
             loss_info.update(loss.item(), len(data[0]))
             loss_info.print_info(batch_idx)
 
         # Return the average test loss and log probability
-        if logprob_epochs > 0 and (epoch - 1) % logprob_epochs == 0:
-            avg_logprob = float(torch.cat(list_of_logprob).mean().item())
-            return loss_info.get_avg(), avg_logprob
-        else:
-            return loss_info.get_avg(), None
+        return loss_info.get_avg(), avg_logprob
