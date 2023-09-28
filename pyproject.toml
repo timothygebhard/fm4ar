@@ -9,6 +9,7 @@ requires = [
     "wheel >=0.40.0",
 ]
 
+
 # -----------------------------------------------------------------------------
 # PROJECT AND DEPENDENCIES
 # -----------------------------------------------------------------------------
@@ -20,12 +21,12 @@ description = "Flow matching for atmospheric retrievals of exoplanets."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "chainconsumer ~=0.34.0",
+    "chainconsumer~=0.34.0",
     "coolname",
     "corner",
     "dill",
     "gitpython",
-    "glasflow ~=0.2.0",
+    "glasflow~=0.2.0",
     "h5py",
     "ipython",
     "joblib",
@@ -34,16 +35,17 @@ dependencies = [
     "nautilus-sampler",
     "numpy",
     "pandas",
+    "pydantic>=2.0.0",
     "pyyaml",
     "requests",
     "scikit-learn",
     "scipy",
-    "spectres ~=2.2.0",
+    "spectres~=2.2.0",
     "tabulate",
     "threadpoolctl",
-    "torch ~=2.0.1",
-    "torchdiffeq ~=0.2.3",
-    "torchvision ~=0.15.2",
+    "torch~=2.0.1",
+    "torchdiffeq~=0.2.3",
+    "torchvision~=0.15.2",
     "tqdm",
     "wandb",
 ]
@@ -64,7 +66,7 @@ dev = [
     "types-toml",
 ]
 petitRADTRANS = [
-    "petitRADTRANS ~=2.6.7",
+    "petitRADTRANS==2.6.7",
 ]
 
 [project.scripts]
