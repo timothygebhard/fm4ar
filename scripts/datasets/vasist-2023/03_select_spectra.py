@@ -73,7 +73,9 @@ if __name__ == "__main__":
             # meet the criteria
             print("Selecting spectra:")
             idx = np.arange(0, len(src["spectra"]), 4096)
-            for a, b in tqdm(list(zip(idx[:-1], idx[1:])), ncols=80):
+            for a, b in tqdm(
+                list(zip(idx[:-1], idx[1:], strict=True)), ncols=80
+            ):
 
                 # Define criteria for spectra to keep
                 mean = np.mean(src["spectra"][a:b], axis=1)

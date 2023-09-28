@@ -111,10 +111,10 @@ if __name__ == "__main__":
     file_name = f"standardization_parameters__{suffix}.hdf"
     file_path = precomputed_dir / file_name
     with h5py.File(file_path, "w") as f:
-        f.create_dataset(name=f"flux/mean", data=flux_mean, dtype=float)
-        f.create_dataset(name=f"flux/std", data=flux_mean, dtype=float)
-        f.create_dataset(name=f"theta/mean", data=theta_mean, dtype=float)
-        f.create_dataset(name=f"theta/std", data=theta_mean, dtype=float)
+        f.create_dataset(name="flux/mean", data=flux_mean, dtype=float)
+        f.create_dataset(name="flux/std", data=flux_mean, dtype=float)
+        f.create_dataset(name="theta/mean", data=theta_mean, dtype=float)
+        f.create_dataset(name="theta/std", data=theta_mean, dtype=float)
     print("Done!")
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds.\n")
