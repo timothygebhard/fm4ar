@@ -152,4 +152,4 @@ def load_toy_dataset(config: dict) -> ArDataset:
         wlen=torch.from_numpy(wlen), noise_levels=noise_levels,
         names=[f"$p_{i}$" for i in range(ndim)],
         ranges=[(-3, 3) for _ in range(ndim)], **config["data"]
-        )
+    )
