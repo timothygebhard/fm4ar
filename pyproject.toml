@@ -67,6 +67,10 @@ petitRADTRANS = [
     "petitRADTRANS ~=2.6.7",
 ]
 
+[project.scripts]
+nex = "fm4ar.utils.create_experiment_dir:create_experiment_dir"
+
+
 # -----------------------------------------------------------------------------
 # TOOL CONFIGURATION
 # -----------------------------------------------------------------------------
