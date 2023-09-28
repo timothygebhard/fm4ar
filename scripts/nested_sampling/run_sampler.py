@@ -3,22 +3,19 @@ Unified script to run different nested sampling algorithms.
 """
 
 import argparse
-import json
 import os
 import sys
 import warnings
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
-from coolname import generate_slug
+from chainconsumer import ChainConsumer
 
 from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, NAMES
 from fm4ar.datasets.vasist_2023.simulation import Simulator
-from fm4ar.nested_sampling import (
-    create_posterior_plot,
-    get_target_parameters_and_spectrum,
-)
+from fm4ar.nested_sampling.config import load_config
 from fm4ar.nested_sampling.samplers import get_sampler
 from fm4ar.utils.git_utils import document_git_status
 from fm4ar.utils.htcondor import (
@@ -36,77 +33,15 @@ def get_cli_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--bid",
-        type=int,
-        default=25,
-        help="Bid to use for the HTCondor job (default: 25).",
-    )
-    parser.add_argument(
-        "--max-runtime",
-        type=int,
-        default=4 * 60 * 60,
-        help="Maximum runtime (in seconds) for a cluster job (default: 4h).",
-    )
-    parser.add_argument(
-        "--memory",
-        type=int,
-        default=100_000,
-        help="Memory (in MB) to use for the HTCondor job (default: 100 GB).",
-    )
-    parser.add_argument(
-        "--n-cpus",
-        type=int,
-        default=96,
-        help="Number of CPUs to use for the HTCondor job (default: 96).",
-    )
-    parser.add_argument(
-        "--n-live-points",
-        type=int,
-        default=4_000,
-        help="Number of livepoints (default 4,000).",
-    )
-    parser.add_argument(
-        "--parameters",
-        nargs="+",
-        default=None,
-        help="Parameters to use for the retrieval (default: all).",
-    )
-    parser.add_argument(
-        "--random-seed",
-        type=int,
-        default=42,
-        help="Random seed (default: 42).",
-    )
-    parser.add_argument(
-        "--resolution",
-        type=int,
-        default=1_000,
-        choices=[400, 1_000],
-        help=r"Resolution R = ∆λ/λ to use for simulations (default: 1,000).",
-    )
-    parser.add_argument(
-        "--run-dir",
-        type=str,
-        default=None,
+        "--experiment-dir",
+        type=Path,
+        required=True,
         help="Directory where to save the results.",
-    )
-    parser.add_argument(
-        "--sampler",
-        type=str,
-        choices=["dynesty", "multinest", "nautilus"],
-        default="nautilus",
-        help="Nested sampling sampler to use (default: nautilus).",
     )
     parser.add_argument(
         "--start-submission",
         action="store_true",
         help="Whether to start a new submission.",
-    )
-    parser.add_argument(
-        "--time-limit",
-        type=int,
-        default=15,
-        help="Time limit (in seconds) for simulations (default: 10s).",
     )
     args = parser.parse_args()
 
@@ -118,14 +53,39 @@ def sync_mpi_processes(comm: Any) -> None:
         comm.Barrier()
 
 
+def create_posterior_plot(
+    points: np.ndarray,
+    weights: np.ndarray,
+    names: list[str],
+    ground_truth: np.ndarray,
+    file_path: Path,
+) -> None:
+    """
+    Create a corner plot of the posterior.
+    """
+
+    # Create the corner plot using ChainConsumer
+    c = ChainConsumer()
+    c.add_chain(
+        chain=points,
+        weights=weights,
+        parameters=names,
+        name="posterior",
+    )
+    c.configure(sigmas=[0, 1, 2, 3])
+    _ = c.plotter.plot(truth=ground_truth.tolist())
+
+    # Save the plot
+    plt.savefig(file_path, dpi=300, bbox_inches="tight", pad_inches=0.1)
+
+
 if __name__ == "__main__":
 
     print("\nRUN NESTED SAMPLING RETRIEVAL\n", flush=True)
 
-    # Load and augment command line arguments
+    # Load command line arguments and configuration file
     args = get_cli_arguments()
-    if args.parameters is None:
-        args.parameters = list(NAMES)
+    config = load_config(experiment_dir=args.experiment_dir)
 
     # Make sure we do not run nested sampling on the login node
     check_if_on_login_node(args.start_submission)
@@ -141,10 +101,14 @@ if __name__ == "__main__":
             "--mca btl self,vader,tcp",
             sys.executable,
             Path(__file__).resolve().as_posix(),
+            f"--experiment-dir {args.experiment_dir}",
         ]
     else:
         executable = sys.executable
-        job_arguments = [Path(__file__).resolve().as_posix()]
+        job_arguments = [
+            Path(__file__).resolve().as_posix(),
+            f"--experiment-dir {args.experiment_dir}",
+        ]
 
     # -------------------------------------------------------------------------
     # Either prepare first submission...
@@ -152,47 +116,23 @@ if __name__ == "__main__":
 
     if args.start_submission:
 
-        # Prepare the results directory
-        results_dir = Path(__file__).parent / "results" / args.sampler
-        results_dir.mkdir(exist_ok=True, parents=True)
-
-        # Create a new directory for this run
-        n_runs = len(list(results_dir.glob("*")))
-        run_dir = results_dir / str(f"{n_runs:d}-" + generate_slug(2))
-        run_dir.mkdir(exist_ok=True)
-        job_arguments.append(f"--run-dir {run_dir}")
-
-        # Dump all arguments to a file
-        with open(run_dir / "arguments.json", "w") as json_file:
-            json.dump(args.__dict__, json_file, indent=4)
-
-        # Document the git status
-        document_git_status(target_dir=run_dir, verbose=True)
-
-        # Collect all arguments for the submission file
-        for key, value in args.__dict__.items():
-            if key not in ["start_submission", "run_dir"]:
-                key = key.replace("_", "-")
-                value = " ".join(value) if isinstance(value, list) else value
-                job_arguments.append(f"--{key} {value}")
-
         print("Creating submission file...", end=" ", flush=True)
         condor_settings = CondorSettings(
             executable=executable,
-            num_cpus=args.n_cpus,
-            memory_cpus=args.memory,
+            num_cpus=config.htcondor.n_cpus,
+            memory_cpus=config.htcondor.memory,
             arguments=job_arguments,
             retry_on_exit_code=42,
             log_file_name="log.$$([NumJobStarts])",
         )
         file_path = create_submission_file(
             condor_settings=condor_settings,
-            experiment_dir=run_dir,
+            experiment_dir=args.experiment_dir,
         )
         print("Done!", flush=True)
 
         print("Submitting job...", end=" ", flush=True)
-        condor_submit_bid(file_path=file_path, bid=args.bid)
+        condor_submit_bid(file_path=file_path, bid=config.htcondor.bid)
         print("Done!\n", flush=True)
 
         sys.exit(0)
@@ -201,8 +141,8 @@ if __name__ == "__main__":
     # ...or actually run the nested sampling algorithm
     # -------------------------------------------------------------------------
 
-    if args.run_dir is None:
-        raise RuntimeError("Must specify --run-dir or --start-submission!")
+    # Document the git status
+    document_git_status(target_dir=args.experiment_dir, verbose=True)
 
     # In case of MultiNest + MPI, this will be overwritten
     comm = None
@@ -211,10 +151,10 @@ if __name__ == "__main__":
     # Treat warnings as errors
     warnings.filterwarnings("error")
     os.environ["OMP_NUM_THREADS"] = "1"
-    np.random.seed(args.random_seed)
+    np.random.seed(config.sampler.random_seed)
 
     # Handle MPI communication for MultiNest
-    if args.sampler == "multinest":
+    if config.sampler.which == "multinest":
         from mpi4py import MPI
 
         comm = MPI.COMM_WORLD
@@ -222,30 +162,41 @@ if __name__ == "__main__":
         print(f"MPI rank: {rank}", flush=True)
         sync_mpi_processes(comm)
 
-    print("Simulating ground truth spectrum...", end=" ", flush=True)
-    theta_obs, x_obs = get_target_parameters_and_spectrum(
-        resolution=args.resolution,
-        time_limit=args.time_limit,
+    print("Creating simulator...", end=" ", flush=True)
+    simulator = Simulator(
+        noisy=False,
+        R=config.simulator.resolution,
+        time_limit=config.simulator.time_limit,
     )
     print("Done!", flush=True)
     sync_mpi_processes(comm)
 
-    print("Creating simulator...", end=" ", flush=True)
-    simulator = Simulator(
-        noisy=False,
-        R=args.resolution,
-        time_limit=args.time_limit,
-    )
+    print("Simulating ground truth spectrum...", end=" ", flush=True)
+    theta_obs = np.array([config.parameters[n].true_value for n in NAMES])
+    if (result := simulator(theta_obs)) is None:
+        raise RuntimeError("Failed to simulate ground truth!")
+    _, x_obs = result
     print("Done!", flush=True)
     sync_mpi_processes(comm)
 
     # Define prior and likelihood
     print("Setting up prior and likelihood...", end=" ", flush=True)
 
-    # Get the lower and upper bounds for the selected parameters
-    idx = np.array([list(NAMES).index(name) for name in args.parameters])
-    lower = np.array(LOWER)[idx]
-    upper = np.array(UPPER)[idx]
+    # Create binary masks for the different parameters actions
+    condition_mask = np.array(
+        [config.parameters[name].action == "condition" for name in NAMES]
+    )
+    infer_mask = np.array(
+        [config.parameters[name].action == "infer" for name in NAMES]
+    )
+    marginalize_mask = np.array(
+        [config.parameters[name].action == "marginalize" for name in NAMES]
+    )
+
+    # Get the lower and upper bounds for the parameters which we want to infer
+    # and for which we need to transform the prior
+    lower = np.array(LOWER)[infer_mask]
+    upper = np.array(UPPER)[infer_mask]
 
     # Define the prior transform function
     def prior(u: np.ndarray) -> np.ndarray:
@@ -256,11 +207,22 @@ if __name__ == "__main__":
     # the choice from `fm4ar.datasets.vasist_2023.simulation.Simulator`.
     # The value was original chosen to give a SNR of 10 (see paper).
     def likelihood(theta: np.ndarray, sigma: float = 0.125754) -> float:
-        # Update theta_obs with the new values
-        # This allows to run a retrieval for a subset of the parameters,
-        # while keeping the others fixed to their ground truth values.
+
+        # Construct theta for the simulation.
+        # First, we copy the ground truth values for all parameters.
         combined_theta = theta_obs.copy()
-        combined_theta[idx] = theta
+
+        # Then, we overwrite the values for the parameters over which we
+        # want to marginalize with a random sample from the prior
+        combined_theta[marginalize_mask] = np.random.uniform(
+            LOWER[marginalize_mask],
+            UPPER[marginalize_mask],
+        )
+
+        # Finally, we overwrite the values for the parameters which we want
+        # to infer with the values from the current sample that is controlled
+        # by the nested sampling algorithm
+        combined_theta[infer_mask] = theta
 
         # If anything goes wrong, return an approximation for "-inf"
         # (MultiNest can't seem to handle proper -inf values and will complain)
@@ -289,20 +251,24 @@ if __name__ == "__main__":
     sync_mpi_processes(comm)
 
     print("Creating sampler...", end=" ", flush=True)
-    sampler = get_sampler(args.sampler)(
-        run_dir=Path(args.run_dir),
+    sampler = get_sampler(config.sampler.which)(
+        run_dir=args.experiment_dir,
         prior=prior,
         likelihood=likelihood,
-        n_dim=len(args.parameters),
-        n_livepoints=args.n_live_points,
-        parameters=list(args.parameters),
-        random_seed=args.random_seed,
+        n_dim=sum(infer_mask),
+        n_livepoints=config.sampler.n_livepoints,
+        inferred_parameters=np.array(NAMES)[infer_mask].tolist(),
+        random_seed=config.sampler.random_seed,
     )
     print("Done!\n", flush=True)
     sync_mpi_processes(comm)
 
     print("Running sampler:", flush=True)
-    sampler.run(max_runtime=args.max_runtime, verbose=True)
+    sampler.run(
+        max_runtime=config.htcondor.max_runtime,
+        verbose=True,
+        run_kwargs=config.sampler.run_kwargs,
+    )
     sampler.cleanup()
     sync_mpi_processes(comm)
 
@@ -324,10 +290,10 @@ if __name__ == "__main__":
 
             print("Creating plot...", end=" ", flush=True)
             create_posterior_plot(
-                points=sampler.points,
-                weights=sampler.weights,
-                parameters=args.parameters,
-                file_path=Path(args.run_dir) / "posterior.pdf",
+                points=np.array(sampler.points),
+                weights=np.array(sampler.weights),
+                names=np.array(NAMES)[infer_mask].tolist(),
+                file_path=args.experiment_dir / "posterior.pdf",
                 ground_truth=theta_obs,
             )
             print("Done!", flush=True)
