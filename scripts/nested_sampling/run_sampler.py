@@ -91,10 +91,10 @@ if __name__ == "__main__":
     check_if_on_login_node(args.start_submission)
 
     # Collect arguments for submission file
-    if args.sampler == "multinest":
+    if config.sampler.which == "multinest":
         executable = "/usr/mpi/current/bin/mpiexec"
         job_arguments = [
-            f"-n {args.n_cpus}",
+            f"-n {config.htcondor.n_cpus}",
             "--bind-to core:overload-allowed",
             "--mca coll ^hcoll",
             "--mca pml ob1",
