@@ -7,7 +7,7 @@ import time
 from abc import ABC, abstractmethod
 from functools import partial
 from pathlib import Path
-from typing import Callable, Type
+from typing import Any, Callable, Type
 
 import dill
 import multiprocess
@@ -29,7 +29,7 @@ class Sampler(ABC):
         likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
-        parameters: list[str],
+        inferred_parameters: list[str],
         random_seed: int = 42,
     ) -> None:
 
@@ -38,7 +38,7 @@ class Sampler(ABC):
         self.likelihood = likelihood
         self.n_dim = n_dim
         self.n_livepoints = n_livepoints
-        self.parameters = parameters
+        self.inferred_parameters = inferred_parameters
         self.random_seed = random_seed
 
         self.complete = False
@@ -47,10 +47,15 @@ class Sampler(ABC):
         # This is only really required for the MultiNest sampler, but we
         # do it for all samplers for consistency.
         with open(run_dir / 'params.json', 'w') as json_file:
-            json.dump(parameters, json_file, indent=2)
+            json.dump(inferred_parameters, json_file, indent=2)
 
     @abstractmethod
-    def run(self, max_runtime: int, verbose: bool = False) -> None:
+    def run(
+        self,
+        max_runtime: int,
+        verbose: bool = False,
+        run_kwargs: dict[str, Any] | None = None,
+    ) -> None:
         """
         Run the sampler for the given `max_runtime`.
         """
@@ -96,7 +101,7 @@ class NautilusSampler(Sampler):
         likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
-        parameters: list[str],
+        inferred_parameters: list[str],
         random_seed: int = 42,
     ) -> None:
 
@@ -106,7 +111,7 @@ class NautilusSampler(Sampler):
             likelihood=likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
-            parameters=parameters,
+            inferred_parameters=inferred_parameters,
             random_seed=random_seed,
         )
 
@@ -126,18 +131,25 @@ class NautilusSampler(Sampler):
             seed=self.random_seed,
         )
 
-    def run(self, max_runtime: int, verbose: bool = True) -> None:
+    def run(
+        self,
+        max_runtime: int,
+        verbose: bool = True,
+        run_kwargs: dict[str, Any] | None = None,
+    ) -> None:
         """
         Run the Nautilus sampler.
         """
 
         start_time = time.time()
+        run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         try:
             with timelimit(seconds=max_runtime):
                 self.sampler.run(
                     verbose=verbose,
                     discard_exploration=True,
+                    **run_kwargs,
                 )
         except TimeoutException:
             print("\nTimeout reached, stopping sampler!\n")
@@ -177,7 +189,7 @@ class DynestySampler(Sampler):
         likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
-        parameters: list[str],
+        inferred_parameters: list[str],
         random_seed: int = 42,
     ) -> None:
 
@@ -187,7 +199,7 @@ class DynestySampler(Sampler):
             likelihood=likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
-            parameters=parameters,
+            inferred_parameters=inferred_parameters,
             random_seed=random_seed,
         )
 
@@ -226,12 +238,18 @@ class DynestySampler(Sampler):
                 queue_size=self.pool_size,
             )
 
-    def run(self, max_runtime: int, verbose: bool = True) -> None:
+    def run(
+        self,
+        max_runtime: int,
+        verbose: bool = True,
+        run_kwargs: dict[str, Any] | None = None,
+    ) -> None:
         """
         Run the Dynesty sampler.
         """
 
         start_time = time.time()
+        run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         try:
             with timelimit(seconds=max_runtime):
@@ -239,6 +257,7 @@ class DynestySampler(Sampler):
                     checkpoint_file=self.checkpoint_path.as_posix(),
                     print_progress=verbose,
                     resume=self.resume,
+                    **run_kwargs,
                 )
         except TimeoutException:
             print("\nTimeout reached, stopping sampler!\n")
@@ -280,7 +299,7 @@ class MultiNestSampler(Sampler):
         likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
-        parameters: list[str],
+        inferred_parameters: list[str],
         random_seed: int = 42,
     ) -> None:
 
@@ -290,18 +309,24 @@ class MultiNestSampler(Sampler):
             likelihood=likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
-            parameters=parameters,
+            inferred_parameters=inferred_parameters,
             random_seed=random_seed,
         )
 
         self.outputfiles_basename = (self.run_dir / "run").as_posix()
 
-    def run(self, max_runtime: int, verbose: bool = True) -> None:
+    def run(
+        self,
+        max_runtime: int,
+        verbose: bool = True,
+        run_kwargs: dict[str, Any] | None = None,
+    ) -> None:
         """
         Run the MultiNest sampler.
         """
 
         start_time = time.time()
+        run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         # Import this here to reduce dependencies
         # MultiNest is a pain to install, so we only import it if we need it
@@ -326,6 +351,8 @@ class MultiNestSampler(Sampler):
                 n_live_points=self.n_livepoints,
                 verbose=verbose,
                 resume=True,
+                seed=self.random_seed,
+                **run_kwargs,
             ),
         )
         process.start()
