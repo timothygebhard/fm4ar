@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from chainconsumer import ChainConsumer
 
-from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, NAMES
+from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, NAMES, LABELS
 from fm4ar.datasets.vasist_2023.simulation import Simulator
 from fm4ar.nested_sampling.config import load_config
 from fm4ar.nested_sampling.samplers import get_sampler
@@ -72,7 +72,7 @@ def create_posterior_plot(
         parameters=names,
         name="posterior",
     )
-    c.configure(sigmas=[0, 1, 2, 3])
+    c.configure(sigmas=[0, 1, 2, 3], summary=False)
     _ = c.plotter.plot(truth=ground_truth.tolist())
 
     # Save the plot
@@ -183,15 +183,21 @@ if __name__ == "__main__":
     print("Setting up prior and likelihood...", end=" ", flush=True)
 
     # Create binary masks for the different parameters actions
-    condition_mask = np.array(
-        [config.parameters[name].action == "condition" for name in NAMES]
-    )
     infer_mask = np.array(
         [config.parameters[name].action == "infer" for name in NAMES]
     )
     marginalize_mask = np.array(
         [config.parameters[name].action == "marginalize" for name in NAMES]
     )
+
+    # Get a prior sample for the marginalized parameters
+    def sample_marginalized_parameters() -> np.ndarray:
+        return np.array(
+            np.random.uniform(
+                np.array(LOWER)[marginalize_mask],
+                np.array(UPPER)[marginalize_mask],
+            )
+        )
 
     # Get the lower and upper bounds for the parameters which we want to infer
     # and for which we need to transform the prior
@@ -214,10 +220,8 @@ if __name__ == "__main__":
 
         # Then, we overwrite the values for the parameters over which we
         # want to marginalize with a random sample from the prior
-        combined_theta[marginalize_mask] = np.random.uniform(
-            LOWER[marginalize_mask],
-            UPPER[marginalize_mask],
-        )
+        if marginalize_mask.any():
+            combined_theta[marginalize_mask] = sample_marginalized_parameters()
 
         # Finally, we overwrite the values for the parameters which we want
         # to infer with the values from the current sample that is controlled
@@ -237,7 +241,7 @@ if __name__ == "__main__":
             return -1e300
 
         # If there are NaNs, return "-inf"
-        wavelengths, x = result
+        _, x = result
         if np.isnan(x).any():
             return -1e300
 
@@ -292,9 +296,9 @@ if __name__ == "__main__":
             create_posterior_plot(
                 points=np.array(sampler.points),
                 weights=np.array(sampler.weights),
-                names=np.array(NAMES)[infer_mask].tolist(),
+                names=np.array(LABELS)[infer_mask].tolist(),
                 file_path=args.experiment_dir / "posterior.pdf",
-                ground_truth=theta_obs,
+                ground_truth=theta_obs[infer_mask],
             )
             print("Done!", flush=True)
 
