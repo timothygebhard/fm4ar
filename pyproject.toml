@@ -116,6 +116,7 @@ select = [
 ]
 ignore = [
     "B019",  # "Use of functools.lru_cache can lead to memory leaks"
+    "B028",  # "No explicit `stacklevel` keyword argument found"
 ]
 line-length = 79
 target-version = "py310"
