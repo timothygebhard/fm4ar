@@ -4,7 +4,6 @@ Methods for preparing a stage and running the training for it.
 
 import numpy as np
 import torch
-import wandb
 from torch.utils.data import DataLoader
 
 from fm4ar.datasets.dataset import ArDataset
@@ -137,11 +136,6 @@ def train_stages(
         if runtime_limits.local_limits_exceeded(pm.epoch):
             print("Local runtime limits reached. Ending program.\n")
             break
-
-    # Mark the run as finished on wandb
-    # This should happen automatically, but lately there have been issues with
-    # jobs restarting themselves, and maybe this line will help with that?
-    wandb.finish()
 
     # Check if we have reached the end of the training
     complete = bool(pm.epoch == end_epochs[-1])
