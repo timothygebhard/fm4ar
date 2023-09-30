@@ -53,7 +53,7 @@ def load_ardevol_martinez_2022_train_dataset(config: dict) -> ArDataset:
 
     # Select input and output wavelengths
     input_wlen = np.array(metadata["Wavelength"]["NIRSPEC"])
-    instrument = config["data"].pop("instrument")
+    instrument = config["data"]["instrument"]
     if instrument == "NIRSPEC":
         output_wlen = np.array(metadata["Wavelength"]["NIRSPEC"])
     elif instrument == "WFC3":
