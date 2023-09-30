@@ -39,9 +39,6 @@ if __name__ == "__main__":
     # Make sure we don't try to run the training on the login node
     check_if_on_login_node(start_submission=args.start_submission)
 
-    # Document the status of the git repository
-    document_git_status(target_dir=args.experiment_dir, verbose=True)
-
     # Get path to this script and add it to the arguments for the job
     job_arguments = [Path(__file__).resolve().as_posix()]
 
@@ -60,6 +57,9 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
 
     else:
+
+        # Document the status of the git repository
+        document_git_status(target_dir=args.experiment_dir, verbose=True)
 
         # Check if there exists a checkpoint file from which we can resume
         checkpoint_file_path = args.experiment_dir / args.checkpoint_name
@@ -113,9 +113,13 @@ if __name__ == "__main__":
     condor_settings = CondorSettings(**config["local"]["condor"])
     condor_settings.arguments = job_arguments
 
-    # Create submission file and submit job
+    # Create submission file
+    print("Creating submission file...", end=" ")
     file_path = create_submission_file(
         condor_settings=condor_settings,
         experiment_dir=args.experiment_dir,
     )
-    condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
+    print("Done!")
+
+    job_id = condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
+    print(f"Job submitted with ID {job_id}!\n")
