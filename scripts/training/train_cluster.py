@@ -114,7 +114,6 @@ if __name__ == "__main__":
         condor_settings=condor_settings,
         experiment_dir=args.experiment_dir,
     )
-    print("Done!")
+    print("Done!\n")
 
     condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
-    print()
