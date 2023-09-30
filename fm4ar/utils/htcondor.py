@@ -2,37 +2,75 @@
 Methods for dealing with the HTCondor cluster system.
 """
 
-from dataclasses import dataclass
-from warnings import warn
-
 import re
 import socket
 import sys
-
 from pathlib import Path
 from shutil import copyfile
 from subprocess import run
+from warnings import warn
+
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class CondorSettings:
+class CondorSettings(BaseModel):
     """
     Dataclass for storing the settings for an HTCondor job.
     """
 
-    executable: str = sys.executable
-    getenv: bool = True
-    num_cpus: int = 1
-    memory_cpus: int = 4_096
-    num_gpus: int = 0
-    memory_gpus: int = 15_000
-    arguments: str | list[str] = ""
-    # max_runtime: int | None = None
-    # max_retries: int | None = None
-    retry_on_exit_code: int | None = None
-    log_file_name: str = "info"
-    queue: int = 1
-    bid: int = 15
+    executable: str = Field(
+        default=sys.executable,
+        description="Path to the executable (e.g., the Python interpreter).",
+    )
+    getenv: bool = Field(
+        default=True,
+        description="Whether the environment variables should be copied.",
+    )
+    num_cpus: int = Field(
+        default=1,
+        ge=1,
+        description="Number of CPUs to request for the job.",
+    )
+    memory_cpus: int = Field(
+        default=4_096,
+        ge=1024,  # 1 GB is the minimum unit of memory on the cluster
+        description="Amount of memory (in MB) to request for the job.",
+    )
+    num_gpus: int = Field(
+        default=0,
+        ge=0,
+        description="Number of GPUs to request for the job.",
+    )
+    memory_gpus: int = Field(
+        default=15_000,
+        ge=0,
+        description="Amount of GPU memory (in MB) to request for the job.",
+    )
+    arguments: str | list[str] = Field(
+        default="",
+        description="(List of) arguments to pass to the executable.",
+    )
+    retry_on_exit_code: int | None = Field(
+        default=None,
+        description=(
+            "If the job exits with this exit code, keep retrying. "
+            "If `None`, do not retry."
+        ),
+    )
+    log_file_name: str = Field(
+        default="info",
+        description="Base name for the log files.",
+    )
+    queue: int = Field(
+        default=1,
+        ge=1,
+        description="Number of times top place this job in the queue.",
+    )
+    bid: int = Field(
+        default=15,
+        ge=15,  # 15 is the current minimum bid on the cluster
+        description="Bid to use for the job.",
+    )
 
 
 def check_if_on_login_node(start_submission: bool) -> None:
