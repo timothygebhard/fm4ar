@@ -33,7 +33,7 @@ def prepare_new(
 
     # Load the dataset
     name = config["data"]["name"]
-    print(f"Loading dataset '{name}'...", end=" ", flush=True)
+    print(f"Loading dataset '{name}'...", end=" ")
     dataset = load_dataset(config=config)
     print("Done!", flush=True)
 
@@ -42,13 +42,17 @@ def prepare_new(
     config["model"]["context_dim"] = dataset.context_dim
 
     # Initialize the posterior model
-    print("Building model from configuration...", end=" ", flush=True)
-    pm = build_model(config=config, device=config["local"]["device"])
-    print(f"Done! (device: {pm.device})", flush=True)
+    print("Building model from configuration...", end=" ")
+    pm = build_model(
+        experiment_dir=experiment_dir,
+        config=config,
+        device=config["local"]["device"],
+    )
+    print(f"Done! (device: {pm.device})")
 
     # Initialize Weights & Biases (if desired)
-    if config["local"].get("wandb", False):
-        print("\n\nInitializing Weights & Biases:", flush=True)
+    if pm.use_wandb:
+        print("\n\nInitializing Weights & Biases:")
 
         # Add number of model parameters to the config
         augmented_config = config.copy()
@@ -61,7 +65,7 @@ def prepare_new(
         # Add the experiment directory to the config
         augmented_config["experiment_dir"] = experiment_dir.as_posix()
 
-        # Initialize Weights & Biases and store augmented config
+        # Initialize Weights & Biases; this will produce some output to stderr
         wandb_id = get_wandb_id(experiment_dir)
         wandb.init(
             id=wandb_id,
@@ -69,11 +73,16 @@ def prepare_new(
             dir=experiment_dir,
             **config["local"]["wandb"],
         )
-        print()
 
-        # Save the name of the run to a file
-        with open(experiment_dir / "wandb" / "name.txt", "w") as txt_file:
-            txt_file.write(wandb.run.name)  # type: ignore
+        # Define metrics
+        wandb.define_metric("epoch")
+        wandb.define_metric("*", step_metric="epoch")
+
+        # Save the name of the run to a file in the experiment directory
+        if wandb.run is not None:
+            (experiment_dir / wandb.run.name).touch(exist_ok=True)
+
+        print()
 
     return pm, dataset
 
@@ -99,20 +108,24 @@ def prepare_resume(
     """
 
     # Instantiate the posterior model
-    print("Building model from checkpoint...", end=" ", flush=True)
+    print("Building model from checkpoint...", end=" ")
     file_path = experiment_dir / checkpoint_name
-    pm = build_model(file_path=file_path, device=config["local"]["device"])
+    pm = build_model(
+        experiment_dir=experiment_dir,
+        file_path=file_path,
+        device=config["local"]["device"],
+    )
     print("Done!", flush=True)
 
     # Load the dataset (using config from checkpoint)
     name = pm.config["data"]["name"]
-    print(f"Loading dataset '{name}'...", end=" ", flush=True)
+    print(f"Loading dataset '{name}'...", end=" ")
     dataset = load_dataset(config=pm.config)
     print("Done!", flush=True)
 
-    # Initialize Weights & Biases (if desired)
+    # Initialize Weights & Biases; this will produce some output to stderr
     if config["local"].get("wandb", False):
-        print("\n\nInitializing Weights & Biases:", flush=True)
+        print("\n\nInitializing Weights & Biases:")
         wandb_id = get_wandb_id(experiment_dir)
         wandb.init(
             id=wandb_id,

@@ -46,16 +46,12 @@ if __name__ == "__main__":
 
     # Train model (either to completion or until the time limit is reached)
     with threadpool_limits(limits=1, user_api="blas"):
-        complete = train_stages(
-            pm=pm,
-            dataset=dataset,
-            experiment_dir=args.experiment_dir,
-            config=config,
-        )
+        complete = train_stages(pm=pm, dataset=dataset)
 
     # Print a message to indicate whether training was completed or not
     if complete:
-        print("All training stages complete!")
+        print("All training stages complete!\n")
     else:
-        print("Program terminated due to runtime limit!")
+        print("Program terminated due to runtime limit!\n")
+
     sys.exit(0)

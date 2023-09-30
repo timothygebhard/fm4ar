@@ -83,12 +83,7 @@ if __name__ == "__main__":
 
         # Train model (either to completion or until the time limit is reached)
         with threadpool_limits(limits=1, user_api="blas"):
-            complete = train_stages(
-                pm=pm,
-                dataset=dataset,
-                experiment_dir=args.experiment_dir,
-                config=config,
-            )
+            complete = train_stages(pm=pm, dataset=dataset)
 
         # Copy log files and append epoch number
         copy_logfiles(
@@ -98,8 +93,8 @@ if __name__ == "__main__":
 
         # Check if training is complete (in which case we do not resubmit)
         if complete:
-            print("Training complete! Job will not be resubmitted.")
-            sys.exit()
+            print("Training complete! Job will not be resubmitted.\n")
+            sys.exit(0)
 
         # If training is not complete, we need to resubmit the job
         else:

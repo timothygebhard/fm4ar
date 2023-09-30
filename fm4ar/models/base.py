@@ -3,12 +3,13 @@ Base class which provides basic functionality for training and
 inference, and from which all posterior models should inherit.
 """
 
-import shutil
 import time
 from abc import abstractmethod
 from pathlib import Path
 from typing import Any, Literal, TYPE_CHECKING, Union
+from warnings import catch_warnings, simplefilter
 
+import pandas as pd
 import torch
 import wandb
 from threadpoolctl import threadpool_limits
@@ -23,12 +24,7 @@ from fm4ar.utils.torchutils import (
     get_scheduler_from_kwargs,
     perform_scheduler_step,
 )
-from fm4ar.utils.tracking import (
-    EarlyStopping,
-    LossInfo,
-    RuntimeLimits,
-    write_history,
-)
+from fm4ar.utils.tracking import LossInfo, RuntimeLimits
 
 if TYPE_CHECKING:
     from fm4ar.models.continuous.flow_matching import FlowMatching
@@ -51,6 +47,7 @@ class Base:
 
     def __init__(
         self,
+        experiment_dir: Path | None = None,
         file_path: Path | None = None,
         config: dict | None = None,
         device: Literal["cpu", "cuda"] = "cpu",
@@ -60,6 +57,9 @@ class Base:
         Initialize a model for the posterior distribution.
 
         Args:
+            experiment_dir: Path to the experiment directory. Required
+                for operations like saving the model. If `None`, these
+                operations will be skipped.
             file_path: Path to a checkpoint file. If given, the model
                 will be loaded from this file.
             config: Experiment configuration. If given, the model will
@@ -73,12 +73,16 @@ class Base:
         # Store constructor arguments
         self.config = dict({} if config is None else config)
         self.device = torch.device(device)
+        self.experiment_dir = experiment_dir
 
         # Initialize attributes
         self.epoch = 0
         self.optimizer_kwargs: dict | None = None
         self.network_kwargs: dict | None = None
         self.scheduler_kwargs: dict | None = None
+
+        # Add dataframe that will keep track of the training history
+        self.history: pd.DataFrame = pd.DataFrame()
 
         # Either load the model from a checkpoint file...
         if file_path is not None:
@@ -174,33 +178,64 @@ class Base:
                 **self.scheduler_kwargs,
             )
 
+    def log_metrics(self, **kwargs: Any) -> None:
+        """
+        Add a row to the training history (locally and wandb).
+        """
+
+        # Convert kwargs to a row and append it to the history dataframe
+        new_row = pd.DataFrame(kwargs, index=[0])
+        if self.history.empty:
+            self.history = new_row
+        else:
+
+            # Ignore a FutureWarning from pandas ("The behavior of DataFrame
+            # concatenation with empty or all-NA entries is deprecated.") that
+            # is caused by the fact that we are concatenating a dataframe with
+            # a single row in which some columns may be NaN.
+            with catch_warnings():
+                simplefilter("ignore", category=FutureWarning)
+                self.history = pd.concat(
+                    objs=[self.history, new_row],
+                    ignore_index=True,
+                    axis=0,
+                )
+
+        # Save the history to disk as a backup (this is never read)
+        if self.experiment_dir is not None:
+            file_path = self.experiment_dir / "history.csv"
+            self.history.to_csv(file_path, index=False)
+
+        # Save the history to wandb
+        if self.use_wandb:
+            wandb.log(kwargs)
+
     def save_model(
         self,
-        experiment_dir: Path,
         name: str = "latest",
         prefix: str = "model",
-        checkpoint_epochs: int | None = None,
         save_training_info: bool = True,
     ) -> None:
         """
         Save the posterior model to disk.
 
         Args:
-            experiment_dir: The directory to save the model in.
             prefix: The prefix for the model name (default: 'model').
             name: Model name (e.g., "latest" or "best").
-            checkpoint_epochs: The number of epochs between two
-                consecutive
-                model checkpoints.
             save_training_info: Whether to save training information
                 that is required to continue training (i.e., the state
                 dicts of the optimizer and LR scheduler).
         """
 
+        # If no experiment directory is given, we don't save anything
+        if self.experiment_dir is None:
+            return
+
         # Collect all the data that we want to save
         data = {
             "config": self.config,
             "epoch": self.epoch,
+            "history": self.history,
             "model_state_dict": self.network.state_dict(),
         }
 
@@ -214,21 +249,8 @@ class Base:
                 data["scheduler_state_dict"] = self.scheduler.state_dict()
 
         # Save the data to disk
-        file_path = experiment_dir / f"{prefix}__{name}.pt"
+        file_path = self.experiment_dir / f"{prefix}__{name}.pt"
         torch.save(obj=data, f=file_path)
-
-        # If no checkpoint is requested, we are done here
-        if checkpoint_epochs is None or self.epoch % checkpoint_epochs != 0:
-            return
-
-        # Otherwise, ensure that the checkpoints directory exists
-        checkpoints_dir = experiment_dir / "checkpoints"
-        checkpoints_dir.mkdir(exist_ok=True)
-
-        # Create a backup of the model (in case something gets corrupted)
-        src = file_path
-        dst = checkpoints_dir / f"{prefix}__{self.epoch:04d}.pt"
-        shutil.copyfile(src, dst)
 
     def load_model(
         self,
@@ -252,6 +274,7 @@ class Base:
         # Load required data
         self.epoch = data["epoch"]
         self.config = data["config"]
+        self.history = data["history"]
 
         # Initialize network and load state dict
         self.initialize_network()
@@ -280,19 +303,20 @@ class Base:
         else:
             self.network.eval()
 
+    @property
+    def checkpoint_epochs(self) -> int:
+        return int(self.config["local"].get("checkpoint_epochs", 1))
+
+    @property
+    def use_wandb(self) -> bool:
+        return self.config["local"].get("wandb") is not None
+
     def train(
         self,
         train_loader: DataLoader,
         test_loader: DataLoader,
-        experiment_dir: Path,
         runtime_limits: RuntimeLimits,
-        checkpoint_epochs: int | None = None,
-        use_wandb: bool = False,
-        test_only: bool = False,
-        early_stopping_config: dict | None = None,
-        gradient_clipping_config: dict | None = None,
-        use_amp: bool = True,
-        logprob_epochs: int | None = None,
+        stage_config: dict[str, Any],
     ) -> None:
         """
         Train the model until the runtime limits are exceeded.
@@ -300,76 +324,48 @@ class Base:
         Args:
             train_loader: DataLoader for training data.
             test_loader: DataLoader for test data.
-            experiment_dir: Path to the experiment directory.
             runtime_limits: RuntimeLimits object.
-            checkpoint_epochs: Number of epochs between checkpoints.
-            use_wandb: Whether to use wandb for logging.
-            early_stopping_config: Configuration for EarlyStopping.
-            test_only: Whether to only evaluate the model on the test
-                set (i.e., skip training).
-            gradient_clipping_config: Configuration for gradient
-                clipping (will be passed to `nn.utils.clip_grad_norm_`).
-            use_amp: Whether to use automatic mixed precision.
-            logprob_epochs: Evaluate the log probability of the true
-                parameter values every `logprob_epochs` epochs. (See
-                `test_epoch()` for details.)
+            stage_config: Configuration for the current training stage.
         """
 
-        # ---------------------------------------------------------------------
-        # In test mode, we only want to evaluate the model on the test set
-        # ---------------------------------------------------------------------
-
-        if test_only:
-            test_loss, test_logprob = test_epoch(
-                pm=self,
-                dataloader=test_loader,
-                epoch=1,
-                logprob_epochs=1,
-            )
-            print(f"Mean test loss:    {test_loss:.3f}")
-            print(f"Mean test logprob: {test_logprob:.3f}")
-            return
-
-        # ---------------------------------------------------------------------
-        # Otherwise, we actually train the model
-        # ---------------------------------------------------------------------
-
-        # Set up the EarlyStopping tracker
-        if early_stopping_config is not None and early_stopping_config:
-            early_stopping = EarlyStopping(**early_stopping_config)
-        else:
-            early_stopping = None
+        # Define some shortcuts
+        early_stopping = stage_config.get("early_stopping")
+        gradient_clipping_config = stage_config.get("gradient_clipping")
+        use_amp = stage_config.get("use_amp", False)
+        logprob_epochs = stage_config.get("logprob_epochs")
 
         # Run for as long as the runtime limits allow
         while not runtime_limits.limits_exceeded(self.epoch):
+
             self.epoch += 1
 
             # Run one epoch of training and testing
             lr = get_lr(self.optimizer)
             with threadpool_limits(limits=1, user_api="blas"):
+
                 # Train for one epoch and measure the time
-                print(f"\nStart training epoch {self.epoch} with lr {lr}:\n")
-                time_start = time.time()
+                print(f"\nStart training epoch {self.epoch} with lr {lr}:")
+                train_start = time.time()
                 train_loss = train_epoch(
                     pm=self,
                     dataloader=train_loader,
                     gradient_clipping_config=gradient_clipping_config,
                     use_amp=use_amp,
                 )
-                train_time = time.time() - time_start
-                print(f"\nDone! This took {train_time:,.2f} seconds.\n")
+                train_time = time.time() - train_start
+                print(f"Done! This took {train_time:,.2f} seconds.\n")
 
                 # Run on the test set and measure the time
-                print(f"\nStart testing epoch {self.epoch}:\n")
-                time_start = time.time()
+                print(f"Start testing epoch {self.epoch}:")
+                test_start = time.time()
                 test_loss, test_logprob = test_epoch(
                     pm=self,
                     dataloader=test_loader,
                     epoch=self.epoch,
                     logprob_epochs=logprob_epochs,
                 )
-                test_time = time.time() - time_start
-                print(f"\nDone! This took {test_time:,.2f} seconds.\n")
+                test_time = time.time() - test_start
+                print(f"Done! This took {test_time:,.2f} seconds.\n")
 
             # Take a step with the learning rate scheduler after each epoch
             perform_scheduler_step(
@@ -378,56 +374,64 @@ class Base:
                 end_of="epoch",
             )
 
-            # Write the training history to a log file
-            write_history(
-                experiment_dir=experiment_dir,
+            # Log relevant metrics (both locally and on wandb)
+            print("Logging metrics...", end=" ")
+            self.log_metrics(
                 epoch=self.epoch,
+                learning_rate=lr[0],
                 train_loss=train_loss,
                 test_loss=test_loss,
-                learning_rates=lr,
+                train_time=train_time,
+                test_time=test_time,
+                test_logprob=test_logprob,
             )
+            print("Done!")
 
-            # Save the latest model to a checkpoint file
-            self.save_model(
-                experiment_dir=experiment_dir,
-                checkpoint_epochs=checkpoint_epochs,
-            )
-
-            # Log the results for this epoch to Weights & Biases
-            if use_wandb:
-                wandb.define_metric("epoch")
-                wandb.define_metric("*", step_metric="epoch")
-                wandb.log(
-                    {
-                        "epoch": self.epoch,
-                        "learning_rate": lr[0],
-                        "train_loss": train_loss,
-                        "test_loss": test_loss,
-                        "train_time": train_time,
-                        "test_time": test_time,
-                        "test_logprob": test_logprob,
-                    }
-                )
+            # Save the latest model
+            print("Saving latest model...", end=" ")
+            self.save_model()
+            print("Done!")
 
             # Check if we should stop early
-            if early_stopping is not None:
-                # Check if the current model is the best one yet
-                # TODO: This does not work across multiple jobs / restarts;
-                #      we probably need to read the history file for this...
-                is_best_model = early_stopping(test_loss)
-                if is_best_model:
-                    self.save_model(
-                        experiment_dir=experiment_dir,
-                        name="best",
-                        save_training_info=False,
-                    )
+            if self.stop_early(patience=early_stopping):
+                print("Early stopping criterion reached, ending training!")
+                break
 
-                # Check if we should stop early
-                if early_stopping.early_stop:
-                    print("Early stopping criterion reached!")
-                    break
+            # Save the best model if the test loss has improved
+            self.save_best_model(test_loss=test_loss)
+            print()
 
-            print(f"Finished training epoch {self.epoch}.\n")
+    def save_best_model(self, test_loss: float) -> None:
+        """
+        Check if the current model is the best one, and if yes, save it.
+        """
+
+        # Note: This should not be needed because this function should only
+        # be called after `.log()` has been called at least once, but...
+        try:
+            best_loss = float(self.history["test_loss"].min())
+        except KeyError:
+            best_loss = float("inf")
+
+        # Note: "<=" (instead of "<") is important here!
+        if test_loss <= best_loss:
+            print("Saving best model...", end=" ")
+            self.save_model(name="best", save_training_info=False)
+            print("Done!")
+
+    def stop_early(self, patience: int | None) -> bool:
+        """
+        Check if we should stop early: If the test loss has not improved
+        for `patience` epochs, we stop the training.
+        """
+
+        if patience is None:
+            return False
+
+        min_idx = int(self.history["test_loss"].idxmin())
+        last_idx = int(self.history.index[-1])
+
+        return bool(last_idx - min_idx > patience)
 
 
 def train_epoch(
@@ -435,7 +439,6 @@ def train_epoch(
     dataloader: DataLoader,
     gradient_clipping_config: dict[str, Any] | None = None,
     use_amp: bool = True,
-    verbose: bool = True,
 ) -> float:
     """
     Train the posterior model for one epoch.
@@ -450,7 +453,6 @@ def train_epoch(
             passed to `torch.nn.utils.clip_grad_norm_`. It must at
             least contain the key "max_norm".
         use_amp: Whether to use automatic mixed precision.
-        verbose: Whether to print progress information.
 
     Returns:
         Average loss over the epoch.
@@ -473,7 +475,7 @@ def train_epoch(
     )
 
     # Create scaler for automatic mixed precision
-    scaler = GradScaler()  # type: ignore
+    scaler = GradScaler(enabled=use_amp)  # type: ignore
 
     # Iterate over the batches
     for batch_idx, data in enumerate(dataloader):
@@ -536,9 +538,7 @@ def train_epoch(
 
         # Update loss for history and logging
         loss_info.update(loss.detach().item(), n=len(data[0]))
-
-        if verbose:
-            loss_info.print_info(batch_idx)
+        loss_info.print_info(batch_idx)
 
     return loss_info.get_avg()
 
@@ -605,7 +605,7 @@ def test_epoch(
         # Background: It seems that the time-inverse ODE required to compute
         # the log probability of the true parameter value is sometimes stiffer
         # than the "forward" ODE, so we need to use a different solver.
-        # TODO: Check this more thoroughly!
+        # TODO: Check this again more thoroughly!
         log_prob_kwargs: dict[str, Any] = dict()
         if model_type == "FlowMatching":
             log_prob_kwargs["tolerance"] = 1e-3
@@ -622,6 +622,12 @@ def test_epoch(
             loss = pm.loss(data[0], *data[1:])
             check_for_nans(loss, "test loss")
 
+            # Define maximum number of samples to use for log probability.
+            # This is to limit the memory usage for batch sizes that cannot
+            # be processed without AMP anymore.
+            # TODO: Maybe there is a cleaner way of handling this?
+            MAX_SAMPLES_FOR_LOGPROB = 1024
+
             # Compute log probability of true parameter values of first batch
             if (
                 logprob_epochs > 0
@@ -629,10 +635,9 @@ def test_epoch(
                 and batch_idx == 0
             ):
                 logprob = pm.log_prob_batch(
-                    data[0],
-                    *data[1:],
+                    data[0][:MAX_SAMPLES_FOR_LOGPROB],
+                    *data[1:][:MAX_SAMPLES_FOR_LOGPROB],
                     **log_prob_kwargs
-
                 ).cpu()
                 avg_logprob = float(logprob.mean().item())
 

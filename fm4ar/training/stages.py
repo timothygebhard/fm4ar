@@ -2,8 +2,6 @@
 Methods for preparing a stage and running the training for it.
 """
 
-from pathlib import Path
-
 import numpy as np
 import torch
 import wandb
@@ -67,8 +65,6 @@ def initialize_stage(
 def train_stages(
     pm: Base,
     dataset: ArDataset,
-    experiment_dir: Path,
-    config: dict,
 ) -> bool:
     """
     Train the network, iterating through the sequence of stages.
@@ -77,8 +73,6 @@ def train_stages(
     Args:
         pm: Posterior model.
         dataset: Dataset.
-        experiment_dir: Path to the experiment directory.
-        config: Full experiment configuration.
 
     Returns:
         A boolean: `True` if all stages are complete, `False` otherwise.
@@ -87,7 +81,7 @@ def train_stages(
     # Initialize the runtime limits (e.g., max number of epochs)
     runtime_limits = RuntimeLimits(
         epoch_start=pm.epoch,
-        **config["local"]["runtime_limits"],
+        **pm.config["local"]["runtime_limits"],
     )
 
     # Extract list of stages from settings dict
@@ -110,14 +104,14 @@ def train_stages(
         # Initialize the stage (either from scratch or from a checkpoint)
         resume = bool(pm.epoch > stage_start_epoch)
         begin_or_resume = "Resuming" if resume else "Beginning"
-        print(f"\n{begin_or_resume} training stage '{stage_name}'", flush=True)
+        print(f"\n{begin_or_resume} training stage '{stage_name}'")
 
         # Initialize the train and test loaders for the stage
         train_loader, test_loader = initialize_stage(
             pm=pm,
             dataset=dataset,
             stage_config=stage_config,
-            num_workers=config["local"]["num_workers"],
+            num_workers=pm.config["local"]["num_workers"],
             resume=resume,
         )
 
@@ -128,30 +122,15 @@ def train_stages(
         pm.train(
             train_loader=train_loader,
             test_loader=test_loader,
-            experiment_dir=experiment_dir,
             runtime_limits=runtime_limits,
-            checkpoint_epochs=config["local"]["checkpoint_epochs"],
-            use_wandb=config["local"].get("wandb", False),
-            test_only=config["local"].get("test_only", False),
-            early_stopping_config=stage_config.get("early_stopping"),
-            gradient_clipping_config=stage_config.get("gradient_clipping"),
-            use_amp=stage_config.get("use_amp", False),
-            logprob_epochs=stage_config.get("logprob_epochs", None),
+            stage_config=stage_config,
         )
-
-        # if test_only, model should not be saved, and run is complete
-        if config["local"].get("test_only", False):
-            return True
 
         # Save the model if we have reached the end of the stage
         if pm.epoch == end_epochs[n]:
             print(f"Training stage '{stage_name}' complete!")
-            print("Saving model...", end=" ", flush=True)
-            pm.save_model(
-                experiment_dir=experiment_dir,
-                name=stage_name,
-                save_training_info=True,
-            )
+            print("Saving model...", end=" ")
+            pm.save_model(name=stage_name, save_training_info=True)
             print("Done!\n", flush=True)
 
         # Check if we have reached the runtime limits

@@ -13,6 +13,7 @@ from fm4ar.models.discrete.normalizing_flow import NormalizingFlow
 
 
 def build_model(
+    experiment_dir: Path | None = None,
     file_path: Path | None = None,
     config: dict | None = None,
     **kwargs: Any,
@@ -21,6 +22,7 @@ def build_model(
     Build a model from a checkpoint file or from a `config` dictionary.
 
     Args:
+        experiment_dir: Path to the experiment directory.
         file_path: Path to a checkpoint file (`*.pt`).
         config: Dictionary with full experiment configuration.
         **kwargs: Extra keyword arguments to pass to the model class.
@@ -42,12 +44,14 @@ def build_model(
     match model_type:
         case "flow_matching" | "fm":
             return FlowMatching(
+                experiment_dir=experiment_dir,
                 file_path=file_path,
                 config=config,
                 **kwargs,
             )
         case "neural_posterior_estimation" | "npe":
             return NormalizingFlow(
+                experiment_dir=experiment_dir,
                 file_path=file_path,
                 config=config,
                 **kwargs,
