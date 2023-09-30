@@ -116,5 +116,5 @@ if __name__ == "__main__":
     )
     print("Done!")
 
-    job_id = condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
-    print(f"Job submitted with ID {job_id}!\n")
+    condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
+    print()
