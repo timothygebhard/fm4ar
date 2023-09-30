@@ -24,7 +24,7 @@ def load_config(
 
     file_path = experiment_dir / file_name
     if not file_path.exists():
-        raise FileNotFoundError(f"No config.yaml in {experiment_dir}!")
+        raise FileNotFoundError(f"No {file_name} in {experiment_dir}!")
 
     with open(file_path) as yaml_file:
         config = yaml.safe_load(yaml_file)
