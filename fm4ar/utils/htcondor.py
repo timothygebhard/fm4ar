@@ -3,7 +3,9 @@ Methods for dealing with the HTCondor cluster system.
 """
 
 from dataclasses import dataclass
+from warnings import warn
 
+import re
 import socket
 import sys
 
@@ -76,7 +78,7 @@ def copy_logfiles(log_dir: Path, label: str) -> None:
 def condor_submit_bid(
     file_path: Path,
     bid: int = 15,
-) -> None:  # pragma: no cover
+) -> str:  # pragma: no cover
     """
     Submit a job to HTCondor using the bid system.
 
@@ -86,10 +88,21 @@ def condor_submit_bid(
     Args:
         file_path: Path to the submission file.
         bid: Bid to use for the job (default: 15).
+
+    Return:
+        The HTCondor job ID of the submitted job.
     """
 
     cmd = ["condor_submit_bid", str(bid), str(file_path)]
-    run(cmd, capture_output=True, check=True)
+    process = run(cmd, capture_output=True, check=True)
+
+    stdout = process.stdout.decode("utf-8").strip()
+    matches = re.match(r"(?P<job_id>\d{8}).", stdout)
+    if matches is None:
+        warn("Could not extract job ID from output of `condor_submit_bid`!")
+        warn(f"Output was:\n{stdout}\n")
+        return "Unknown"
+    return matches.group("job_id")
 
 
 def create_submission_file(
