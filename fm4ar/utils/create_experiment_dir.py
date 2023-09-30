@@ -40,7 +40,10 @@ def get_arguments() -> Path:
     return base_dir
 
 
-def create_experiment_dir(base_dir: Path | None = None) -> None:
+def create_experiment_dir(
+    base_dir: Path | None = None,
+    verbose: bool = True,
+) -> Path:
     """
     Function to create a new experiment directory in the given
     `base_dir` directory. If no `base_dir` is given, the function
@@ -80,4 +83,7 @@ def create_experiment_dir(base_dir: Path | None = None) -> None:
     experiment_dir.mkdir()
 
     # Print the path to the new experiment directory
-    print("Created new experiment directory:", experiment_dir.resolve())
+    if verbose:
+        print("Created new experiment directory:", experiment_dir.resolve())
+
+    return experiment_dir
