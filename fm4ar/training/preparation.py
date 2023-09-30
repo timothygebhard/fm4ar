@@ -2,6 +2,7 @@
 Methods to prepare a new or resumed training run.
 """
 
+import sys
 import time
 from pathlib import Path
 
@@ -145,11 +146,12 @@ def prepare_resume(
                 )
                 print()
                 break
-            except Exception as e:
+            except ConnectionRefusedError as e:
                 if n_failures == 4:
+                    print("Failed 5 times, giving up!", file=sys.stderr)
                     raise
-                print("Caugh an exception:\n\n\n", e)
-                print("\n\nRetrying in 60 seconds...")
-                time.sleep(60)
+                print("\nException:", e, file=sys.stderr)
+                print("Retrying in 180 seconds...", file=sys.stderr)
+                time.sleep(180)
 
     return pm, dataset
