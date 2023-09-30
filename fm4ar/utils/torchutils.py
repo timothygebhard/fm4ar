@@ -17,6 +17,18 @@ from fm4ar.nn.modules import Sine
 from fm4ar.utils.resampling import resample_spectrum
 
 
+def check_for_nans(x: torch.Tensor, label: str = "tensor") -> None:
+    """
+    Check if the given tensor (usually the loss) contains any entries
+    that are NaN or infinite. If so, raise a `ValueError`.
+    """
+
+    if torch.isnan(x).any():
+        raise ValueError(f"NaN values detected in {label}, aborting!")
+    if torch.isinf(x).any():
+        raise ValueError(f"Inf values detected in {label}, aborting!")
+
+
 def get_activation_from_string(
     name: str,
 ) -> Callable[[torch.Tensor], torch.Tensor]:

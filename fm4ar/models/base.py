@@ -17,6 +17,7 @@ from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 
 from fm4ar.utils.torchutils import (
+    check_for_nans,
     get_lr,
     get_optimizer_from_kwargs,
     get_scheduler_from_kwargs,
@@ -487,6 +488,8 @@ def train_epoch(
         if not use_amp:
 
             loss = pm.loss(data[0], *data[1:])
+            check_for_nans(loss, "train loss")
+
             loss.backward()  # type: ignore
 
             if (
@@ -506,6 +509,8 @@ def train_epoch(
             # Note: Backward passes under autocast are not recommended
             with autocast():
                 loss = pm.loss(data[0], *data[1:])
+                check_for_nans(loss, "train loss")
+
             scaler.scale(loss).backward()  # type: ignore
 
             if (
@@ -615,6 +620,7 @@ def test_epoch(
 
             # Compute test loss
             loss = pm.loss(data[0], *data[1:])
+            check_for_nans(loss, "test loss")
 
             # Compute log probability of true parameter values of first batch
             if (
