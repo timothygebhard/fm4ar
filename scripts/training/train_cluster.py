@@ -1,15 +1,14 @@
 """
 Train a model on an HTCondor cluster.
 
-This script is meant to be called from the login node of the cluster,
-using the `--start-submission` flag. This will then (on the login node)
-create a submission file and launch a new job on the cluster, which will
-run *without* the `--start-submission` flag. This job will then run the
-actual training, and it will automatically restart itself from the
-latest checkpoint if the job runtime limit is reached.
+The script should be called using the `--start-submission` flag on the
+login node. This will create a submission file and submit the job to
+the cluster. The job will then be retried automatically if the runtime
+limit is reached but the training is not complete yet.
 """
 
 import sys
+from socket import gethostname
 from pathlib import Path
 
 from threadpoolctl import threadpool_limits
@@ -23,7 +22,6 @@ from fm4ar.utils.htcondor import (
     CondorSettings,
     check_if_on_login_node,
     condor_submit_bid,
-    copy_logfiles,
     create_submission_file,
 )
 
@@ -31,6 +29,7 @@ from fm4ar.utils.htcondor import (
 if __name__ == "__main__":
 
     print("\nTRAIN MODEL ON HTCONDOR CLUSTER\n")
+    print("Running on host:", gethostname(), flush=True)
 
     # Get arguments and load the experiment configuration
     args = get_cli_arguments()
@@ -39,18 +38,39 @@ if __name__ == "__main__":
     # Make sure we don't try to run the training on the login node
     check_if_on_login_node(start_submission=args.start_submission)
 
-    # Get path to this script and add it to the arguments for the job
-    job_arguments = [Path(__file__).resolve().as_posix()]
-
     # -------------------------------------------------------------------------
-    # Either prepare first submission...
+    # Either prepare submission file and submit job...
     # -------------------------------------------------------------------------
 
     # This branch does not run any training, but only creates the submit file
     if args.start_submission:
-        job_arguments.append(f"--experiment-dir {args.experiment_dir}")
-        if args.checkpoint_name != "model__latest.pt":
-            job_arguments.append(f"--checkpoint-name {args.checkpoint_name}")
+
+        # Collect arguments for job (Python script and command line options)
+        job_arguments = [
+            Path(__file__).resolve().as_posix(),
+            f"--experiment-dir {args.experiment_dir}",
+            f"--checkpoint-name {args.checkpoint_name}"
+        ]
+
+        # Combine condor settings from config file with job arguments and the
+        # options that are required to automatically restart the job if the
+        # runtime limit is reached but the training is not complete yet
+        condor_settings = CondorSettings(**config["local"]["condor"])
+        condor_settings.arguments = job_arguments
+        condor_settings.retry_on_exit_code = 42
+        condor_settings.log_file_name = "log.$$([NumJobStarts])"
+
+        # Create submission file
+        print("Creating submission file...", end=" ")
+        file_path = create_submission_file(
+            condor_settings=condor_settings,
+            experiment_dir=args.experiment_dir,
+        )
+        print("Done!\n")
+
+        # Submit job to HTCondor cluster and exit
+        condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
+        sys.exit(0)
 
     # -------------------------------------------------------------------------
     # ...or actually run the training
@@ -85,35 +105,12 @@ if __name__ == "__main__":
         with threadpool_limits(limits=1, user_api="blas"):
             complete = train_stages(pm=pm, dataset=dataset)
 
-        # Copy log files and append epoch number
-        copy_logfiles(
-            log_dir=args.experiment_dir / "logs",
-            label=f"epoch-{pm.epoch:03d}",
-        )
-
-        # Check if training is complete (in which case we do not resubmit)
+        # If the training is complete, we can end the job. Otherwise, we exit
+        # with code 42 (see CondorSettings above), which will cause the job to
+        # be put on hold and retried automatically.
         if complete:
-            print("Training complete! Job will not be resubmitted.\n")
+            print("Training complete! Ending job.\n")
             sys.exit(0)
-
-        # If training is not complete, we need to resubmit the job
         else:
-            job_arguments.append(f"--experiment-dir {args.experiment_dir}")
-
-    # -------------------------------------------------------------------------
-    # Create next submission file and submit job
-    # -------------------------------------------------------------------------
-
-    # Combine condor arguments with the rest of the condor settings
-    condor_settings = CondorSettings(**config["local"]["condor"])
-    condor_settings.arguments = job_arguments
-
-    # Create submission file
-    print("Creating submission file...", end=" ")
-    file_path = create_submission_file(
-        condor_settings=condor_settings,
-        experiment_dir=args.experiment_dir,
-    )
-    print("Done!\n")
-
-    condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
+            print("Training incomplete! Sending job back to the queue.\n")
+            sys.exit(42)
