@@ -29,7 +29,6 @@ from fm4ar.utils.htcondor import (
 if __name__ == "__main__":
 
     print("\nTRAIN MODEL ON HTCONDOR CLUSTER\n")
-    print("Running on host:", gethostname(), flush=True)
 
     # Get arguments and load the experiment configuration
     args = get_cli_arguments()
@@ -77,6 +76,8 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
 
     else:
+
+        print("Running on host:", gethostname(), "\n", flush=True)
 
         # Document the status of the git repository
         document_git_status(target_dir=args.experiment_dir, verbose=True)
