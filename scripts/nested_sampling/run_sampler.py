@@ -131,9 +131,7 @@ if __name__ == "__main__":
         )
         print("Done!", flush=True)
 
-        print("Submitting job...", end=" ", flush=True)
         condor_submit_bid(file_path=file_path, bid=config.htcondor.bid)
-        print("Done!\n", flush=True)
 
         sys.exit(0)
 
