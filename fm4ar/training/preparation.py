@@ -2,8 +2,6 @@
 Methods to prepare a new or resumed training run.
 """
 
-import sys
-import time
 from pathlib import Path
 
 import wandb
@@ -127,31 +125,14 @@ def prepare_resume(
 
     # Initialize Weights & Biases; this will produce some output to stderr
     if config["local"].get("wandb", False):
+        print("\n\nRe-initializing Weights & Biases:", flush=True)
 
-        print("\n\nInitializing Weights & Biases:")
-
-        # Resuming jobs has been failing lately because of a cryptic error:
-        # "ConnectionRefusedError: [Errno 111] Connection refused". However,
-        # manually retrying the connection seems to work. As a temporary
-        # workaround, we can therefore try to connect to the W&B server a few
-        # times before giving up.
-        for n_failures in range(5):
-            try:
-                wandb_id = get_wandb_id(experiment_dir)
-                wandb.init(
-                    id=wandb_id,
-                    resume="must",
-                    dir=experiment_dir,
-                    **config["local"]["wandb"],
-                )
-                print()
-                break
-            except ConnectionRefusedError as e:
-                if n_failures == 4:
-                    print("Failed 5 times, giving up!", file=sys.stderr)
-                    raise
-                print("\nException:", e, file=sys.stderr)
-                print("Retrying in 180 seconds...", file=sys.stderr)
-                time.sleep(180)
+        wandb_id = get_wandb_id(experiment_dir)
+        wandb.init(
+            id=wandb_id,
+            resume="must",
+            dir=experiment_dir,
+            **config["local"]["wandb"],
+        )
 
     return pm, dataset
