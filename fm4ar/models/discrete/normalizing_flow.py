@@ -12,38 +12,78 @@ from fm4ar.models.discrete.model import create_df_model, DiscreteFlowModel
 
 class NormalizingFlow(Base):
 
-    network: DiscreteFlowModel
+    model: DiscreteFlowModel
 
     def __init__(self, **kwargs: Any) -> None:
+        """
+        Initialize a new NormalizingFlow instance.
+        """
+
         super().__init__(**kwargs)
 
-    def initialize_network(self) -> None:
-        self.network = create_df_model(model_kwargs=self.config["model"])
+    def initialize_model(self) -> None:
+        """
+        Initialize the model (i.e., the discrete normalizing flow).
+        """
+
+        self.model = create_df_model(model_kwargs=self.config["model"])
 
     def log_prob_batch(
         self,
-        y: torch.Tensor,
-        *context_data: torch.Tensor,
+        theta: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
-        return torch.Tensor(self.network(y, *context_data))
+        """
+        Compute the log probability of the given `theta`.
+        """
+
+        log_prob = self.model.log_prob(theta, context)
+        return torch.Tensor(log_prob)
 
     def sample_batch(
         self,
-        *context_data: torch.Tensor,
+        context: torch.Tensor | None,
+        num_samples: int = 1,
     ) -> torch.Tensor:
-        return torch.Tensor(self.network.sample(*context_data))
+        """
+        Sample from the model and return the samples. If `context` is
+        None, we need to specify the number of samples to draw;
+        otherwise, we assume that the number of samples is the same as
+        the batch size of `context`.
+        """
+
+        samples = self.model.sample(
+            context=context,
+            num_samples=num_samples,
+        )
+        return torch.Tensor(samples)
 
     def sample_and_log_prob_batch(
         self,
-        *context_data: torch.Tensor,
-        batch_size: int | None = None,
+        context: torch.Tensor | None,
+        num_samples: int = 1,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        samples, log_probs = self.network.sample_and_log_prob(*context_data)
+        """
+        Sample from the model and return the samples and their log
+        probabilities. If `context` is None, we need to specify the
+        number of samples to draw; otherwise, we assume that the
+        number of samples is the same as the batch size of `context`.
+        """
+
+        samples, log_probs = self.model.sample_and_log_prob(
+            context=context,
+            num_samples=num_samples,
+        )
         return torch.Tensor(samples), torch.Tensor(log_probs)
 
     def loss(
         self,
-        data: torch.Tensor,
-        *context_data: torch.Tensor,
+        theta: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
-        return torch.Tensor(-self.network(data, *context_data).mean())
+        """
+        Compute the loss for the given `theta` and `context` (i.e.,
+        the mean negative log probability).
+        """
+
+        return torch.Tensor(-self.model(theta=theta, context=context).mean())

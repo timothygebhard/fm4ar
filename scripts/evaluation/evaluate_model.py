@@ -106,7 +106,7 @@ def get_logprob_of_theta(
     Compute the log probability of `theta` given `x`.
     """
 
-    model.network.eval()
+    model.model.eval()
 
     # TODO: Computing the log probability with AMP does not seem to work with
     #   the `NormalizingFlow` models from the glasflow package ... ?!
@@ -148,7 +148,7 @@ def get_samples(
     Draw samples from posterior (with or without log probability).
     """
 
-    model.network.eval()
+    model.model.eval()
 
     # TODO: For now, we disable AMP also for posterior sampling when using a
     #   `NormalizingFlow` model, at least until we understand the issue
@@ -262,7 +262,7 @@ def run_evaluation(
     file_path = args.experiment_dir / "model__best.pt"
     model_hash = get_sha512sum(file_path=file_path)
     model = build_model(file_path=file_path, device=args.device)
-    model.network.eval()
+    model.model.eval()
     print("Done!\n")
 
     # Define model-specific keyword arguments

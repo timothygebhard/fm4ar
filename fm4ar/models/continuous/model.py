@@ -10,7 +10,6 @@ import torch.nn as nn
 from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.nn.resnets import DenseResidualNet
 from fm4ar.utils.torchutils import (
-    forward_pass_with_unpacked_tuple,
     load_and_or_freeze_model_weights,
     validate_dims,
 )
@@ -53,22 +52,19 @@ class ContinuousFlowModel(nn.Module):
         self.t_theta_with_glu = t_theta_with_glu
 
     @lru_cache(maxsize=1)
-    def get_context_embedding(self, *context: torch.Tensor) -> torch.Tensor:
+    def get_context_embedding(self, context: torch.Tensor) -> torch.Tensor:
         """
         Get the embedding of the context. We wrap this in a separate
         method to allow caching the last result.
         """
 
-        return forward_pass_with_unpacked_tuple(
-            self.context_embedding_net,
-            *context,
-        )
+        return torch.Tensor(self.context_embedding_net(context))
 
     def forward(
         self,
         t: torch.Tensor,
-        theta: torch.Tensor,
-        *context: torch.Tensor,
+        theta: torch.Tensor,  # theta at time t
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
         """
         Forward pass through the continuous flow model, that is,
@@ -82,11 +78,11 @@ class ContinuousFlowModel(nn.Module):
         validate_dims(t_theta_embedding, 2)
 
         # Handle unconditional forward pass
-        if len(context) == 0:
+        if context is None:
             return torch.Tensor(self.vectorfield_net(t_theta_embedding))
 
         # Get the embedding of the context
-        context_embedding = self.get_context_embedding(*context)
+        context_embedding = self.get_context_embedding(context)
         validate_dims(context_embedding, 2)
 
         # Collect inputs for the continuous flow network:

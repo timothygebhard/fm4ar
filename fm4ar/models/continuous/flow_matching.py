@@ -33,26 +33,25 @@ class FlowMatching(ContinuousFlowBase):
 
         super().__init__(**kwargs)
 
-        self.eps = 0
         self.sigma_min = self.config["model"]["sigma_min"]
 
     def evaluate_vectorfield(
         self,
         t: float | torch.Tensor,
         theta_t: torch.Tensor,
-        *context_data: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
         """
         Evaluate the vectorfield at the given time and parameter values.
 
         Args:
-            t: The time at which to evaluate the vectorfield. Usually
-                a float between 0 and 1; for type consistency, we also
-                allow a tensor.
+            t: The time at which to evaluate the vectorfield (must be
+                a float between 0 and 1). Note: This can also be a
+                tensor in case we are evaluating the vectorfield for
+                a batch.
             theta_t: The parameter values at which to evaluate the
                 vectorfield.
-            *context_data: The context (i.e., the observed data) that
-                is used to condition the network.
+            context: Context (i.e., observed data).
 
         Returns:
             The vectorfield evaluated at the given time and parameter.
@@ -61,12 +60,13 @@ class FlowMatching(ContinuousFlowBase):
         # If t is a number (and thus the same for each element in this batch),
         # expand it as a tensor. This is required for the odeint solver.
         t = t * torch.ones(len(theta_t), device=theta_t.device)
-        return torch.Tensor(self.network(t, theta_t, *context_data))
+
+        return torch.Tensor(self.model(t=t, theta=theta_t, context=context))
 
     def loss(
         self,
         theta: torch.Tensor,
-        *context_data: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
         """
         Calculates loss as the the mean squared error between the
@@ -75,7 +75,7 @@ class FlowMatching(ContinuousFlowBase):
 
         Args:
             theta: Parameters.
-            *context_data: Context (i.e., observed data).
+            context: Context (i.e., observed data).
 
         Returns:
             Loss tensor.
@@ -89,7 +89,7 @@ class FlowMatching(ContinuousFlowBase):
         theta_t = ot_conditional_flow(theta_0, theta_1, t, self.sigma_min)
 
         true_vf = theta - (1 - self.sigma_min) * theta_0
-        pred_vf = self.network(t, theta_t, *context_data)
+        pred_vf = self.model(t=t, theta=theta_t, context=context)
 
         loss = mse(pred_vf, true_vf)
 

@@ -41,7 +41,7 @@ class Base:
     """
 
     # Declare attributes with type hints (but without assigning values)
-    network: torch.nn.Module
+    model: torch.nn.Module
     optimizer: torch.optim.Optimizer
     scheduler: lr_scheduler.LRScheduler | lr_scheduler.ReduceLROnPlateau
 
@@ -78,7 +78,7 @@ class Base:
         # Initialize attributes
         self.epoch = 0
         self.optimizer_kwargs: dict | None = None
-        self.network_kwargs: dict | None = None
+        self.model_kwargs: dict | None = None
         self.scheduler_kwargs: dict | None = None
 
         # Add dataframe that will keep track of the training history
@@ -94,60 +94,65 @@ class Base:
 
         # ...or initialize it from the configuration
         else:
-            self.initialize_network()
-            self.network_to_device(device)
+            self.initialize_model()
+            self.model_to_device(device)
 
     @abstractmethod
-    def initialize_network(self) -> None:
+    def initialize_model(self) -> None:
         """
-        Initialize the network backbone for the posterior model.
+        Initialize the model backbone.
         """
+
         raise NotImplementedError()
 
     @abstractmethod
     def sample_batch(
         self,
-        *context_data: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
         """
         Sample a batch of data from the posterior model.
         """
+
         raise NotImplementedError()
 
     @abstractmethod
     def sample_and_log_prob_batch(
         self,
-        *context_data: torch.Tensor,
-        batch_size: int | None = None,
+        context: torch.Tensor | None,
+        num_samples: int,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Sample a batch of data and log probs from the posterior model.
         """
+
         raise NotImplementedError()
 
     @abstractmethod
     def log_prob_batch(
         self,
-        data: torch.Tensor,
-        *context_data: torch.Tensor,
+        theta: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
         """
-        Compute the log probabilities of a batch of `data`.
+        Compute the log probabilities of a batch of `theta`.
         """
+
         raise NotImplementedError()
 
     @abstractmethod
     def loss(
         self,
-        data: torch.Tensor,
+        theta: torch.Tensor,
         context: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Compute the loss for a batch of `data`.
+        Compute the loss for a batch.
         """
+
         raise NotImplementedError()
 
-    def network_to_device(
+    def model_to_device(
         self,
         device: Literal["cpu", "cuda"] = "cpu",
     ) -> None:
@@ -159,7 +164,7 @@ class Base:
             raise ValueError(f"Invalid device: `{device}`.")
 
         self.device = torch.device(device)
-        self.network.to(self.device)
+        self.model.to(self.device)
 
     def initialize_optimizer_and_scheduler(self) -> None:
         """
@@ -168,7 +173,7 @@ class Base:
 
         if self.optimizer_kwargs is not None:
             self.optimizer = get_optimizer_from_kwargs(
-                model_parameters=self.network.parameters(),
+                model_parameters=self.model.parameters(),
                 **self.optimizer_kwargs,
             )
 
@@ -185,8 +190,10 @@ class Base:
 
         # Convert kwargs to a row and append it to the history dataframe
         new_row = pd.DataFrame(kwargs, index=[0])
+
         if self.history.empty:
             self.history = new_row
+
         else:
 
             # Ignore a FutureWarning from pandas ("The behavior of DataFrame
@@ -236,7 +243,7 @@ class Base:
             "config": self.config,
             "epoch": self.epoch,
             "history": self.history,
-            "model_state_dict": self.network.state_dict(),
+            "model_state_dict": self.model.state_dict(),
         }
 
         # Add optional data
@@ -276,14 +283,14 @@ class Base:
         self.config = data["config"]
         self.history = data["history"]
 
-        # Initialize network and load state dict
-        self.initialize_network()
-        self.network.load_state_dict(data["model_state_dict"])
-        self.network_to_device(device)
+        # Initialize model and load state dict
+        self.initialize_model()
+        self.model.load_state_dict(data["model_state_dict"])
+        self.model_to_device(device)
 
         # Set up optimizer and learning rate scheduler for resuming training
         if load_training_info:
-            self.network.train()
+            self.model.train()
 
             # Load optimizer and scheduler kwargs
             if "optimizer_kwargs" in data:
@@ -301,7 +308,7 @@ class Base:
                 self.scheduler.load_state_dict(data["scheduler_state_dict"])
 
         else:
-            self.network.eval()
+            self.model.eval()
 
     @property
     def checkpoint_epochs(self) -> int:
@@ -463,7 +470,7 @@ def train_epoch(
         raise RuntimeError("Don't use automatic mixed precision on CPU!")
 
     # Ensure that the model is in training mode
-    pm.network.train()
+    pm.model.train()
 
     # Set up a LossInfo object to keep track of the loss and times
     loss_info = LossInfo(
@@ -478,10 +485,12 @@ def train_epoch(
     scaler = GradScaler(enabled=use_amp)  # type: ignore
 
     # Iterate over the batches
-    for batch_idx, data in enumerate(dataloader):
+    for batch_idx, (theta, context) in enumerate(dataloader):
 
         # Move data to device
-        data = [d.to(pm.device, non_blocking=True) for d in data]
+        theta = theta.to(pm.device, non_blocking=True)
+        if context is not None:
+            context = context.to(pm.device, non_blocking=True)
 
         loss_info.update_timer()
         pm.optimizer.zero_grad()
@@ -489,7 +498,7 @@ def train_epoch(
         # No automatic mixed precision
         if not use_amp:
 
-            loss = pm.loss(data[0], *data[1:])
+            loss = pm.loss(theta=theta, context=context)
             check_for_nans(loss, "train loss")
 
             loss.backward()  # type: ignore
@@ -499,7 +508,7 @@ def train_epoch(
                 and gradient_clipping_config
             ):
                 torch.nn.utils.clip_grad_norm_(
-                    parameters=pm.network.parameters(),
+                    parameters=pm.model.parameters(),
                     **gradient_clipping_config,
                 )
 
@@ -510,7 +519,7 @@ def train_epoch(
 
             # Note: Backward passes under autocast are not recommended
             with autocast():
-                loss = pm.loss(data[0], *data[1:])
+                loss = pm.loss(theta=theta, context=context)
                 check_for_nans(loss, "train loss")
 
             scaler.scale(loss).backward()  # type: ignore
@@ -521,7 +530,7 @@ def train_epoch(
             ):
                 scaler.unscale_(pm.optimizer)  # type: ignore
                 torch.nn.utils.clip_grad_norm_(
-                    parameters=pm.network.parameters(),
+                    parameters=pm.model.parameters(),
                     **gradient_clipping_config,
                 )
 
@@ -537,7 +546,7 @@ def train_epoch(
         )
 
         # Update loss for history and logging
-        loss_info.update(loss.detach().item(), n=len(data[0]))
+        loss_info.update(loss.detach().item(), n=len(theta))
         loss_info.print_info(batch_idx)
 
     return loss_info.get_avg()
@@ -571,7 +580,7 @@ def test_epoch(
 
     # TODO: Maybe we also want to use AMP here to speed up the logprob stuff?
 
-    pm.network.eval()
+    pm.model.eval()
 
     # Determine the type of the posterior model
     # Note: We can't directly check if `pm` is a `FlowMatching` instance,
@@ -612,14 +621,16 @@ def test_epoch(
             log_prob_kwargs["method"] = "dopri8"
 
         # Iterate over the batches
-        for batch_idx, data in enumerate(dataloader):
+        for batch_idx, (theta, context) in enumerate(dataloader):
             loss_info.update_timer()
 
             # Move data to device
-            data = [d.to(pm.device, non_blocking=True) for d in data]
+            theta = theta.to(pm.device, non_blocking=True)
+            if context is not None:
+                context = context.to(pm.device, non_blocking=True)
 
             # Compute test loss
-            loss = pm.loss(data[0], *data[1:])
+            loss = pm.loss(theta=theta, context=context)
             check_for_nans(loss, "test loss")
 
             # Define maximum number of samples to use for log probability.
@@ -635,14 +646,14 @@ def test_epoch(
                 and batch_idx == 0
             ):
                 logprob = pm.log_prob_batch(
-                    data[0][:MAX_SAMPLES_FOR_LOGPROB],
-                    *data[1:][:MAX_SAMPLES_FOR_LOGPROB],
+                    theta=theta[:MAX_SAMPLES_FOR_LOGPROB],
+                    context=context[:MAX_SAMPLES_FOR_LOGPROB],
                     **log_prob_kwargs
                 ).cpu()
                 avg_logprob = float(logprob.mean().item())
 
             # Update loss for history and logging
-            loss_info.update(loss.item(), len(data[0]))
+            loss_info.update(loss.item(), len(theta))
             loss_info.print_info(batch_idx)
 
         # Return the average test loss and log probability

@@ -53,35 +53,39 @@ class ContinuousFlowBase(Base):
     """
 
     def __init__(self, **kwargs: Any) -> None:
+        """
+        Initialize a new ContinuousFlowBase instance.
+        """
 
         super().__init__(**kwargs)
 
-        self.eps = 0
-        self.time_prior_exponent = self.config["model"].get(
-            "time_prior_exponent", 0
+        self.time_prior_exponent = (
+            self.config["model"].get("time_prior_exponent", 0)
         )
         self.theta_dim = self.config["model"]["theta_dim"]
 
     def sample_t(self, batch_size: int) -> torch.Tensor:
         """
         Sample time `t` from a power law distribution.
-        (For `time_prior_exponent=0`, this is a uniform distribution.)
+        For `time_prior_exponent=0`, this is a uniform distribution.
         """
-        t = (1 - self.eps) * torch.rand(batch_size, device=self.device)
+
+        t = torch.rand(batch_size, device=self.device)
         return torch.pow(t, 1 / (1 + self.time_prior_exponent))
 
-    def sample_theta_0(self, batch_size: int) -> torch.Tensor:
+    def sample_theta_0(self, num_samples: int) -> torch.Tensor:
         """
-        Sample `theta_0` from a Gaussian prior.
+        Sample `theta_0` from a standard Gaussian prior.
         """
-        return torch.randn(batch_size, self.theta_dim, device=self.device)
+
+        return torch.randn(num_samples, self.theta_dim, device=self.device)
 
     @abstractmethod
     def evaluate_vectorfield(
         self,
         t: float,
         theta_t: torch.Tensor,
-        *context_data: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
         """
         Evaluate the vectorfield `v(t, theta_t, context_data)` that
@@ -93,7 +97,7 @@ class ContinuousFlowBase(Base):
         Args:
             t: Time (controls the noise level).
             theta_t: Noisy parameters, perturbed with noise level `t`.
-            *context_data: Context data (e.g., observed data).
+            context: Context (i.e., observed data).
         """
         raise NotImplementedError()
 
@@ -101,7 +105,7 @@ class ContinuousFlowBase(Base):
         self,
         t: float,
         theta_and_div_t: torch.Tensor,
-        *context_data: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
         """
         Returns the right hand side of the neural ODE that is used to
@@ -115,29 +119,31 @@ class ContinuousFlowBase(Base):
         Args:
             t: Time (controls the noise level).
             theta_and_div_t: Concatenated tensor of `(theta_t, div)`.
-            *context_data: Context data (e.g., observed data).
+            context: Context (i.e., observed data).
 
         Returns:
             The vector field that generates the continuous flow, plus
             its divergence (required for likelihood evaluation).
         """
+
         theta_t = theta_and_div_t[:, :-1]  # extract theta_t
         with torch.enable_grad():
             theta_t.requires_grad_(True)
-            vf = self.evaluate_vectorfield(t, theta_t, *context_data)
+            vf = self.evaluate_vectorfield(t, theta_t, context)
             div_vf = compute_divergence(vf, theta_t)
         return torch.cat((vf, -div_vf), dim=1)
 
-    def initialize_network(self) -> None:
+    def initialize_model(self) -> None:
         """
         Initialize the neural net that parameterizes the vectorfield.
         """
-        self.network = create_cf_model(model_kwargs=self.config["model"])
+
+        self.model = create_cf_model(model_kwargs=self.config["model"])
 
     def sample_batch(
         self,
-        *context_data: torch.Tensor,
-        batch_size: int | None = None,
+        context: torch.Tensor | None,
+        num_samples: int = 1,
         tolerance: float = 1e-7,
         method: str = "dopri5",
     ) -> torch.Tensor:
@@ -146,11 +152,10 @@ class ContinuousFlowBase(Base):
         an ODE forwards in time.
 
         Args:
-            *context_data: Context data (e.g., observed data).
-            batch_size: Batch size for sampling.
-                If len(context_data) > 0, we automatically determine the
-                batch size from the context data, so this option is only
-                used for unconditional sampling.
+            context: Context (i.e., observed data).
+            num_samples: Number of posterior samples to generate in the
+                unconditional case. If `context` is provided, the number
+                of samples is automatically determined from the context.
             tolerance: Tolerance (atol and rtol) for the ODE solver.
             method: ODE solver method. Default is "dopri5".
 
@@ -158,23 +163,17 @@ class ContinuousFlowBase(Base):
             The generated samples.
         """
 
-        self.network.eval()
+        self.model.eval()
 
-        # Ensure we got a valid combination of context_data and batch_size
-        if len(context_data) == 0 and batch_size is None:
-            raise ValueError("Must set batch_size for unconditional sampling!")
-        if len(context_data) > 0 and batch_size is not None:
-            raise ValueError("Can't set batch_size for conditional sampling!")
+        # Get the number of samples, either from context or explicitly
+        num_samples = len(context) if context is not None else num_samples
 
-        # Extract batch size from context data if not set
-        batch_size = len(context_data[0]) if batch_size is None else batch_size
-
-        # Solve ODE forwards in time to get theta_1 from theta_0
+        # Solve ODE forwards in time to get from theta_0 to theta_1
         with torch.no_grad():
-            theta_0 = self.sample_theta_0(batch_size)
+            theta_0 = self.sample_theta_0(num_samples)
             _, theta_1 = odeint(
                 func=lambda t, theta_t: self.evaluate_vectorfield(
-                    t, theta_t, *context_data
+                    t, theta_t, context
                 ),
                 y0=theta_0,
                 t=self.integration_range,
@@ -188,7 +187,7 @@ class ContinuousFlowBase(Base):
     def log_prob_batch(
         self,
         theta: torch.Tensor,
-        *context_data: torch.Tensor,
+        context: torch.Tensor | None,
         tolerance: float = 1e-7,
         method: str = "dopri5",
     ) -> torch.Tensor:
@@ -203,28 +202,29 @@ class ContinuousFlowBase(Base):
 
         Args:
             theta: Parameter values for which to evaluate the log_prob.
-            *context_data:  Context data (e.g., observed data).
+            context: Context (i.e., observed data).
             tolerance: Tolerance (atol and rtol) for the ODE solver.
             method: ODE solver method. Default is "dopri5".
 
         Returns:
             The log probability of `theta`.
         """
-        self.network.eval()
+
+        self.model.eval()
 
         div_init = torch.zeros(
             (theta.shape[0],), device=theta.device
         ).unsqueeze(1)
         theta_and_div_init = torch.cat((theta, div_init), dim=1)
 
+        # Integrate backwards in time to get from theta_1 to theta_0;
+        # note the `flip()` of the integration range
         _, theta_and_div_0 = odeint(
-            lambda t, theta_and_div_t: self.rhs_of_joint_ode(
-                t, theta_and_div_t, *context_data
+            func=lambda t, theta_and_div_t: self.rhs_of_joint_ode(
+                t, theta_and_div_t, context
             ),
-            theta_and_div_init,
-            torch.flip(
-                self.integration_range, dims=(0,)
-            ),  # integrate backwards in time, i.e., from 1 to 0
+            y0=theta_and_div_init,
+            t=torch.flip(self.integration_range, dims=(0,)),
             atol=tolerance,
             rtol=tolerance,
             method=method,
@@ -238,8 +238,8 @@ class ContinuousFlowBase(Base):
 
     def sample_and_log_prob_batch(
         self,
-        *context_data: torch.Tensor,
-        batch_size: int | None = None,
+        context: torch.Tensor | None,
+        num_samples: int = 1,
         tolerance: float = 1e-7,
         method: str = "dopri5",
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -255,10 +255,10 @@ class ContinuousFlowBase(Base):
         log p(theta_0)] = [theta_1, log p_1(theta_1)].
 
         Args:
-            *context_data: Context data (e.g., observed data).
-            batch_size: Number of posterior samples to generate in the
-                unconditional case. If context_data is provided, the
-                batch_size is automatically determined from the context.
+            context: Context (i.e., observed data).
+            num_samples: Number of posterior samples to generate in the
+                unconditional case. If `context` is provided, the number
+                of samples is automatically determined from the context.
             tolerance: Tolerance (atol and rtol) for the ODE solver.
             method: ODE solver method. Default is "dopri5".
 
@@ -266,35 +266,24 @@ class ContinuousFlowBase(Base):
             The generated samples and their log probabilities.
         """
 
-        self.network.eval()
+        self.model.eval()
 
-        if len(context_data) == 0 and batch_size is None:
-            raise ValueError(
-                "For unconditional sampling, the batch size needs to be set."
-            )
-        elif len(context_data) > 0:
-            if batch_size is not None:
-                raise ValueError(
-                    "For conditional sampling, the batch_size can not be set "
-                    "manually as it is automatically determined by the "
-                    "context_data."
-                )
-            batch_size = len(context_data[0])
+        # Get the number of samples, either from context or explicitly
+        num_samples = len(context) if context is not None else num_samples
 
-        assert isinstance(batch_size, int)
-
-        theta_0 = self.sample_theta_0(batch_size)
+        theta_0 = self.sample_theta_0(num_samples)
         log_prior = compute_log_prior(theta_0)
         theta_and_div_init = torch.cat(
             (theta_0, log_prior.unsqueeze(1)), dim=1
         )
 
+        # Integrate forwards in time to get from theta_0 to theta_1
         _, theta_and_div_1 = odeint(
-            lambda t, theta_and_div_t: self.rhs_of_joint_ode(
-                t, theta_and_div_t, *context_data
+            func=lambda t, theta_and_div_t: self.rhs_of_joint_ode(
+                t, theta_and_div_t, context
             ),
-            theta_and_div_init,
-            self.integration_range,  # integrate forwards in time, [0, 1-eps]
+            y0=theta_and_div_init,
+            t=self.integration_range,
             atol=tolerance,
             rtol=tolerance,
             method=method,
@@ -307,17 +296,17 @@ class ContinuousFlowBase(Base):
     @property
     def integration_range(self) -> torch.Tensor:
         """
-        Integration range for ODE: We integrate from `0` to `1 - eps`.
-        For score matching, `eps > 0` is required for stability. For
-        flow matching, we can also have `eps = 0`.
+        Integration range for ODE solver: [0, 1].
         """
-        return torch.tensor([0.0, 1.0 - self.eps], device=self.device).float()
+
+        return torch.tensor([0.0, 1.0], device=self.device).float()
 
 
 def compute_divergence(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """
     Compute the divergence. TODO: Of what exactly?
     """
+
     div: float | torch.Tensor = 0.0
     with torch.enable_grad():
         y.requires_grad_(True)
@@ -333,6 +322,7 @@ def compute_log_prior(theta_0: torch.Tensor) -> torch.Tensor:
     """
     Compute the log prior of theta_0 under the base distribution
     """
+
     N = theta_0.shape[1]
     return torch.Tensor(
         -N / 2.0 * float(np.log(2 * np.pi))

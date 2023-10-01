@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 from glasflow.nflows import distributions, flows
 
-from fm4ar.utils.torchutils import forward_pass_with_unpacked_tuple
 from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.nn.nsf import create_transform
 from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
@@ -50,63 +49,67 @@ class DiscreteFlowModel(nn.Module):
         self.flow = flow
 
     @lru_cache(maxsize=1)
-    def get_context_embedding(self, *context: torch.Tensor) -> torch.Tensor:
+    def get_context_embedding(self, context: torch.Tensor) -> torch.Tensor:
         """
         Get the embedding of the context.
         """
-
-        return forward_pass_with_unpacked_tuple(
-            self.context_embedding_net,
-            *context,
-        )
+        return torch.Tensor(self.context_embedding_net(context))
 
     def log_prob(
         self,
-        y: torch.Tensor,
-        *context: torch.Tensor,
+        theta: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
 
-        if len(context) == 0:
-            return torch.Tensor(self.flow.log_prob(y))
-
-        context_embedding = self.get_context_embedding(*context)
-        return torch.squeeze(self.flow.log_prob(y, context_embedding))
+        if context is None:
+            log_prob = torch.Tensor(self.flow.log_prob(theta))
+        else:
+            context_embedding = self.get_context_embedding(context)
+            log_prob = self.flow.log_prob(theta, context_embedding)
+        return torch.squeeze(log_prob)
 
     def sample(
         self,
-        *context: torch.Tensor,
+        context: torch.Tensor | None,
         num_samples: int = 1,
     ) -> torch.Tensor:
 
-        if len(context) == 0:
-            return torch.squeeze(self.flow.sample(num_samples))
-
-        context_embedding = self.get_context_embedding(*context)
-        return torch.squeeze(
-            self.flow.sample(num_samples, context_embedding)
-        )
+        if context is None:
+            samples = self.flow.sample(num_samples)
+        else:
+            context_embedding = self.get_context_embedding(context)
+            samples = self.flow.sample(
+                num_samples=1,  # this means "1 per context"
+                context=context_embedding
+            )
+        return torch.squeeze(samples)
 
     def sample_and_log_prob(
         self,
-        *context: torch.Tensor,
+        context: torch.Tensor | None,
         num_samples: int = 1,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Sample from the model and return the samples and their log
+        probabilities. If `context` is None, we need to specify the
+        number of samples to draw; otherwise, we assume that the
+        number of samples is the same as the batch size of `context`.
+        """
 
-        if len(context) == 0:
+        if context is None:
             sample, log_prob = self.flow.sample_and_log_prob(num_samples)
-
         else:
-            context_embedding = self.get_context_embedding(*context)
+            context_embedding = self.get_context_embedding(context)
             sample, log_prob = self.flow.sample_and_log_prob(
-                num_samples, context_embedding
+                num_samples=1,  # this means "1 per context"
+                context=context_embedding,
             )
-
         return torch.squeeze(sample), torch.squeeze(log_prob)
 
     def forward(
         self,
         theta: torch.Tensor,
-        *context: torch.Tensor,
+        context: torch.Tensor | None,
     ) -> torch.Tensor:
         """
         Forward pass through the model. This returns the log probability
@@ -114,11 +117,7 @@ class DiscreteFlowModel(nn.Module):
         train the model using the NPE loss function.
         """
 
-        return (
-            self.log_prob(theta, *context)
-            if len(context) > 0
-            else self.log_prob(theta)
-        )
+        return torch.Tensor(self.log_prob(theta=theta, context=context))
 
 
 def create_df_model(model_kwargs: dict) -> DiscreteFlowModel:

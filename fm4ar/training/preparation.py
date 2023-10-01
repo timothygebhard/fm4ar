@@ -57,9 +57,9 @@ def prepare_new(
         # Add number of model parameters to the config
         augmented_config = config.copy()
         augmented_config["n_model_parameters"] = {
-            "trainable": get_number_of_model_parameters(pm.network, (True,)),
-            "fixed": get_number_of_model_parameters(pm.network, (False,)),
-            "total": get_number_of_model_parameters(pm.network),
+            "trainable": get_number_of_model_parameters(pm.model, (True,)),
+            "fixed": get_number_of_model_parameters(pm.model, (False,)),
+            "total": get_number_of_model_parameters(pm.model),
         }
 
         # Add the experiment directory to the config
