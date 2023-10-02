@@ -149,7 +149,9 @@ if __name__ == "__main__":
         # Define experiment name
         parts = []
         for p, v in zip(sweep_config.values(), combination, strict=True):
-            parts.append(f"{v:.1e}" if p["name"] == "lr" else str(v))
+            parts.append(
+                p["name"] + "=" + f"{v:.0e}" if p["name"] == "lr" else str(v)
+            )
         experiment_name = "__".join(parts)
 
         # Create the experiment directory
