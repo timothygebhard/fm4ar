@@ -22,6 +22,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "chainconsumer~=0.34.0",
+    "click",
     "coolname",
     "corner",
     "dill",
