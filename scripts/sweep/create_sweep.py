@@ -15,7 +15,6 @@ import click
 import numpy as np
 
 from fm4ar.utils.config import load_config, save_config
-from fm4ar.utils.create_experiment_dir import create_experiment_dir
 
 
 def get_arguments() -> argparse.Namespace:
@@ -49,7 +48,7 @@ def get_arguments() -> argparse.Namespace:
             "Number of experiments to create. If None, all combinations of "
             "hyperparameters will be created. If a number is given, the "
             "combinations will be chosen randomly."
-        )
+        ),
     )
     parser.add_argument(
         "--random-seed",
@@ -85,7 +84,6 @@ def set_value_in_nested_dict(d: dict, key: str, value: Any) -> None:
 
 
 if __name__ == "__main__":
-
     script_start = time.time()
     print("\nCREATE HYPERPARAMETER SWEEP\n")
 
@@ -124,7 +122,7 @@ if __name__ == "__main__":
             [
                 f"{k}={v}"
                 for k, v in zip(sweep_config.keys(), combination, strict=True)
-             ]
+            ]
         )
         print("  " + joined)
 
@@ -148,8 +146,17 @@ if __name__ == "__main__":
     experiment_dirs = []
     for combination in subset:
 
+        # Define experiment name
+        experiment_name = "__".join(
+            [
+                f"{p['name']}={v}"
+                for p, v in zip(sweep_config.values(), combination)
+            ]
+        )
+
         # Create the experiment directory
-        experiment_dir = create_experiment_dir(args.base_dir, False).resolve()
+        experiment_dir = args.base_dir / args.config_dir.name / experiment_name
+        experiment_dir.mkdir(parents=True)
         experiment_dirs.append(experiment_dir)
         print("  " + experiment_dir.as_posix())
 
