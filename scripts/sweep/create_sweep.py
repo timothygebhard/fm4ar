@@ -150,7 +150,7 @@ if __name__ == "__main__":
         parts = []
         for p, v in zip(sweep_config.values(), combination, strict=True):
             parts.append(
-                p["name"] + "=" + (f"{v:.0e}" if p["name"] == "lr" else str(v))
+                p["name"] + "_" + (f"{v:.0e}" if p["name"] == "lr" else str(v))
             )
         experiment_name = "__".join(parts)
 
