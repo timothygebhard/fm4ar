@@ -147,12 +147,10 @@ if __name__ == "__main__":
     for combination in subset:
 
         # Define experiment name
-        experiment_name = "__".join(
-            [
-                f"{p['name']}={v}"
-                for p, v in zip(sweep_config.values(), combination)
-            ]
-        )
+        parts = []
+        for p, v in zip(sweep_config.values(), combination, strict=True):
+            parts.append(f"{v:.1e}" if p["name"] == "lr" else str(v))
+        experiment_name = "__".join(parts)
 
         # Create the experiment directory
         experiment_dir = args.base_dir / args.config_dir.name / experiment_name
