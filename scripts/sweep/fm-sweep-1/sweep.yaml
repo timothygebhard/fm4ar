@@ -1,12 +1,12 @@
 time_prior_exponent:
   name: texp
   key: "model/time_prior_exponent"
-  values: [0.0, 0.5, 1.0, 1.5, 2.0]
+  values: [0.0, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0]
 
 initial_learning_rate:
   name: lr
   key: "training/stage_0/optimizer/lr"
-  values: [5.0e-5, 1.0e-4, 3.0e-4, 5.0e-4]
+  values: [1.0e-5, 5.0e-5, 1.0e-4]
 
 batch_size:
   name: bs

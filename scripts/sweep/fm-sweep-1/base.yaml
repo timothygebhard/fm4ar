@@ -132,9 +132,9 @@ local:
   condor:
     bid: 25
     num_cpus: 2
-    memory_cpus: 65_000
+    memory_cpus: 100_000
     num_gpus: 1
-    memory_gpus: 65_000
+    memory_gpus: 20_000
 
   # Settings for Weights & Biases, remove if not used
   wandb:
