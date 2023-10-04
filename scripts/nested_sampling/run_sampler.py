@@ -129,7 +129,7 @@ if __name__ == "__main__":
             condor_settings=condor_settings,
             experiment_dir=args.experiment_dir,
         )
-        print("Done!", flush=True)
+        print("Done!\n", flush=True)
 
         condor_submit_bid(file_path=file_path, bid=config.htcondor.bid)
 
