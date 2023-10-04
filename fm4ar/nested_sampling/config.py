@@ -26,7 +26,7 @@ class SamplerConfig(BaseModel):
         description="Number of live points to use in the nested sampling run",
     )
     random_seed: int = Field(
-        ...,
+        default=42,
         description="Random seed to use for the nested sampling run",
     )
     run_kwargs: dict[str, Any] = Field(
