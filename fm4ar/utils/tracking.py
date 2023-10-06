@@ -2,9 +2,7 @@
 Various classes for tracking, e.g., the average loss, or the runtime.
 """
 
-import csv
 import time
-from pathlib import Path
 from typing import Literal
 
 
@@ -28,56 +26,6 @@ class AvgTracker:
 
     def get_last(self) -> float:
         return self.last
-
-
-class EarlyStopping:
-    """
-    Early stopping based on the validation loss.
-    """
-
-    def __init__(
-        self,
-        patience: int = 10,
-        min_delta: float = 0.0,
-    ) -> None:
-        """
-        Inialize new EarlyStopping instance.
-
-        Args:
-            patience: Number of epochs to wait for improvement.
-            min_delta: Minimum change in the validation loss to qualify
-                as an improvement.
-        """
-
-        # Store the parameters
-        self.patience = patience
-        self.min_delta = min_delta
-
-        # Initialize the counter and early stopping flag
-        self.counter = 0
-        self.early_stop = False
-
-        # Initialize the minimum validation loss
-        self.min_val_loss = float("inf")
-
-    def __call__(self, val_loss: float) -> bool:
-        """
-        Returns whether the current validation loss is the new minimum,
-        that is, if the current model is the best model so far.
-        """
-
-        # If the validation loss is at least `min_delta` smaller than the
-        # current minimum validation loss, update the minimum
-        if val_loss < self.min_val_loss - self.min_delta:
-            self.min_val_loss = val_loss
-            self.counter = 0
-            return True
-
-        # Otherwise, increase the counter and check if we should stop for good
-        self.counter += 1
-        if self.counter >= self.patience:
-            self.early_stop = True
-        return False
 
 
 class LossInfo:
@@ -187,8 +135,7 @@ class LossInfo:
 
 class RuntimeLimits:
     """
-    Keeps track of the runtime limits (time limit, epoch limit, max. number
-    of epochs for model).
+    Keeps track of the runtime limits (time and / or number of epochs)
     """
 
     def __init__(
@@ -196,7 +143,7 @@ class RuntimeLimits:
         max_time_per_run: float | None = None,
         max_epochs_per_run: int | None = None,
         max_epochs_total: int | None = None,
-        epoch_start: int | None = None,
+        epoch_start: int = 0,
     ) -> None:
         """
         Initialize new `RuntimeLimits` object.
@@ -214,13 +161,9 @@ class RuntimeLimits:
         self.max_epochs_per_run = max_epochs_per_run
         self.max_epochs_total = max_epochs_total
         self.epoch_start = epoch_start
-
-        if max_epochs_per_run is not None and epoch_start is None:
-            raise ValueError("`max_epochs_per_run` requires `epoch_start`!")
-
         self.time_start = time.time()
 
-    def limits_exceeded(self, epoch: int | None = None) -> bool:
+    def limits_exceeded(self, epoch: int) -> bool:
         """
         Check whether any of the runtime limits are exceeded.
         """
@@ -233,11 +176,7 @@ class RuntimeLimits:
 
         # Check epoch limit for run
         if self.max_epochs_per_run is not None:
-            if epoch is None:
-                raise ValueError("`epoch` argument is required!")
-
-            n_epochs = epoch - self.epoch_start  # type: ignore
-            if n_epochs >= self.max_epochs_per_run:
+            if epoch - self.epoch_start >= self.max_epochs_per_run:
                 print(f"Run epoch limit of {self.max_epochs_per_run} reached!")
                 return True
 
@@ -246,85 +185,7 @@ class RuntimeLimits:
             if epoch is None:
                 raise ValueError("`epoch` argument is required!")
             if epoch >= self.max_epochs_total:
-                print(f"Total epoch limit of {self.max_epochs_total} reached.")
+                print(f"Total epoch limit of {self.max_epochs_total} reached!")
                 return True
 
         return False
-
-    def local_limits_exceeded(self, epoch: int | None = None) -> bool:
-        """
-        Check whether any of the local runtime limits are exceeded.
-        Local runtime limits include `max_epochs_per_run` and
-        `max_time_per_run`, but not `max_epochs_total`.
-        """
-
-        # Check time limit for run
-        if self.max_time_per_run is not None:
-            if time.time() - self.time_start >= self.max_time_per_run:
-                return True
-
-        # Check epoch limit for run
-        if self.max_epochs_per_run is not None:
-            if epoch is None:
-                raise ValueError("`epoch` argument is required!")
-
-            n_epochs = epoch - self.epoch_start  # type: ignore
-            if n_epochs >= self.max_epochs_per_run:
-                return True
-
-        return False
-
-
-def write_history(
-    experiment_dir: Path,
-    epoch: int,
-    train_loss: float,
-    test_loss: float,
-    learning_rates: list[float],
-    extra_info: dict | None = None,
-    file_name: str = "history.csv",
-    overwrite: bool = False,
-) -> None:
-    """
-    Write history of training loss and other information to a text file.
-
-    Args:
-        experiment_dir: Main directory of experiment.
-        epoch: Current epoch.
-        train_loss: Current training loss.
-        test_loss: Current test loss.
-        learning_rates: List of learning rates.
-        extra_info: Dictionary with any extra information or metrics to
-            be written to the history file.
-        file_name: Name of history file (default: "history.csv").
-        overwrite: Whether to overwrite the history file if it already
-            exists (default: False).
-    """
-
-    # Make sure we do not overwrite pre-existing files accidentally
-    file_path = experiment_dir / file_name
-    if epoch == 1 and file_path.exists() and not overwrite:
-        raise FileExistsError(f"{file_path} already exists!")
-
-    # Write header with column names
-    if epoch == 1:
-        with open(file_path, "w") as history_file:
-            writer = csv.writer(history_file, delimiter=",")
-            writer.writerow(
-                ["epoch", "train_loss", "test_loss"]
-                + [f"lr_{i}" for i in range(len(learning_rates))]
-                + list(extra_info.keys() if extra_info is not None else [])
-            )
-
-    # Write row with values
-    with open(file_path, "a") as history_file:
-        writer = csv.writer(history_file, delimiter=",")
-        writer.writerow(
-            [
-                epoch,
-                train_loss,
-                test_loss,
-                *learning_rates,
-                *(list(extra_info.values()) if extra_info is not None else []),
-            ]
-        )

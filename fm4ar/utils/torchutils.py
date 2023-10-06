@@ -58,26 +58,6 @@ def get_activation_from_string(
             raise ValueError("Invalid activation function!")
 
 
-def forward_pass_with_unpacked_tuple(
-    model: nn.Module,
-    x: torch.Tensor | tuple[torch.Tensor, ...],
-) -> torch.Tensor:
-    """
-    Performs forward pass of `model` with input `x`. If `x` is a tensor,
-    it return `model(x)`, else it returns `model(*x)`.
-
-    Args:
-        model: Model for forward pass.
-        x: Input for forward pass: Either a tensor or a tuple of
-            tensors (the length of the tuple may be 0, though).
-
-    Returns:
-        Output of the forward pass, either `model(*x)` or `model(x)`.
-    """
-
-    return torch.Tensor(model(x) if isinstance(x, torch.Tensor) else model(*x))
-
-
 def get_number_of_model_parameters(
     model: nn.Module,
     requires_grad_flags: tuple[bool, ...] = (True, False),

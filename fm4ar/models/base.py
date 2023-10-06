@@ -290,7 +290,6 @@ class Base:
 
         # Set up optimizer and learning rate scheduler for resuming training
         if load_training_info:
-            self.model.train()
 
             # Load optimizer and scheduler kwargs
             if "optimizer_kwargs" in data:
@@ -306,9 +305,6 @@ class Base:
                 self.optimizer.load_state_dict(data["optimizer_state_dict"])
             if "scheduler_state_dict" in data:
                 self.scheduler.load_state_dict(data["scheduler_state_dict"])
-
-        else:
-            self.model.eval()
 
     @property
     def checkpoint_epochs(self) -> int:

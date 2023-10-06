@@ -9,7 +9,6 @@ import pytest
 import torch.nn
 
 from fm4ar.utils.torchutils import (
-    forward_pass_with_unpacked_tuple,
     get_activation_from_string,
     get_number_of_model_parameters,
     get_optimizer_from_kwargs,
@@ -45,31 +44,6 @@ def test__get_activation_from_string(
     else:
         activation = get_activation_from_string(activation_name)
         assert activation is expected_activation
-
-
-def test__forward_pass_with_unpacked_tuple() -> None:
-    """
-    Test `fm4ar.utils.torchutils.forward_pass_with_unpacked_tuple()`.
-    """
-
-    # Case 1: No unpacking
-    model_1 = torch.nn.Identity()
-    x = torch.randn(10, 5)
-    assert torch.equal(forward_pass_with_unpacked_tuple(model_1, x), x)
-
-    # Case 2: Unpacking
-    class DummyModule(torch.nn.Module):
-        @staticmethod
-        def forward(*args: torch.Tensor) -> torch.Tensor:
-            return torch.row_stack(args)
-
-    model_2 = DummyModule()
-    x1 = torch.randn(10, 5)
-    x2 = torch.randn(10, 5)
-    assert torch.equal(
-        forward_pass_with_unpacked_tuple(model_2, (x1, x2)),
-        torch.cat((x1, x2), dim=0),
-    )
 
 
 def test__get_number_of_model_parameters() -> None:

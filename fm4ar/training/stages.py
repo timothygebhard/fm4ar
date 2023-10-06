@@ -132,11 +132,6 @@ def train_stages(
             pm.save_model(name=stage_name, save_training_info=True)
             print("Done!\n", flush=True)
 
-        # Check if we have reached the runtime limits
-        if runtime_limits.local_limits_exceeded(pm.epoch):
-            print("Local runtime limits reached. Ending program.\n")
-            break
-
     # Check if we have reached the end of the training
     complete = bool(pm.epoch == end_epochs[-1])
     return complete
