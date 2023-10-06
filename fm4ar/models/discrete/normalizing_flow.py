@@ -37,8 +37,14 @@ class NormalizingFlow(Base):
         Compute the log probability of the given `theta`.
         """
 
-        log_prob = self.model.log_prob(theta, context)
-        return torch.Tensor(log_prob)
+        self.model.eval()
+
+        if context is None:
+            log_prob = torch.Tensor(self.model.flow.log_prob(theta))
+        else:
+            context_embedding = self.model.get_context_embedding(context)
+            log_prob = self.model.flow.log_prob(theta, context_embedding)
+        return torch.squeeze(log_prob)
 
     def sample_batch(
         self,
@@ -52,11 +58,17 @@ class NormalizingFlow(Base):
         the batch size of `context`.
         """
 
-        samples = self.model.sample(
-            context=context,
-            num_samples=num_samples,
-        )
-        return torch.Tensor(samples)
+        self.model.eval()
+
+        if context is None:
+            samples = self.model.flow.sample(num_samples)
+        else:
+            context_embedding = self.model.get_context_embedding(context)
+            samples = self.model.flow.sample(
+                num_samples=1,  # this means "1 per context"
+                context=context_embedding
+            )
+        return torch.squeeze(samples)
 
     def sample_and_log_prob_batch(
         self,
@@ -70,11 +82,17 @@ class NormalizingFlow(Base):
         number of samples is the same as the batch size of `context`.
         """
 
-        samples, log_probs = self.model.sample_and_log_prob(
-            context=context,
-            num_samples=num_samples,
-        )
-        return torch.Tensor(samples), torch.Tensor(log_probs)
+        self.model.eval()
+
+        if context is None:
+            sample, log_prob = self.model.flow.sample_and_log_prob(num_samples)
+        else:
+            context_embedding = self.model.get_context_embedding(context)
+            sample, log_prob = self.model.flow.sample_and_log_prob(
+                num_samples=1,  # this means "1 per context"
+                context=context_embedding,
+            )
+        return torch.squeeze(sample), torch.squeeze(log_prob)
 
     def loss(
         self,

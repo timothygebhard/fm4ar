@@ -55,57 +55,6 @@ class DiscreteFlowModel(nn.Module):
         """
         return torch.Tensor(self.context_embedding_net(context))
 
-    def log_prob(
-        self,
-        theta: torch.Tensor,
-        context: torch.Tensor | None,
-    ) -> torch.Tensor:
-
-        if context is None:
-            log_prob = torch.Tensor(self.flow.log_prob(theta))
-        else:
-            context_embedding = self.get_context_embedding(context)
-            log_prob = self.flow.log_prob(theta, context_embedding)
-        return torch.squeeze(log_prob)
-
-    def sample(
-        self,
-        context: torch.Tensor | None,
-        num_samples: int = 1,
-    ) -> torch.Tensor:
-
-        if context is None:
-            samples = self.flow.sample(num_samples)
-        else:
-            context_embedding = self.get_context_embedding(context)
-            samples = self.flow.sample(
-                num_samples=1,  # this means "1 per context"
-                context=context_embedding
-            )
-        return torch.squeeze(samples)
-
-    def sample_and_log_prob(
-        self,
-        context: torch.Tensor | None,
-        num_samples: int = 1,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Sample from the model and return the samples and their log
-        probabilities. If `context` is None, we need to specify the
-        number of samples to draw; otherwise, we assume that the
-        number of samples is the same as the batch size of `context`.
-        """
-
-        if context is None:
-            sample, log_prob = self.flow.sample_and_log_prob(num_samples)
-        else:
-            context_embedding = self.get_context_embedding(context)
-            sample, log_prob = self.flow.sample_and_log_prob(
-                num_samples=1,  # this means "1 per context"
-                context=context_embedding,
-            )
-        return torch.squeeze(sample), torch.squeeze(log_prob)
-
     def forward(
         self,
         theta: torch.Tensor,
@@ -117,7 +66,16 @@ class DiscreteFlowModel(nn.Module):
         train the model using the NPE loss function.
         """
 
-        return torch.Tensor(self.log_prob(theta=theta, context=context))
+        # Unconditional case
+        if context is None:
+            return torch.Tensor(self.flow.log_prob(theta))
+
+        # Conditional case
+        # Note that we do not use `get_context_embedding()` here, because we
+        # only want to use the cache during inference but not during training
+        else:
+            context_embedding = self.context_embedding_net(context)
+            return torch.Tensor(self.flow.log_prob(theta, context_embedding))
 
 
 def create_df_model(model_kwargs: dict) -> DiscreteFlowModel:
