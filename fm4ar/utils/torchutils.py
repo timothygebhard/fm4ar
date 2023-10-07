@@ -183,6 +183,13 @@ def perform_scheduler_step(
     # Different schedulers need to be called at different times:
     if isinstance(scheduler, lrs.CosineAnnealingLR) and end_of == "epoch":
         scheduler.step()
+    if (
+        isinstance(scheduler, lrs.CosineAnnealingWarmRestarts)
+        and end_of == "epoch"
+    ):
+        scheduler.step()
+    if isinstance(scheduler, lrs.CyclicLR) and end_of == "batch":
+        scheduler.step()
     elif isinstance(scheduler, lrs.OneCycleLR) and end_of == "batch":
         scheduler.step()
     elif isinstance(scheduler, lrs.ReduceLROnPlateau) and end_of == "epoch":
