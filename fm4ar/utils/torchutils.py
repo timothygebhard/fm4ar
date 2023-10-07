@@ -5,7 +5,7 @@ Utility functions for PyTorch.
 from collections import OrderedDict
 from math import prod
 from pathlib import Path
-from typing import Any, Callable, Iterable, Literal
+from typing import Any, Callable, Iterable, Literal, Type
 
 import numpy as np
 import torch
@@ -147,20 +147,21 @@ def get_scheduler_from_kwargs(
     if scheduler_type is None:
         raise KeyError("Scheduler type needs to be specified!")
 
+    # Map strings to scheduler classes
+    mapping: dict[str, Type[lrs.LRScheduler | lrs.ReduceLROnPlateau]] = {
+        "step": lrs.StepLR,
+        "cosine": lrs.CosineAnnealingLR,
+        "cosine_warm_restarts": lrs.CosineAnnealingWarmRestarts,
+        "cyclic": lrs.CyclicLR,
+        "onecycle": lrs.OneCycleLR,
+        "reduce_on_plateau": lrs.ReduceLROnPlateau,
+    }
+
     # Get scheduler from scheduler type
-    # Note: ReduceLROnPleateau is not a subclass of LRScheduler, so we need
-    # to check for it separately.
-    match scheduler_type.lower():
-        case "step":
-            return lrs.StepLR(optimizer, **scheduler_kwargs)
-        case "cosine":
-            return lrs.CosineAnnealingLR(optimizer, **scheduler_kwargs)
-        case "onecycle":
-            return lrs.OneCycleLR(optimizer, **scheduler_kwargs)
-        case "reduce_on_plateau":
-            return lrs.ReduceLROnPlateau(optimizer, **scheduler_kwargs)
-        case _:
-            raise ValueError("No valid scheduler specified!")
+    try:
+        return mapping[scheduler_type.lower()](optimizer, **scheduler_kwargs)
+    except KeyError as e:
+        raise ValueError(f"Invalid scheduler type: `{scheduler_type}`") from e
 
 
 def perform_scheduler_step(
