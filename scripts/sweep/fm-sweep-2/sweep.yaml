@@ -15,11 +15,11 @@ scheduler:
       eta_min: 1.0e-8
 
     # Cosine annealing with warm restarts
-    - type: cosine
+    - type: cosine_warm_restarts
       T_0: 16
       T_mult: 2
       eta_min: 1.0e-7
-    - type: cosine
+    - type: cosine_warm_restarts
       T_0: 50
       T_mult: 1
       eta_min: 1.0e-7
@@ -30,16 +30,19 @@ scheduler:
       max_lr: 1.0e-4
       step_size_up: 5_000
       mode: triangular2
+      cycle_momentum: false
     - type: cyclic
       base_lr: 1.0e-7
       max_lr: 1.0e-4
       step_size_up: 10_000
       mode: triangular2
+      cycle_momentum: false
     - type: cyclic
       base_lr: 1.0e-7
       max_lr: 1.0e-4
       step_size_up: 50_000
       mode: triangular2
+      cycle_momentum: false
 
     # Reduce on plateau
     - type: reduce_on_plateau
@@ -80,15 +83,15 @@ scheduler:
       min_lr: 1.0e-7
 
     # OneCycle
-    - type: one_cycle
+    - type: onecycle
       total_steps: 300
       steps_per_epoch: 957
       pct_start: 0.1
-    - type: one_cycle
+    - type: onecycle
       total_steps: 300
       steps_per_epoch: 957
       pct_start: 0.2
-    - type: one_cycle
+    - type: onecycle
       total_steps: 300
       steps_per_epoch: 957
       pct_start: 0.3
