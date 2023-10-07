@@ -107,7 +107,7 @@ if __name__ == "__main__":
         executable = sys.executable
         job_arguments = [
             Path(__file__).resolve().as_posix(),
-            f"--experiment-dir {args.experiment_dir}",
+            f"--experiment-dir {args.experiment_dir.resolve()}",
         ]
 
     # -------------------------------------------------------------------------
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         )
         file_path = create_submission_file(
             condor_settings=condor_settings,
-            experiment_dir=args.experiment_dir,
+            experiment_dir=args.experiment_dir.resolve(),
         )
         print("Done!\n", flush=True)
 
