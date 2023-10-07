@@ -13,6 +13,7 @@ from typing import Any
 
 import click
 import numpy as np
+from coolname import generate_slug
 
 from fm4ar.utils.config import load_config, save_config
 
@@ -34,11 +35,6 @@ def get_arguments() -> argparse.Namespace:
         type=Path,
         required=True,
         help="Path to the directory with the config files for the sweep.",
-    )
-    parser.add_argument(
-        "--dry",
-        action="store_true",
-        help="If set, list but do not create or launch sweep experiments.",
     )
     parser.add_argument(
         "--n-experiments",
@@ -84,6 +80,7 @@ def set_value_in_nested_dict(d: dict, key: str, value: Any) -> None:
 
 
 if __name__ == "__main__":
+
     script_start = time.time()
     print("\nCREATE HYPERPARAMETER SWEEP\n")
 
@@ -109,11 +106,11 @@ if __name__ == "__main__":
     print(f"Total number of all combinations: {len(combinations)}\n")
 
     # If a number of experiments is given, choose a random subset
-    if args.n_experiments is not None:
-        idx = rng.choice(len(combinations), args.n_experiments, replace=False)
-        subset = sorted([combinations[i] for i in idx])
+    if args.n_experiments is None or args.n_experiments >= len(combinations):
+        subset = combinations
     else:
-        subset = sorted(combinations)
+        idx = rng.choice(len(combinations), args.n_experiments, replace=False)
+        subset = [combinations[i] for i in idx]
 
     # Print the set of combinations for which we will create experiments
     print(f"The following {args.n_experiments} combinations were chosen:\n")
@@ -125,11 +122,6 @@ if __name__ == "__main__":
             ]
         )
         print("  " + joined)
-
-    # In case of a dry run, we are done here
-    if args.dry:
-        print("\nThis was a dry run, no experiments were created.\n")
-        sys.exit(0)
 
     # Double-check if we really want to continue
     if not click.confirm("\nDo you want to continue?", default=False):
@@ -146,15 +138,11 @@ if __name__ == "__main__":
     experiment_dirs = []
     for combination in subset:
 
-        # Define experiment name
-        parts = []
-        for p, v in zip(sweep_config.values(), combination, strict=True):
-            parts.append(
-                p["name"] + "_" + (f"{v:.0e}" if p["name"] == "lr" else str(v))
-            )
-        experiment_name = "__".join(parts)
-
         # Create the experiment directory
+        # Note: Having the experiment name as a slug is not ideal, but once
+        # you get to the point where the values are dicts, having all key-
+        # value pairs in the name is not really feasible anymore.
+        experiment_name = generate_slug(2)
         experiment_dir = args.base_dir / args.config_dir.name / experiment_name
         experiment_dir.mkdir(parents=True)
         experiment_dirs.append(experiment_dir)
