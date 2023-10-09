@@ -36,7 +36,7 @@ def get_standardization_parameters(
     # Keep track of some statistics to compute the mean and std without
     # loading the full dataset into memory;
     # Source: https://stackoverflow.com/a/5543790/4100721
-    s0: int = 0
+    s0: float = 0.0
     s1: np.ndarray | float = 0.0
     s2: np.ndarray | float = 0.0
 
@@ -52,7 +52,7 @@ def get_standardization_parameters(
 
         limits = list(zip(idx[:-1], idx[1:], strict=True))
         for a, b in tqdm(limits, ncols=80):
-            x = np.array(hdf_file[key][a:b])
+            x = np.array(hdf_file[key][a:b], dtype=np.float32)
             s0 += len(x)
             s1 += np.sum(x, axis=0)
             s2 += np.sum(x ** 2, axis=0)
@@ -81,18 +81,27 @@ if __name__ == "__main__":
             "This can be different we run a pre-selection of the spectra."
         ),
     )
+    parser.add_argument(
+        "--which",
+        type=str,
+        default="train",
+        help=(
+            "Name of the directory that contains the input HDF file."
+            "Usually, this is either 'train' or 'test'."
+        ),
+    )
     args = parser.parse_args()
 
     # Ensure the output directory exists
     dataset_dir = get_datasets_dir() / "vasist-2023"
-    train_dir = dataset_dir / "train"
+    input_dir = dataset_dir / args.which
     precomputed_dir = dataset_dir / "precomputed"
     precomputed_dir.mkdir(parents=True, exist_ok=True)
 
     # Compute the mean and std of the flux
     print("Computing standardization parameters for the flux:")
     flux_mean, flux_std = get_standardization_parameters(
-        file_path=train_dir / args.input_file_name,
+        file_path=input_dir / args.input_file_name,
         key="spectra",
     )
     print()
@@ -100,7 +109,7 @@ if __name__ == "__main__":
     # Save the standardization parameters for theta
     print("Computing standardization parameters for theta:")
     theta_mean, theta_std = get_standardization_parameters(
-        file_path=train_dir / args.input_file_name,
+        file_path=input_dir / args.input_file_name,
         key="theta",
     )
     print()
