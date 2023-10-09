@@ -46,22 +46,25 @@ def get_standardization_parameters(
 
         n = len(hdf_file[key])
         idx = (
-            np.arange(0, n, buffer_size) if n > buffer_size
+            np.r_[0 : n : buffer_size, n] if n > buffer_size
             else np.array([0, n])
         )
 
+        # Note: We load the data as a float128 because otherwise we can get
+        # surprisingly large errors when computing the standard deviation!
         limits = list(zip(idx[:-1], idx[1:], strict=True))
         for a, b in tqdm(limits, ncols=80):
-            x = np.array(hdf_file[key][a:b], dtype=np.float32)
+            x = np.array(hdf_file[key][a:b], dtype=np.float128)
             s0 += len(x)
             s1 += np.sum(x, axis=0)
             s2 += np.sum(x ** 2, axis=0)
 
-    # Compute the mean and std
-    mean = np.array(s1 / s0)
-    std = np.sqrt((s0 * s2 - s1 * s1) / (s0 * (s0 - 1)))
+    # Compute the mean and std (and convert to float32)
+    mean = np.array(s1 / s0).astype(np.float32)
+    numerator = np.clip(s0 * s2 - s1 * s1, 0.0, None)
+    denominator = s0 * (s0 - 1)
+    std = np.sqrt(numerator / denominator).astype(np.float32)
 
-    # Compute the standardization parameters
     return mean, std
 
 
