@@ -20,26 +20,33 @@ if __name__ == "__main__":
     # Get command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--n-bins",
+        type=int,
+        default=947,
+        help="Number of bins in the spectra (default: 947).",
+    )
+    parser.add_argument(
+        "--n-parameters",
+        type=int,
+        default=16,
+        help="Number of simulation parameters (default: 16).",
+    )
+    parser.add_argument(
         "--output-file-name",
         type=str,
         default="selected.hdf",
         help="Name of the output HDF file with the selected spectra.",
     )
     parser.add_argument(
-        "--which",
+        "--target-dir",
         type=str,
-        choices=["train", "test"],
         default="train",
-        help="Which dataset to select spectra from (train or test).",
+        help="Directory that contains the merged.hdf file (e.g., 'train').",
     )
     args = parser.parse_args()
 
-    # Hard-code some constants about the data
-    N_PARAMETERS = 16
-    N_BINS = 947
-
     # Define target directory
-    target_dir = get_datasets_dir() / "vasist-2023" / args.which
+    target_dir = get_datasets_dir() / "vasist-2023" / args.target_dir
 
     # Open the HDF file with all the spectra
     with h5py.File(target_dir / args.output_file_name, "w") as dst:
@@ -47,14 +54,14 @@ if __name__ == "__main__":
         # Prepare datasets in the output HDF file
         dst.create_dataset(
             name="theta",
-            shape=(0, N_PARAMETERS),
-            maxshape=(None, N_PARAMETERS),
+            shape=(0, args.n_parameters),
+            maxshape=(None, args.n_parameters),
             dtype=np.float32,
         )
         dst.create_dataset(
             name="spectra",
-            shape=(0, N_BINS),
-            maxshape=(None, N_BINS),
+            shape=(0, args.n_bins),
+            maxshape=(None, args.n_bins),
             dtype=np.float32,
         )
 

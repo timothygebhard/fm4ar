@@ -20,16 +20,24 @@ if __name__ == "__main__":
     # Get command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--n-bins",
+        type=int,
+        default=947,
+        help="Number of bins in the spectra (default: 947).",
+    )
+    parser.add_argument(
+        "--n-parameters",
+        type=int,
+        default=16,
+        help="Number of simulation parameters (default: 16).",
+    )
+    parser.add_argument(
         "--target-dir",
         type=str,
         default="train",
         help="Name of the target directory (default: train).",
     )
     args = parser.parse_args()
-
-    # Hard-code some constants about the data
-    N_PARAMETERS = 16
-    N_BINS = 947
 
     # Collect source HDF files
     print("Finding HDF files...", end=" ")
@@ -44,14 +52,14 @@ if __name__ == "__main__":
     with h5py.File(dst_file_path, "w") as f:
         f.create_dataset(
             name="theta",
-            shape=(0, N_PARAMETERS),
-            maxshape=(None, N_PARAMETERS),
+            shape=(0, args.n_parameters),
+            maxshape=(None, args.n_parameters),
             dtype=np.float32,
         )
         f.create_dataset(
             name="spectra",
-            shape=(0, N_BINS),
-            maxshape=(None, N_BINS),
+            shape=(0, args.n_bins),
+            maxshape=(None, args.n_bins),
             dtype=np.float32,
         )
     print("Done!\n", flush=True)
