@@ -36,6 +36,31 @@ LOWER, UPPER, NAMES, LABELS = zip(  # type: ignore
 )
 
 
+# Define theta_0 (or theta*, or theta_obs) from Vasist et al. (2023)
+# fmt: off
+THETA_0 = np.array(
+    [
+        0.55,    # C/0
+        0.0,     # Fe/H
+        -5.0,    # log_P_quench
+        -0.86,   # log_X_cb_Fe(c)
+        -0.65,   # log_X_cb_MgSiO3(c)
+        3.0,     # f_sed
+        8.5,     # log_K_zz
+        2.0,     # sigma_g
+        3.75,    # log_g
+        1.0,     # R_P
+        1063.6,  # T_0
+        0.26,    # T3
+        0.29,    # T2
+        0.32,    # T1
+        1.39,    # alpha
+        0.48,    # log_delta
+    ]
+)
+# fmt: on
+
+
 class Prior:
     """
     Box uniform prior over atmospheric parameters; see Table 1 in
