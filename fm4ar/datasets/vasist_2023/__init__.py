@@ -36,6 +36,20 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
     # Load standardization parameters
     standardizer = get_standardizer(config)
 
+    # If requested, select only a subset of the parameters
+    if config["data"].get("parameters") is not None:
+        parameters: list[int] = list(map(int, config["data"]["parameters"]))
+        theta = theta[:, parameters]
+        names = [LABELS[i] for i in parameters]
+        ranges = [(LOWER[i], UPPER[i]) for i in parameters]
+        if not isinstance(standardizer.theta_mean, float):
+            standardizer.theta_mean = standardizer.theta_mean[parameters]
+        if not isinstance(standardizer.theta_std, float):
+            standardizer.theta_std = standardizer.theta_std[parameters]
+    else:
+        names = LABELS
+        ranges = list(zip(LOWER, UPPER, strict=True))
+
     # Create dataset
     return ArDataset(
         theta=torch.from_numpy(theta),
@@ -43,8 +57,8 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
         wlen=torch.from_numpy(wlen),
         noise_levels=noise_levels,
         noise_floor=0.0,
-        names=LABELS,
-        ranges=list(zip(LOWER, UPPER, strict=True)),
+        names=names,
+        ranges=ranges,
         standardizer=standardizer,
         **config["data"],
     )
