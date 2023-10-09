@@ -125,7 +125,7 @@ if __name__ == "__main__":
     file_path = target_dir / f"random-seed_{effective_random_seed:06d}.hdf"
     with h5py.File(file_path, "w") as hdf_file:
         hdf_file.create_dataset(name="theta", data=np.array(thetas))
-        hdf_file.create_dataset(name="wavelength", data=wavelengths)
+        hdf_file.create_dataset(name="wavelengths", data=wavelengths)
         hdf_file.create_dataset(name="spectra", data=np.array(spectra))
     print("Done!\n", flush=True)
 
