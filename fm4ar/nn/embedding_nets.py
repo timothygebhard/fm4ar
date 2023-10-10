@@ -378,14 +378,16 @@ class TransformerEmbedding(nn.Module):
         self.n_heads = n_heads
         self.n_blocks = n_blocks
 
-        # Define the transformer layers
-        self.layers = nn.Sequential(
-            nn.Linear(in_features=input_dim, out_features=1024),
+        # Define layers
+        self.mlp = nn.Sequential(
+            nn.Linear(in_features=1, out_features=1024),
             nn.GELU(),
             nn.Linear(in_features=1024, out_features=1024),
             nn.GELU(),
-            nn.Linear(in_features=1024, out_features=latent_dim),
-            nn.GELU(),
+            nn.Linear(in_features=1024, out_features=latent_dim // 2),
+            nn.Tanh(),
+        )
+        self.transformer = nn.Sequential(
             nn.TransformerEncoder(  # type: ignore
                 encoder_layer=nn.TransformerEncoderLayer(
                     d_model=latent_dim,
@@ -398,6 +400,7 @@ class TransformerEmbedding(nn.Module):
             ),
             Mean(dim=1),
             nn.Linear(in_features=latent_dim, out_features=output_dim),
+            nn.Tanh(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -409,9 +412,35 @@ class TransformerEmbedding(nn.Module):
         validate_shape(x, (None, None, self.input_dim))
         batch_size, n_bins, _ = x.shape
 
+        # Split input features
+        flux, wlen, *_ = torch.split(x, 1, dim=2)
+        wlen = wlen.squeeze(2)
+
+        if self.latent_dim % 4 != 0:
+            raise ValueError("The latent dimension must be even!")
+
+        # Compute positional encoding for the wavelengths
+        freqs = []
+        for i in range(int(self.latent_dim / 4)):
+            freqs.append(torch.sin(wlen / 10_000 ** (4 * i / self.latent_dim)))
+            freqs.append(torch.cos(wlen / 10_000 ** (4 * i / self.latent_dim)))
+        encoded_wlen = torch.stack(freqs, dim=2)
+        validate_shape(
+            encoded_wlen, (batch_size, n_bins, self.latent_dim // 2)
+        )
+
+        # Send the flux through the MLP
+        encoded_flux = self.mlp(flux)
+        validate_shape(
+            encoded_flux, (batch_size, n_bins, self.latent_dim // 2)
+        )
+
+        # Combine the flux and the positional encoding
+        transformer_input = torch.cat([encoded_flux, encoded_wlen], dim=2)
+
         # Apply the embedding network
         # Expected shape: (batch_size, output_dim)
-        output = self.layers(x)
+        output = self.transformer(transformer_input)
         validate_shape(output, (batch_size, self.output_dim))
 
         return torch.Tensor(output)

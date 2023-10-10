@@ -5,7 +5,6 @@ randomly mask out parts of the spectra and ask a dummy decoder to
 predict them from the context embedding.
 """
 
-
 import argparse
 import time
 from itertools import chain
@@ -29,7 +28,6 @@ from fm4ar.utils.torchutils import (
     get_lr,
     perform_scheduler_step,
 )
-from fm4ar.utils.tracking import write_history
 
 
 class ModelSaver:
@@ -65,15 +63,6 @@ class ModelSaver:
         print("Done!\n\n")
 
 
-def rescale_wavelength(
-    wlen: torch.Tensor,
-    min_wlen: float = 0.6025,
-    max_wlen: float = 5.2976,
-) -> torch.Tensor:
-
-    return 2 * (wlen - min_wlen) / (max_wlen - min_wlen) - 1
-
-
 def get_optimizer_and_scheduler(
     encoder: torch.nn.Module,
     decoder: torch.nn.Module,
@@ -88,11 +77,11 @@ def get_optimizer_and_scheduler(
     # Define the optimizer and the scheduler
     optimizer = torch.optim.Adam(
         params=params,
-        lr=1.0e-4,
+        lr=5.0e-5,
     )
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer=optimizer,
-        max_lr=1.0e-4,
+        max_lr=5.0e-5,
         epochs=args.epochs,
         steps_per_epoch=len(train_loader),
         pct_start=0.1,
@@ -102,7 +91,8 @@ def get_optimizer_and_scheduler(
 
 
 def train_batch(
-    x: torch.Tensor,
+    x_vanilla: torch.Tensor,
+    x_corrupt: torch.Tensor,
     device: torch.device,
     encoder: torch.nn.Module,
     decoder: torch.nn.Module,
@@ -115,40 +105,15 @@ def train_batch(
     Run a training step on a given batch `x` of data.
     """
 
-    batch_size, n_bins, _ = x.shape
     optimizer.zero_grad()
 
-    x = torch.Tensor(x.to(device, non_blocking=True))
-
-    # Create a random mask to select a subset of the wavelengths as context
-    mask: torch.Tensor = torch.Tensor(torch.rand(n_bins) > -1)
-    n_pred = int((mask).sum())
+    x_vanilla = torch.Tensor(x_vanilla.to(device, non_blocking=True))
+    x_corrupt = torch.Tensor(x_corrupt.to(device, non_blocking=True))
 
     with autocast(enabled=(device.type == "cuda")):
-
-        # Get the context embedding = representations of spectra
-        # We reshape this to have one context for each wavelength
-        # of each spectrum in the batch (see below).
-        z = encoder(x[:, mask, :])
-        z = torch.nn.Sigmoid()(z)
-        z = (
-            z
-            .unsqueeze(1)
-            .repeat(1, n_pred, 1)
-            .reshape(batch_size * n_pred, -1)
-        )
-
-        # Predict the flux at the masked-out wavelengths.
-        # Note: We need to reshape the wavelength dimension into
-        # the batch dimension for the DenseResidualNet to work.
-        true_flux = x[:, mask, 0].reshape(batch_size, n_pred)
-        true_wlen = rescale_wavelength(
-            x[:, mask, 1].reshape(batch_size * n_pred, 1)
-        )
-        pred_flux = decoder(x=true_wlen, context=z)
-        pred_flux = pred_flux.reshape(batch_size, n_pred)
-
-        # Compute the loss
+        z = encoder(x_corrupt)
+        true_flux = x_vanilla[:, :, 0]
+        pred_flux = decoder(z, context=z)
         loss = torch.nn.functional.mse_loss(pred_flux, true_flux)
 
     # Take a gradient step (with AMP)
@@ -157,14 +122,19 @@ def train_batch(
     torch.nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
     torch.nn.utils.clip_grad_norm_(decoder.parameters(), 1.0)
     scaler.step(optimizer)  # type: ignore
+    scale = scaler.get_scale()  # type: ignore
     scaler.update()  # type: ignore
 
-    # Take a learning rate step
-    perform_scheduler_step(
-        scheduler=scheduler,
-        loss=loss,
-        end_of="batch",
-    )
+    # Take a learning rate step (unless optimizer.step() was skipped; this
+    # basically only seems to happen on the first batch of the first epoch?)
+    # See: https://discuss.pytorch.org/t/optimizer-step-before-lr-
+    #   scheduler-step-error-using-gradscaler/92930
+    if not scale > scaler.get_scale():  # type: ignore
+        perform_scheduler_step(
+            scheduler=scheduler,
+            loss=loss,
+            end_of="batch",
+        )
 
     tq.set_postfix(loss=loss.item())
 
@@ -192,9 +162,10 @@ def train_epoch(
 
     print(f"Training epoch {epoch}:")
     with tqdm(train_loader, unit=" batches", ncols=80) as tq:
-        for _, x in tq:
+        for x_vanilla, x_corrupt in tq:
             loss = train_batch(
-                x=x,
+                x_vanilla=x_vanilla,
+                x_corrupt=x_corrupt,
                 device=device,
                 encoder=encoder,
                 decoder=decoder,
@@ -215,7 +186,8 @@ def train_epoch(
 
 
 def test_batch(
-    x: torch.Tensor,
+    x_vanilla: torch.Tensor,
+    x_corrupt: torch.Tensor,
     device: torch.device,
     encoder: torch.nn.Module,
     decoder: torch.nn.Module,
@@ -225,37 +197,21 @@ def test_batch(
     Evaluate the model on a batch of data.
     """
 
-    batch_size, n_bins, _ = x.shape
-    x = torch.Tensor(x.to(device, non_blocking=True))
+    x_vanilla = torch.Tensor(x_vanilla.to(device, non_blocking=True))
+    x_corrupt = torch.Tensor(x_corrupt.to(device, non_blocking=True))
 
-    mask = torch.Tensor(torch.rand(n_bins) > -1)
-    n_pred = int((mask).sum())
-
-    z = encoder(x[:, mask, :])
-    z = torch.nn.Sigmoid()(z)
-    z = (
-        z
-        .unsqueeze(1)
-        .repeat(1, n_pred, 1)
-        .reshape(batch_size * n_pred, -1)
-    )
-
-    true_flux = x[:, mask, 0].reshape(batch_size, n_pred)
-    true_wlen = rescale_wavelength(
-        x[:, mask, 1].reshape(batch_size * n_pred, 1)
-    )
-    pred_flux = decoder(x=true_wlen, context=z)
-    pred_flux = pred_flux.reshape(batch_size, n_pred)
+    z = encoder(x_corrupt)
+    true_flux = x_vanilla[:, :, 0]
+    pred_flux = decoder(z, context=z)
 
     loss = torch.nn.functional.mse_loss(pred_flux, true_flux).item()
-    r2 = float(
-        np.mean(
-            [
-                r2_score(input=pred_flux[i], target=true_flux[i]).item()
-                for i in range(batch_size)
-            ]
-        )
-    )
+
+    r2_scores = [
+        r2_score(input=pred_flux[i], target=true_flux[i]).item()
+        for i in range(len(true_flux))
+    ]
+    r2_scores = [r2 for r2 in r2_scores if np.isfinite(r2)]
+    r2 = float(np.median(r2_scores))
 
     tq.set_postfix(loss=loss, r2=r2)
 
@@ -285,9 +241,10 @@ def test_epoch(
         torch.no_grad(),
         tqdm(test_loader, unit=" batches", ncols=80) as tq,
     ):
-        for _, x in tq:
+        for x_vanilla, x_corrupt in tq:
             loss, r2 = test_batch(
-                x=x,
+                x_vanilla=x_vanilla,
+                x_corrupt=x_corrupt,
                 device=device,
                 encoder=encoder,
                 decoder=decoder,
@@ -301,6 +258,7 @@ def test_epoch(
     avg_test_r2_score = float(np.mean(r2_scores))
 
     print(f"Mean test loss:  {avg_test_loss:.9f}")
+    print(f"Mean R2 score:   {avg_test_r2_score:.3f}")
     print(f"Test time:       {test_time:.2f} seconds\n")
 
     return avg_test_loss, avg_test_r2_score, test_time
@@ -314,7 +272,7 @@ def log_metrics(
     train_time: float,
     test_time: float,
     test_r2_score: float,
-    pretrain_dir: Path,
+    # pretrain_dir: Path,
     use_wandb: bool = True,
 ) -> None:
     """
@@ -322,19 +280,19 @@ def log_metrics(
     """
 
     # Log to local file
-    write_history(
-        experiment_dir=pretrain_dir,
-        epoch=epoch,
-        train_loss=train_loss,
-        test_loss=test_loss,
-        learning_rates=[learning_rate],
-        extra_info={
-            "train_time": train_time,
-            "test_time": test_time,
-            "test_r2_score": test_r2_score,
-        },
-        overwrite=True,
-    )
+    # write_history(
+    #     experiment_dir=pretrain_dir,
+    #     epoch=epoch,
+    #     train_loss=train_loss,
+    #     test_loss=test_loss,
+    #     learning_rates=[learning_rate],
+    #     extra_info={
+    #         "train_time": train_time,
+    #         "test_time": test_time,
+    #         "test_r2_score": test_r2_score,
+    #     },
+    #     overwrite=True,
+    # )
 
     # Log to wandb
     if use_wandb:
@@ -362,7 +320,7 @@ if __name__ == "__main__":
 
     # Define argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--disable-wandb", action="store_true")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--experiment-dir", type=Path)
@@ -376,7 +334,10 @@ if __name__ == "__main__":
     use_wandb = not args.disable_wandb
 
     # Load the experiment config
+    # Note: We set `add_noise_to_flux` to False because the `pretrain_collate`
+    # function will take care of adding noise to the corrupted flux.
     config = load_config(experiment_dir=args.experiment_dir)
+    config["data"]["add_noise_to_flux"] = False
 
     # Create extra directory for pretraining
     pretrain_dir = args.experiment_dir / "pretrain"
@@ -389,7 +350,8 @@ if __name__ == "__main__":
         train_fraction=config["data"]["train_fraction"],
         batch_size=args.batch_size,
         num_workers=num_workers,
-        # collate_fn="collate_and_corrupt",
+        train_collate_fn="collate_pretrain",
+        test_collate_fn="collate_pretrain",
     )
     parameter_names = (
         dataset.names if dataset.names is not None
@@ -406,10 +368,7 @@ if __name__ == "__main__":
 
     # Construct the decoder (which we won't really need after training)
     decoder_kwargs = config["model"]["decoder_kwargs"]
-    decoder_kwargs["context_features"] = output_dim
     decoder = DenseResidualNet(**decoder_kwargs).to(device)
-    decoder.residual_blocks[0].activation.w0 = 10.0
-    decoder.residual_blocks[1].activation.w0 = 5.0
 
     # Define an optimizer and a learning rate scheduler
     optimizer, scheduler = get_optimizer_and_scheduler(encoder, decoder)
@@ -470,7 +429,7 @@ if __name__ == "__main__":
             train_time=train_time,
             test_time=test_time,
             test_r2_score=test_r2_score,
-            pretrain_dir=pretrain_dir,
+            # pretrain_dir=pretrain_dir,
             use_wandb=use_wandb,
         )
 
