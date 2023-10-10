@@ -6,7 +6,7 @@ import socket
 import sys
 from pathlib import Path
 from shutil import copyfile
-from subprocess import run, CalledProcessError
+from subprocess import run
 
 from pydantic import BaseModel, Field
 
@@ -129,13 +129,7 @@ def condor_submit_bid(
     """
 
     cmd = ["condor_submit_bid", str(bid), str(file_path)]
-
-    try:
-        process = run(cmd, capture_output=True, check=True)
-    except CalledProcessError:
-        print(process.stdout.decode("utf-8"))
-        print(process.stderr.decode("utf-8"))
-        raise
+    process = run(cmd, capture_output=True, check=False)
 
     if verbose:
         print(process.stdout.decode("utf-8"))
