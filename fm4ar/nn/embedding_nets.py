@@ -585,7 +585,7 @@ class Float2Bits(nn.Module):
             nn.Linear(in_features=16, out_features=2)
         )
 
-    def forwward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
 
         validate_shape(x, (None, None))
         batch_size, n_bins = x.shape
