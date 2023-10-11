@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from fm4ar.nn.modules import Mean
 from fm4ar.nn.resnets import DenseResidualNet
+from fm4ar.utils.ieee754 import float2bits
 from fm4ar.utils.torchutils import (
     load_and_or_freeze_model_weights,
     validate_shape,
@@ -118,6 +119,8 @@ def create_embedding_net_stage(
             stage = DenseResidualNet(input_dim=input_dim[0], **kwargs)
         case "DropFeatures":
             stage = DropFeatures()
+        case "Float2Bits":
+            stage = Float2Bit()
         case "PrecomputedPCAEmbedding":
             stage = PrecomputedPCAEmbedding(**kwargs)
         case "PositionalEncoding":
@@ -559,5 +562,44 @@ class SubsampleSpectrum(nn.Module):
 
         # Expected shape: (batch_size, n_bins_resampled, n_features)
         validate_shape(x, (batch_size, None, n_features))
+
+        return x
+
+
+class Float2Bits(nn.Module):
+    """
+    Standardize the input data by casting them to a bit tensor
+    """
+
+    def __init__(self) -> None:
+
+        super().__init__()
+
+        self.mlp = nn.Sequential(
+            nn.Linear(in_features=32, out_features=1024),
+            nn.LeakyReLU(),
+            nn.Linear(in_features=1024, out_features=128),
+            nn.LeakyReLU(),
+            nn.Linear(in_features=128, out_features=16),
+            nn.LeakyReLU(),
+            nn.Linear(in_features=16, out_features=2)
+        )
+
+    def forwward(self, x: torch.Tensor) -> torch.Tensor:
+
+        validate_shape(x, (None, None))
+        batch_size, n_bins = x.shape
+
+        # Cast to bit tensor
+        x = float2bits(x, precision="single")
+        validate_shape(x, (batch_size, n_bins, 32))
+
+        # Send the bit tensor through the MLP
+        x = self.mlp(x)
+        validate_shape(x, (batch_size, n_bins, 2))
+
+        # Flatten out the last dimension
+        x = x.view(batch_size, n_bins * 2)
+        validate_shape(x, (batch_size, n_bins * 2))
 
         return x
