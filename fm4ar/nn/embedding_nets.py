@@ -120,7 +120,7 @@ def create_embedding_net_stage(
         case "DropFeatures":
             stage = DropFeatures()
         case "Float2Bits":
-            stage = Float2Bit()
+            stage = Float2Bits()
         case "PrecomputedPCAEmbedding":
             stage = PrecomputedPCAEmbedding(**kwargs)
         case "PositionalEncoding":
