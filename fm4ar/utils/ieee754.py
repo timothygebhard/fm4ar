@@ -145,7 +145,7 @@ def mantissa2bits(
     Turn mantissa tensor (which will be in the interval [1, 2)) to bits.
     """
 
-    exponent_bits = torch.arange(num_bits)
+    exponent_bits = torch.arange(num_bits).to(mantissa.device)
     exponent_bits = exponent_bits.repeat(mantissa.shape + (1,))
     out = (mantissa.unsqueeze(-1) * 2**exponent_bits) % 1
     return torch.floor(2 * out).int()
@@ -161,6 +161,7 @@ def exponent2bits(
 
     # Create a tensor [num_bits - 1, ..., 2, 1, 0] for bitwise right shifts
     shifts = torch.arange(num_bits - 1, -1, -1).unsqueeze(0)
+    shifts = shifts.to(exponent.device)
 
     # Expand the input tensor shape to include an additional dimension.
     # Perform bitwise right shift using broadcasting along this new dimension.
