@@ -577,12 +577,15 @@ class Float2Bits(nn.Module):
 
         self.mlp = nn.Sequential(
             nn.Linear(in_features=32, out_features=1024),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=1024, out_features=128),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=128, out_features=16),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=16, out_features=2)
+            nn.GELU(),
+            nn.Linear(in_features=1024, out_features=256),
+            nn.GELU(),
+            nn.Linear(in_features=256, out_features=64),
+            nn.GELU(),
+            nn.Linear(in_features=64, out_features=16),
+            nn.GELU(),
+            nn.Linear(in_features=16, out_features=4),
+            nn.GELU(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -596,10 +599,10 @@ class Float2Bits(nn.Module):
 
         # Send the bit tensor through the MLP
         x = self.mlp(x)
-        validate_shape(x, (batch_size, n_bins, 2))
+        validate_shape(x, (batch_size, n_bins, 4))
 
         # Flatten out the last dimension
-        x = x.view(batch_size, n_bins * 2)
-        validate_shape(x, (batch_size, n_bins * 2))
+        x = x.view(batch_size, n_bins * 4)
+        validate_shape(x, (batch_size, n_bins * 4))
 
         return x
