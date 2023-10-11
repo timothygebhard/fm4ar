@@ -593,6 +593,9 @@ class Float2Bits(nn.Module):
         validate_shape(x, (None, None))
         batch_size, n_bins = x.shape
 
+        # Make sure there are no subnormal numbers in x
+        x[torch.abs(x) < 2e-38] = 0.0
+
         # Cast to bit tensor
         x = float2bits(x, precision="single")
         validate_shape(x, (batch_size, n_bins, 32))
