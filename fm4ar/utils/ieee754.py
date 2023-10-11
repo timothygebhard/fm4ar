@@ -96,13 +96,13 @@ def float2bits(
 
     # Compute (raw) exponent and mantissa
     # Note: `torch.frexp()` uses the convention `f = mantissa * 2 ** exponent`
-    # with the mantissa in the open interval (-1, 1).
+    # with the mantissa in (-1, 0.5] ∪ {0} ∪ [0.5, 1), where a mantissa of 0
+    # is used only iff the input is 0.
     mantissa, exponent = torch.frexp(torch.abs(f))
 
     # The IEEE 754 standard assumes the mantissa to be in the interval [1, 2).
     # Therefore, we need to apply some corrections to the results above to get
     # the mantissa in the correct range and apply the bias to the exponent.
-    # The `- 1` in the exponent compensates for the `* 2` in the mantissa.
     mantissa = 2 * torch.abs(mantissa)
     exponent = exponent - 1 + bias
 
