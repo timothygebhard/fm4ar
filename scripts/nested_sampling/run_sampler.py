@@ -135,6 +135,9 @@ if __name__ == "__main__":
         )
         print("Done!\n", flush=True)
 
+        logs_dir = args.experiment_dir / "logs"
+        logs_dir.mkdir(exist_ok=True)
+
         condor_submit_bid(file_path=file_path, bid=config.htcondor.bid)
 
         sys.exit(0)
