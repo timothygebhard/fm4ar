@@ -69,6 +69,13 @@ class CondorSettings(BaseModel):
         ge=15,  # 15 is the current minimum bid on the cluster
         description="Bid to use for the job.",
     )
+    extra_kwargs: dict = Field(
+        default={},
+        description=(
+            "Extra key/value pairs to add to the submission file. "
+            "Example: transfer_executable = False."
+        )
+    )
 
 
 def check_if_on_login_node(start_submission: bool) -> None:
@@ -206,6 +213,12 @@ def create_submission_file(
             "&& (HoldReasonCode =?= 3) "
             "&& (HoldReasonSubCode =?= 1) )\n\n"
         )
+
+    # Add extra key/value pairs, if applicable
+    if condor_settings.extra_kwargs:
+        for key, value in condor_settings.extra_kwargs.items():
+            lines.append(f"{key} = {value}\n")
+        lines.append("\n")
 
     # Set the queue
     queue = "" if condor_settings.queue == 1 else condor_settings.queue
