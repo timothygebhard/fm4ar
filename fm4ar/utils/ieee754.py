@@ -58,7 +58,7 @@ def check_bounds(
         & torch.Tensor(f != 0.0)
     ):
         raise ValueError(
-            f"Input tensor contains subnormal numbers, which is currenly "
+            "Input tensor contains subnormal numbers, which is currenly "
             "not supported by this code."
         )
 
