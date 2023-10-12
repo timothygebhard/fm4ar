@@ -59,7 +59,7 @@ def get_standardization_parameters(
             s1 += np.sum(x, axis=0)
             s2 += np.sum(x ** 2, axis=0)
 
-    # Compute the mean and std (and convert to float32)
+    # Compute the mean and std (and convert back to float32)
     mean = np.array(s1 / s0).astype(np.float32)
     numerator = np.clip(s0 * s2 - s1 * s1, 0.0, None)
     denominator = s0 * (s0 - 1)
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     print("Computing standardization parameters for the flux:")
     flux_mean, flux_std = get_standardization_parameters(
         file_path=input_dir / args.input_file_name,
-        key="spectra",
+        key="flux",
     )
     print()
 

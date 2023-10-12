@@ -12,12 +12,11 @@ from tqdm import tqdm
 from fm4ar.utils.paths import get_datasets_dir
 
 
-if __name__ == "__main__":
+def get_cli_arguments() -> argparse.Namespace:
+    """
+    Get command line arguments.
+    """
 
-    script_start = time.time()
-    print("\nMERGE HDF FILES\n", flush=True)
-
-    # Get command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--n-bins",
@@ -39,6 +38,16 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    return args
+
+
+if __name__ == "__main__":
+
+    script_start = time.time()
+    print("\nMERGE HDF FILES\n", flush=True)
+
+    args = get_cli_arguments()
+
     # Collect source HDF files
     print("Finding HDF files...", end=" ")
     target_dir = get_datasets_dir() / "vasist-2023" / args.target_dir
@@ -57,7 +66,7 @@ if __name__ == "__main__":
             dtype=np.float32,
         )
         f.create_dataset(
-            name="spectra",
+            name="flux",
             shape=(0, args.n_bins),
             maxshape=(None, args.n_bins),
             dtype=np.float32,
@@ -79,32 +88,32 @@ if __name__ == "__main__":
 
                 # Load data from source HDF file
                 theta = np.array(src["theta"])
-                spectra = np.array(src["spectra"])
+                flux = np.array(src["flux"])
 
                 # Only keep files with at least one spectrum
-                if len(spectra) == 0:
+                if len(theta) == 0:
                     continue
 
                 # Exclude spectra with NaNs
-                mask = np.isnan(spectra).any(axis=1)
+                mask = np.isnan(flux).any(axis=1)
                 theta = theta[~mask]
-                spectra = spectra[~mask]
+                flux = flux[~mask]
                 n = (~mask).sum()
                 n_dropped += mask.sum()
 
                 # Resize datasets in output HDF file
                 dst["theta"].resize(dst["theta"].shape[0] + n, axis=0)
-                dst["spectra"].resize(dst["spectra"].shape[0] + n, axis=0)
+                dst["flux"].resize(dst["flux"].shape[0] + n, axis=0)
 
                 # Write data to output HDF file
                 dst["theta"][-n:] = theta
-                dst["spectra"][-n:] = spectra
+                dst["flux"][-n:] = flux
 
                 # Copy over wavelengths
-                if "wavelengths" not in dst:
+                if "wlen" not in dst:
                     dst.create_dataset(
-                        name="wavelengths",
-                        data=src["wavelengths"][...],
+                        name="wlen",
+                        data=src["wlen"][...],
                         dtype=np.float32,
                     )
 

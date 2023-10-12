@@ -12,12 +12,11 @@ from tqdm import tqdm
 from fm4ar.utils.paths import get_datasets_dir
 
 
-if __name__ == "__main__":
+def get_cli_arguments() -> argparse.Namespace:
+    """
+    Get command line arguments.
+    """
 
-    script_start = time.time()
-    print("\nSELECT SPECTRA\n")
-
-    # Get command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--n-bins",
@@ -45,6 +44,16 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    return args
+
+
+if __name__ == "__main__":
+
+    script_start = time.time()
+    print("\nSELECT SPECTRA\n")
+
+    args = get_cli_arguments()
+
     # Define target directory
     target_dir = get_datasets_dir() / "vasist-2023" / args.target_dir
 
@@ -59,7 +68,7 @@ if __name__ == "__main__":
             dtype=np.float32,
         )
         dst.create_dataset(
-            name="spectra",
+            name="flux",
             shape=(0, args.n_bins),
             maxshape=(None, args.n_bins),
             dtype=np.float32,
@@ -70,8 +79,8 @@ if __name__ == "__main__":
 
             # # Copy over wavelengths
             dst.create_dataset(
-                name="wavelengths",
-                data=src["wavelengths"][...],
+                name="wlen",
+                data=src["wlen"][...],
                 dtype=np.float32,
             )
 
@@ -79,30 +88,30 @@ if __name__ == "__main__":
             # a time (to limit memory consumption) and copy over the ones that
             # meet the criteria
             print("Selecting spectra:")
-            idx = np.arange(0, len(src["spectra"]), 4096)
+            idx = np.arange(0, len(src["flux"]), 4096)
             for a, b in tqdm(
                 list(zip(idx[:-1], idx[1:], strict=True)), ncols=80
             ):
 
                 # Define criteria for spectra to keep
-                mean = np.mean(src["spectra"][a:b], axis=1)
+                mean = np.mean(src["flux"][a:b], axis=1)
                 mask = (1e-5 <= mean) & (mean <= 1e5)
 
                 # Select spectra that meet the criteria
-                spectra = np.array(src["spectra"][a:b])[mask]
+                flux = np.array(src["flux"][a:b])[mask]
                 theta = np.array(src["theta"][a:b])[mask]
-                n = len(spectra)
+                n = len(flux)
 
                 # Resize the datasets in the output HDF file
-                dst["spectra"].resize((dst["spectra"].shape[0] + n), axis=0)
+                dst["flux"].resize((dst["flux"].shape[0] + n), axis=0)
                 dst["theta"].resize((dst["theta"].shape[0] + n), axis=0)
 
                 # Save the selected spectra and theta
-                dst["spectra"][-n:] = spectra
+                dst["flux"][-n:] = flux
                 dst["theta"][-n:] = theta
 
             # Print some information about how many spectra we selected
-            print("Before:", src["spectra"].shape)
-            print("After: ", dst["spectra"].shape)
+            print("Before:", src["theta"].shape[0])
+            print("After: ", dst["theta"].shape[0])
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")

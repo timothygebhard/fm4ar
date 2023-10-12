@@ -83,19 +83,22 @@ if __name__ == "__main__":
     args = get_cli_arguments()
     effective_random_seed = args.random_seed + args.random_seed_offset
 
+    # Set up prior and simulator
     prior = Prior(random_seed=effective_random_seed)
     simulator = Simulator(R=args.resolution, time_limit=args.time_limit)
 
     # Define mask for parameters to fix to their THETA_0 values
+    # In other words: The parameters given via `--parameters` are the ones
+    # that will be sampled randomly from their respective prior.
     if args.parameters is None:
         mask = np.zeros(len(NAMES), dtype=bool)
     else:
         mask = np.array([p not in args.parameters for p in NAMES])
 
     # Prepare lists to store the results
-    wavelengths = np.empty(0)
-    list_of_thetas = []
-    list_of_spectra = []
+    wlen = np.empty(0)
+    list_of_theta = []
+    list_of_flux = []
 
     # Run the simulation
     print("Simulating spectra:", flush=True)
@@ -105,18 +108,23 @@ if __name__ == "__main__":
         theta = prior.sample()
         theta[mask] = THETA_0[mask]
 
+        # Convert to float32 (already *before* passing to simulator; otherwise
+        # re-running the simulator on the saved theta values may yield slighly
+        # different results for the fluxes)
+        theta = theta.astype(np.float32)
+
         # Simulate spectrum and store results if successful
         result = simulator(theta)
         if result is not None:
-            wavelengths, spectrum = result
-            list_of_thetas.append(theta)
-            list_of_spectra.append(spectrum)
+            wlen, flux = result
+            list_of_theta.append(theta)
+            list_of_flux.append(flux)
 
     # Convert lists to arrays
-    thetas = np.array(list_of_thetas)
-    spectra = np.array(list_of_spectra)
+    theta = np.array(list_of_theta)
+    flux = np.array(list_of_flux)
 
-    print(f"\nNumber of successful simulations: {len(spectra)}\n", flush=True)
+    print(f"\nNumber of successful simulations: {len(theta)}\n", flush=True)
 
     # Save everything to an HDF file
     print("Saving to an HDF file...", end=" ", flush=True)
@@ -124,9 +132,9 @@ if __name__ == "__main__":
     target_dir.mkdir(parents=True, exist_ok=True)
     file_path = target_dir / f"random-seed_{effective_random_seed:06d}.hdf"
     with h5py.File(file_path, "w") as hdf_file:
-        hdf_file.create_dataset(name="theta", data=np.array(thetas))
-        hdf_file.create_dataset(name="wavelengths", data=wavelengths)
-        hdf_file.create_dataset(name="spectra", data=np.array(spectra))
+        hdf_file.create_dataset(name="theta", data=theta, dtype=np.float32)
+        hdf_file.create_dataset(name="wlen", data=wlen, dtype=np.float32)
+        hdf_file.create_dataset(name="flux", data=flux, dtype=np.float32)
     print("Done!\n", flush=True)
 
     print(f"This took {time.time() - script_start:.1f} seconds.\n")
