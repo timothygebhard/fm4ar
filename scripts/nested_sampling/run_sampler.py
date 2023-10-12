@@ -214,7 +214,7 @@ if __name__ == "__main__":
     # The noise level sigma is computed as `1.25754e-17 * 1e16` to match
     # the choice from `fm4ar.datasets.vasist_2023.simulation.Simulator`.
     # The value was original chosen to give a SNR of 10 (see paper).
-    def likelihood(theta: np.ndarray, sigma: float = 0.125754) -> float:
+    def log_likelihood(theta: np.ndarray, sigma: float = 0.125754) -> float:
 
         # Construct theta for the simulation.
         # First, we copy the ground truth values for all parameters.
@@ -260,7 +260,7 @@ if __name__ == "__main__":
     sampler = get_sampler(config.sampler.which)(
         run_dir=args.experiment_dir,
         prior=prior,
-        likelihood=likelihood,
+        log_likelihood=log_likelihood,
         n_dim=sum(infer_mask),
         n_livepoints=config.sampler.n_livepoints,
         inferred_parameters=np.array(NAMES)[infer_mask].tolist(),

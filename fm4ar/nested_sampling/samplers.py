@@ -26,7 +26,7 @@ class Sampler(ABC):
         self,
         run_dir: Path,
         prior: Callable[[np.ndarray], np.ndarray],
-        likelihood: Callable[[np.ndarray], float],
+        log_likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
         inferred_parameters: list[str],
@@ -35,7 +35,7 @@ class Sampler(ABC):
 
         self.run_dir = run_dir
         self.prior = prior
-        self.likelihood = likelihood
+        self.log_likelihood = log_likelihood
         self.n_dim = n_dim
         self.n_livepoints = n_livepoints
         self.inferred_parameters = inferred_parameters
@@ -98,7 +98,7 @@ class NautilusSampler(Sampler):
         self,
         run_dir: Path,
         prior: Callable[[np.ndarray], np.ndarray],
-        likelihood: Callable[[np.ndarray], float],
+        log_likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
         inferred_parameters: list[str],
@@ -108,7 +108,7 @@ class NautilusSampler(Sampler):
         super().__init__(
             run_dir=run_dir,
             prior=prior,
-            likelihood=likelihood,
+            log_likelihood=log_likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
             inferred_parameters=inferred_parameters,
@@ -121,9 +121,12 @@ class NautilusSampler(Sampler):
         from nautilus import Sampler as _NautilusSampler
 
         # noinspection PyTypeChecker
+        # The argument of `NautilusSampler` is called `likelihood`, but at
+        # least according to the docstring, it does indeed expect "the natural
+        # logarithm of the likelihood" as its input.
         self.sampler = _NautilusSampler(
             prior=prior,
-            likelihood=likelihood,
+            likelihood=log_likelihood,
             n_dim=self.n_dim,
             n_live=self.n_livepoints,
             pool=get_number_of_available_cores(),
@@ -186,7 +189,7 @@ class DynestySampler(Sampler):
         self,
         run_dir: Path,
         prior: Callable[[np.ndarray], np.ndarray],
-        likelihood: Callable[[np.ndarray], float],
+        log_likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
         inferred_parameters: list[str],
@@ -196,7 +199,7 @@ class DynestySampler(Sampler):
         super().__init__(
             run_dir=run_dir,
             prior=prior,
-            likelihood=likelihood,
+            log_likelihood=log_likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
             inferred_parameters=inferred_parameters,
@@ -230,7 +233,7 @@ class DynestySampler(Sampler):
         else:
             # noinspection PyTypeChecker
             self.sampler = _DynamicNestedSampler(
-                loglikelihood=self.likelihood,
+                loglikelihood=self.log_likelihood,
                 prior_transform=self.prior,
                 ndim=self.n_dim,
                 nlive=self.n_livepoints,
@@ -296,7 +299,7 @@ class MultiNestSampler(Sampler):
         self,
         run_dir: Path,
         prior: Callable[[np.ndarray], np.ndarray],
-        likelihood: Callable[[np.ndarray], float],
+        log_likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
         inferred_parameters: list[str],
@@ -306,7 +309,7 @@ class MultiNestSampler(Sampler):
         super().__init__(
             run_dir=run_dir,
             prior=prior,
-            likelihood=likelihood,
+            log_likelihood=log_likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
             inferred_parameters=inferred_parameters,
@@ -344,7 +347,7 @@ class MultiNestSampler(Sampler):
         process = multiprocess.Process(
             target=partial(
                 _solve_pymultinest,
-                LogLikelihood=self.likelihood,
+                LogLikelihood=self.log_likelihood,
                 Prior=self.prior,
                 n_dims=self.n_dim,
                 outputfiles_basename=self.outputfiles_basename,
