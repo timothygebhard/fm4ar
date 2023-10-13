@@ -55,17 +55,18 @@ def get_standardization_parameters(
 
         # Loop 1: Compute the mean
         for a, b in tqdm(limits, ncols=80):
-            x = np.array(hdf_file[key][a:b])
+            x = np.array(hdf_file[key][a:b]).astype(np.float64)
             s0 += len(x)
             s1 += np.sum(x, axis=0)
-        mean = np.array(s1 / s0).astype(np.float32)
+        mean = np.array(s1 / s0).astype(np.float64)
 
         # Loop 2: Compute the std
         for a, b in tqdm(limits, ncols=80):
-            x = np.array(hdf_file[key][a:b])
+            x = np.array(hdf_file[key][a:b]).astype(np.float64)
             x = x - mean
             s2 += np.sum(x ** 2, axis=0)
         std = np.sqrt(s2 / (s0 - 1)).astype(np.float32)
+        mean = np.array(s1 / s0).astype(np.float32)
 
     return mean, std
 
