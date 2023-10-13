@@ -79,6 +79,12 @@ if __name__ == "__main__":
     # Get command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--buffer-size",
+        type=int,
+        default=4096,
+        help="Size of the buffer to use when computing the mean and std.",
+    )
+    parser.add_argument(
         "--input-file-name",
         type=str,
         default="merged.hdf",
@@ -109,6 +115,7 @@ if __name__ == "__main__":
     flux_mean, flux_std = get_standardization_parameters(
         file_path=input_dir / args.input_file_name,
         key="flux",
+        buffer_size=args.buffer_size,
     )
     print()
 
