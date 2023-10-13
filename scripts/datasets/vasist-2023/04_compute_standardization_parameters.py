@@ -16,7 +16,7 @@ from fm4ar.utils.paths import get_datasets_dir
 def get_standardization_parameters(
     file_path: Path,
     key: str,
-    buffer_size: int = 4096,
+    buffer_size: int = 8192,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute the standardization parameters for the dataset without
@@ -54,14 +54,14 @@ def get_standardization_parameters(
         # numerically unstable (unless we cast everything to float128)
 
         # Loop 1: Compute the mean
-        for a, b in tqdm(limits, ncols=80):
+        for a, b in tqdm(limits, ncols=80, desc="mean"):
             x = np.array(hdf_file[key][a:b]).astype(np.float64)
             s0 += len(x)
             s1 += np.sum(x, axis=0)
         mean = np.array(s1 / s0).astype(np.float64)
 
         # Loop 2: Compute the std
-        for a, b in tqdm(limits, ncols=80):
+        for a, b in tqdm(limits, ncols=80, desc="std "):
             x = np.array(hdf_file[key][a:b]).astype(np.float64)
             x = x - mean
             s2 += np.sum(x ** 2, axis=0)
