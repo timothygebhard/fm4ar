@@ -27,8 +27,8 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
     file_path = dataset_dir / file_name
     with h5py.File(file_path, "r") as hdf_file:
         theta = np.array(hdf_file["theta"][:n_samples], dtype=np.float32)
-        flux = np.array(hdf_file["spectra"][:n_samples], dtype=np.float32)
-        wlen = np.array(hdf_file["wavelengths"], dtype=np.float32)
+        flux = np.array(hdf_file["flux"][:n_samples], dtype=np.float32)
+        wlen = np.array(hdf_file["wlen"], dtype=np.float32)
 
     # Define noise levels
     noise_levels = 1.25754e-17 * 1e16
