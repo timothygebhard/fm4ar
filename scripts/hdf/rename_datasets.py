@@ -25,7 +25,7 @@ def get_cli_arguments() -> argparse.Namespace:
         type=str,
         nargs="+",
         required=True,
-        help="List of mappings in the form 'old_name->new_name'.",
+        help="List of mappings in the form 'old_name=new_name'.",
     )
     args = parser.parse_args()
 
@@ -49,7 +49,7 @@ def rename_dataset(
             return
 
         # Otherwise, "rename" the dataset
-        print(f"Renaming '{old_name}' to '{new_name}'...", end=" ")
+        print(f"Renaming '{old_name}' to '{new_name}'...", end=" ", flush=True)
         f.copy(old_name, new_name)
         del f[old_name]
         print("Done!")
@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
     # Rename datasets
     for mapping in args.mappings:
-        old_name, new_name = mapping.split("->")
+        old_name, new_name = mapping.split("=")
         rename_dataset(
             file_path=args.file_path,
             old_name=old_name,
