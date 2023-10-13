@@ -33,9 +33,7 @@ def get_standardization_parameters(
         parameters.
     """
 
-    # Keep track of some statistics to compute the mean and std without
-    # loading the full dataset into memory;
-    # Source: https://stackoverflow.com/a/5543790/4100721
+    # Keep track of some statistics
     s0: float = 0.0
     s1: np.ndarray | float = 0.0
     s2: np.ndarray | float = 0.0
@@ -44,26 +42,30 @@ def get_standardization_parameters(
     # Motivation: Looping over each sample individually is very slow.
     with h5py.File(file_path.as_posix(), "r") as hdf_file:
 
+        # Prepare the indices for the chunks
         n = len(hdf_file[key])
         idx = (
             np.r_[0 : n : buffer_size, n] if n > buffer_size
             else np.array([0, n])
         )
-
-        # Note: We load the data as a float128 because otherwise we can get
-        # surprisingly large errors when computing the standard deviation!
         limits = list(zip(idx[:-1], idx[1:], strict=True))
+
+        # Note: We loop twice because the single loop version seems to be
+        # numerically unstable (unless we cast everything to float128)
+
+        # Loop 1: Compute the mean
         for a, b in tqdm(limits, ncols=80):
-            x = np.array(hdf_file[key][a:b], dtype=np.float128)
+            x = np.array(hdf_file[key][a:b])
             s0 += len(x)
             s1 += np.sum(x, axis=0)
-            s2 += np.sum(x ** 2, axis=0)
+        mean = np.array(s1 / s0).astype(np.float32)
 
-    # Compute the mean and std (and convert back to float32)
-    mean = np.array(s1 / s0).astype(np.float32)
-    numerator = np.clip(s0 * s2 - s1 * s1, 0.0, None)
-    denominator = s0 * (s0 - 1)
-    std = np.sqrt(numerator / denominator).astype(np.float32)
+        # Loop 2: Compute the std
+        for a, b in tqdm(limits, ncols=80):
+            x = np.array(hdf_file[key][a:b])
+            x = x - mean
+            s2 += np.sum(x ** 2, axis=0)
+        std = np.sqrt(s2 / (s0 - 1)).astype(np.float32)
 
     return mean, std
 
