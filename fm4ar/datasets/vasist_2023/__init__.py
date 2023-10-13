@@ -42,10 +42,6 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
         theta = theta[:, parameters]
         names = [LABELS[i] for i in parameters]
         ranges = [(LOWER[i], UPPER[i]) for i in parameters]
-        if not isinstance(standardizer.theta_mean, float):
-            standardizer.theta_mean = standardizer.theta_mean[parameters]
-        if not isinstance(standardizer.theta_std, float):
-            standardizer.theta_std = standardizer.theta_std[parameters]
     else:
         names = LABELS
         ranges = list(zip(LOWER, UPPER, strict=True))

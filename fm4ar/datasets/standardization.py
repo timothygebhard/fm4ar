@@ -98,6 +98,7 @@ def get_standardizer(config: dict) -> Standardizer:
     Load the standardization parameters for the given experiment config.
     """
 
+    # Create standardizer
     match name := config["data"]["name"]:
 
         case "ardevol-martinez-2022":
@@ -108,7 +109,7 @@ def get_standardizer(config: dict) -> Standardizer:
                 / "standardization_parameters.hdf"
             )
             prefix = str(config["data"]["type"])
-            return get_standardizer_from_hdf(file_path, prefix)
+            standardizer = get_standardizer_from_hdf(file_path, prefix)
 
         case "goyal-2020":
             raise NotImplementedError()
@@ -125,7 +126,17 @@ def get_standardizer(config: dict) -> Standardizer:
                 / "precomputed"
                 / f"standardization_parameters__{suffix}.hdf"
             )
-            return get_standardizer_from_hdf(file_path)
+            standardizer = get_standardizer_from_hdf(file_path)
 
         case _:
             raise ValueError(f"Unknown dataset: `{name}`")
+
+    # Adjust parameters
+    if config["data"].get("parameters") is not None:
+        parameters: list[int] = list(map(int, config["data"]["parameters"]))
+        if not isinstance(standardizer.theta_mean, float):
+            standardizer.theta_mean = standardizer.theta_mean[parameters]
+        if not isinstance(standardizer.theta_std, float):
+            standardizer.theta_std = standardizer.theta_std[parameters]
+
+    return standardizer
