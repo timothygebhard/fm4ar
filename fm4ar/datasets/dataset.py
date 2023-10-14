@@ -70,7 +70,8 @@ class ArDataset(Dataset):
         self.names = names
         self.ranges = ranges
         self.standardizer = (
-            standardizer if standardizer is not None else Standardizer()
+            Standardizer() if standardizer is None
+            else standardizer
         )
         self.standardize_theta = standardize_theta
         self.standardize_flux = standardize_flux
@@ -97,8 +98,11 @@ class ArDataset(Dataset):
         """
 
         # Make sure that the noise levels are not smaller than the noise floor
-        noise_levels = self.noise_levels_as_tensor.clone()
-        noise_levels[noise_levels < self.noise_floor] = self.noise_floor
+        if self.noise_floor > 0.0:
+            noise_levels = self.noise_levels_as_tensor.clone()
+            noise_levels[noise_levels < self.noise_floor] = self.noise_floor
+        else:
+            noise_levels = self.noise_levels_as_tensor
 
         # Sample noise from a normal distribution
         noise = noise_levels * torch.randn(flux.shape)
