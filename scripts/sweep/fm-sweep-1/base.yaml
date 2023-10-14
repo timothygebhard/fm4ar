@@ -7,7 +7,7 @@ data:
   which: train
   file_name: selected.hdf
   train_fraction: 0.98
-  add_noise_to_x: True
+  add_noise_to_flux: True
   standardize_theta: True
   n_samples: 8_000_000
 
