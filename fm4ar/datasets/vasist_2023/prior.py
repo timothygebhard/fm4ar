@@ -61,6 +61,10 @@ THETA_0 = np.array(
 # fmt: on
 
 
+# Define sigma (i.e., the noise level); see also the `Simulator` class
+SIGMA = 1.25754e-17 * 1e16
+
+
 class Prior:
     """
     Box uniform prior over atmospheric parameters; see Table 1 in
