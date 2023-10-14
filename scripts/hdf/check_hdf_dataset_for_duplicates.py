@@ -56,5 +56,6 @@ if __name__ == "__main__":
     if len(duplicates) > 0:
         print("Duplicates:")
         print(duplicates)
+        print()
 
-    print(f"\nThis took {time.time() - script_start:.1f} seconds.\n")
+    print(f"This took {time.time() - script_start:.1f} seconds.\n")
