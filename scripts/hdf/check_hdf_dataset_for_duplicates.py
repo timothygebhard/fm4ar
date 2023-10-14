@@ -47,12 +47,12 @@ if __name__ == "__main__":
 
     # Check for duplicates
     print("Checking for duplicates...", end=" ", flush=True)
-    unique, counts = np.unique(dataset, return_counts=True)
+    unique, counts = np.unique(dataset, return_counts=True, axis=0)
     duplicates = unique[counts > 1]
-    print("Done!")
+    print("Done!\n")
 
     # Print results
-    print(f"Found {len(duplicates)} duplicates.\n")
+    print(f"Found {len(duplicates):,} duplicates.\n")
     if len(duplicates) > 0:
         print("Duplicates:")
         print(duplicates)
