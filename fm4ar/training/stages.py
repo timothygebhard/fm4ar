@@ -83,6 +83,9 @@ def train_stages(
         **pm.config["local"]["runtime_limits"],
     )
 
+    # Initialize the flag that indicates whether we stopped early
+    stopped_early = False
+
     # Extract list of stages from settings dict
     stage_configs = list(pm.config["training"].values())
     num_stages = len(stage_configs)
@@ -118,7 +121,7 @@ def train_stages(
         runtime_limits.max_epochs_total = end_epochs[n]
 
         # Train the model for the stage
-        pm.train(
+        stopped_early = pm.train(
             train_loader=train_loader,
             test_loader=test_loader,
             runtime_limits=runtime_limits,
@@ -132,6 +135,7 @@ def train_stages(
             pm.save_model(name=stage_name, save_training_info=True)
             print("Done!\n", flush=True)
 
-    # Check if we have reached the end of the training
-    complete = bool(pm.epoch == end_epochs[-1])
+    # Check if we have reached the end of the training, either because we
+    # stopped early or because we have completed all stages
+    complete = stopped_early or pm.epoch == end_epochs[-1]
     return complete

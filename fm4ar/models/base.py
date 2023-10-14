@@ -320,7 +320,7 @@ class Base:
         test_loader: DataLoader,
         runtime_limits: RuntimeLimits,
         stage_config: dict[str, Any],
-    ) -> None:
+    ) -> bool:
         """
         Train the model until the runtime limits are exceeded.
 
@@ -329,6 +329,10 @@ class Base:
             test_loader: DataLoader for test data.
             runtime_limits: RuntimeLimits object.
             stage_config: Configuration for the current training stage.
+
+        Returns:
+            True if we stopped because we reached the early stopping
+            criterion, False otherwise.
         """
 
         # Define some shortcuts
@@ -398,11 +402,13 @@ class Base:
             # Check if we should stop early
             if self.stop_early(patience=early_stopping):
                 print("Early stopping criterion reached, ending training!")
-                break
+                return True
 
             # Save the best model if the test loss has improved
             self.save_best_model(test_loss=test_loss)
             print()
+
+        return False
 
     def save_best_model(self, test_loss: float) -> None:
         """

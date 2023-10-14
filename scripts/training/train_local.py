@@ -44,7 +44,8 @@ if __name__ == "__main__":
         )
         print()
 
-    # Train model (either to completion or until the time limit is reached)
+    # Train model (either to completion, or until a time limit is reached,
+    # or until the early stopping criterion is met)
     with threadpool_limits(limits=1, user_api="blas"):
         complete = train_stages(pm=pm, dataset=dataset)
 
