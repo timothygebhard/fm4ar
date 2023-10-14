@@ -8,7 +8,7 @@ import torch
 
 from fm4ar.datasets.dataset import ArDataset
 from fm4ar.datasets.standardization import get_standardizer
-from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, LABELS
+from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, LABELS, SIGMA
 from fm4ar.utils.paths import get_datasets_dir
 
 
@@ -30,9 +30,6 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
         flux = np.array(hdf_file["flux"][:n_samples], dtype=np.float32)
         wlen = np.array(hdf_file["wlen"], dtype=np.float32)
 
-    # Define noise levels
-    noise_levels = 1.25754e-17 * 1e16
-
     # Load standardization parameters
     standardizer = get_standardizer(config)
 
@@ -51,10 +48,12 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
         theta=torch.from_numpy(theta),
         flux=torch.from_numpy(flux),
         wlen=torch.from_numpy(wlen),
-        noise_levels=noise_levels,
+        noise_levels=SIGMA,
         noise_floor=0.0,
         names=names,
         ranges=ranges,
         standardizer=standardizer,
-        **config["data"],
+        standardize_theta=config["data"].get("standardize_theta", True),
+        standardize_flux=config["data"].get("standardize_flux", False),
+        add_noise_to_flux=config["data"].get("add_noise_to_flux", True),
     )
