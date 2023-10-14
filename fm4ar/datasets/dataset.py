@@ -27,9 +27,7 @@ class ArDataset(Dataset):
         standardizer: Standardizer | None = None,
         standardize_theta: bool = True,
         standardize_flux: bool = False,
-        add_noise_to_flux: bool = False,
-        *_: Any,  # Ignore any other arguments
-        **__: Any,  # Ignore any other keyword arguments
+        add_noise_to_flux: bool = True,
     ) -> None:
         """
         Instantiate a dataset.
