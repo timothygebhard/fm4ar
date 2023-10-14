@@ -1,3 +1,6 @@
+# Submission files for HTCondor
+*.sub
+
 # Folders with datasets or results
 datasets/**
 experiments/**
