@@ -175,12 +175,12 @@ def create_posterior_plot(
     )
 
     # Create the plot
-    c.configure(sigmas=[0, 1, 2, 3], summary=False)
+    c.configure(sigmas=[0, 1, 2, 3], summary=False, cloud=True)
     c.plotter.plot(truth=ground_truth.tolist())
 
-    # Save the plot as a PDF
-    file_path = experiment_dir / "importance_sampling_posterior.pdf"
-    plt.savefig(file_path, bbox_inches="tight", pad_inches=0.1)
+    # Save the plot as a PNG (PDFs can be 50+ MB for 16 parameters)
+    file_path = experiment_dir / "importance_sampling_posterior.png"
+    plt.savefig(file_path, dpi=300, bbox_inches="tight", pad_inches=0.1)
 
 
 def handle_nested_sampling_posterior() -> tuple[np.ndarray, np.ndarray]:
