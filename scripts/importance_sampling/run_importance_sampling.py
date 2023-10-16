@@ -180,7 +180,7 @@ def create_posterior_plot(
 
     # Save the plot as a PNG (PDFs can be 50+ MB for 16 parameters)
     file_path = experiment_dir / "importance_sampling_posterior.png"
-    plt.savefig(file_path, dpi=300, bbox_inches="tight", pad_inches=0.1)
+    plt.savefig(file_path, dpi=150, bbox_inches="tight", pad_inches=0.1)
 
 
 def handle_nested_sampling_posterior() -> tuple[np.ndarray, np.ndarray]:
@@ -333,6 +333,17 @@ if __name__ == "__main__":
     x = np.array(x)
     likelihoods = np.array(likelihoods).flatten()
     priors = np.array(priors).flatten()
+
+    # Drop everything that has a prior of 0 (i.e., is outside the bounds)
+    mask = priors > 0
+    theta = theta[mask]
+    probs = probs[mask]
+    x = x[mask]
+    likelihoods = likelihoods[mask]
+    priors = priors[mask]
+    n = len(theta)
+    print(f"Dropped {np.sum(~mask):,} samples with prior=0!")
+    print(f"Remaining samples: {n:,} ({100 * n / args.n_samples:.2f}%)\n")
 
     # Compute the importance sampling weights (raw and normalized)
     raw_is_weights = likelihoods * priors / probs
