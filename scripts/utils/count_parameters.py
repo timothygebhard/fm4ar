@@ -7,6 +7,8 @@ from argparse import ArgumentParser
 from time import time
 from pathlib import Path
 
+import torch
+
 from fm4ar.training.preparation import prepare_new
 from fm4ar.utils.config import load_config
 from fm4ar.utils.torchutils import get_number_of_model_parameters
@@ -33,7 +35,8 @@ if __name__ == "__main__":
     # Load config and update local settings to ensure they work on macOS.
     # Also, load only the smaller test set to get the correct theta_dim.
     config = load_config(args.experiment_dir)
-    config["data"]["which"] = "test"
+    config["data"]["which"] = "train"
+    config["data"]["n_samples"] = "10"
     config["local"]["wandb"] = False
     config["local"]["device"] = "cpu"
     config["local"]["n_workers"] = 0
@@ -45,9 +48,10 @@ if __name__ == "__main__":
     )
     print("\n")
 
-    for name, model in (
-        ("total", pm.network),
-        ("context embedding net", pm.network.context_embedding_net),
+    model: torch.nn.Module
+    for name, model in (  # type: ignore
+        ("total", pm.model),
+        ("context embedding net", pm.model.context_embedding_net),
     ):
         n_trainable = get_number_of_model_parameters(model, (True,))
         n_fixed = get_number_of_model_parameters(model, (False,))
