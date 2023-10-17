@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--experiment_dir",
+        "--experiment-dir",
         type=Path,
         required=True,
         help="Path to the experiment directory.",
@@ -39,6 +39,10 @@ if __name__ == "__main__":
         parameter_mask = np.array(hdf_file["parameter_mask"])
     print("Done!")
 
+    # Compute sample efficiency
+    n_eff = np.sum(weights) ** 2 / np.sum(weights**2)
+    sample_efficiency = n_eff / len(weights)
+
     # Create plot
     print("Creating plot...", end=" ", flush=True)
     create_posterior_plot(
@@ -47,7 +51,7 @@ if __name__ == "__main__":
         parameter_mask=parameter_mask,
         ground_truth=theta_0,
         names=np.array(LABELS)[parameter_mask].tolist(),
-        sample_efficiency=weights.sum() / weights.size,
+        sample_efficiency=sample_efficiency,
         experiment_dir=args.experiment_dir,
     )
     print("Done!")
