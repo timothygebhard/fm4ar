@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # Also, load only the smaller test set to get the correct theta_dim.
     config = load_config(args.experiment_dir)
     config["data"]["which"] = "train"
-    config["data"]["n_samples"] = "10"
+    config["data"]["n_samples"] = 10
     config["local"]["wandb"] = False
     config["local"]["device"] = "cpu"
     config["local"]["n_workers"] = 0
