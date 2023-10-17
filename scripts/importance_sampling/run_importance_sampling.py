@@ -4,16 +4,13 @@ This script currently only works for the Vasist-2023 dataset.
 """
 
 import argparse
-import logging
 import sys
 import time
 from pathlib import Path
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from chainconsumer import ChainConsumer
 from p_tqdm import p_map
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
@@ -32,6 +29,7 @@ from fm4ar.models.build_model import build_model
 from fm4ar.models.continuous.flow_matching import FlowMatching
 from fm4ar.nested_sampling.config import load_config as load_ns_config
 from fm4ar.nested_sampling.posteriors import load_posterior
+from fm4ar.nested_sampling.plotting import create_posterior_plot
 from fm4ar.utils.config import load_config as load_ml_config
 from fm4ar.utils.htcondor import (
     CondorSettings,
@@ -149,49 +147,6 @@ def process_theta_i(
     )
 
     return x_i, likelihood, prior
-
-
-def create_posterior_plot(
-    samples: np.ndarray,
-    weights: np.ndarray,
-    names: list[str],
-    ground_truth: np.ndarray,
-    sample_efficiency: float,
-    experiment_dir: Path,
-) -> None:
-    """
-    Create a corner plot of the posterior.
-    """
-
-    # Suppress the custom warnings from ChainConsumer
-    logging.basicConfig(level=logging.ERROR)
-
-    # Setup new corner plot
-    c = ChainConsumer()
-
-    # First add the original samples without weights
-    c.add_chain(
-        chain=samples[:, parameter_mask],
-        weights=None,
-        parameters=names,
-        name="Original posterior",
-    )
-
-    # Then add the samples with the importance sampling weights
-    c.add_chain(
-        chain=samples[:, parameter_mask],
-        weights=weights,
-        parameters=names,
-        name=rf"IS posterior ($\epsilon$={100 * sample_efficiency:.1f}%)",
-    )
-
-    # Create the plot
-    c.configure(sigmas=[0, 1, 2, 3], summary=False, cloud=True)
-    c.plotter.plot(truth=ground_truth.tolist())
-
-    # Save the plot as a PNG (PDFs can be 50+ MB for 16 parameters)
-    file_path = experiment_dir / "importance_sampling_posterior.png"
-    plt.savefig(file_path, dpi=150, bbox_inches="tight", pad_inches=0.1)
 
 
 def handle_nested_sampling_posterior() -> tuple[np.ndarray, np.ndarray]:
@@ -442,6 +397,7 @@ if __name__ == "__main__":
     create_posterior_plot(
         samples=theta,
         weights=is_weights,
+        parameter_mask=parameter_mask,
         names=np.array(LABELS)[parameter_mask].tolist(),
         ground_truth=THETA_0[parameter_mask],
         sample_efficiency=sample_efficiency,
