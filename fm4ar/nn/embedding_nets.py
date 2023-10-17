@@ -4,7 +4,7 @@ Different embedding networks and convenience functions.
 
 from os.path import expandvars
 from math import pi
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -131,6 +131,8 @@ def create_embedding_net_stage(
             stage = RescaleWavelength(**kwargs)
         case "SoftClip":
             stage = SoftClip(**kwargs)
+        case "StandardizeIndividually":
+            stage = StandardizeIndividually(input_dim=input_dim[0], **kwargs)
         case "SubsampleSpectrum":
             stage = SubsampleSpectrum(**kwargs)
         case "TransformerEmbedding":
@@ -607,5 +609,81 @@ class Float2Bits(nn.Module):
         # Flatten out the last dimension
         x = x.view(batch_size, n_bins * 4)
         validate_shape(x, (batch_size, n_bins * 4))
+
+        return x
+
+
+class StandardizeIndividually(nn.Module):
+    """
+    Standardize each spectrum individually and then add the mean and
+    standard deviation either via GLU or via concatenation.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        mode: Literal["glu", "concat"],
+    ) -> None:
+
+        super().__init__()
+
+        self.input_dim = input_dim
+        self.mode = mode
+
+        # Define small networks for the mean and std
+        self.mean_net = nn.Sequential(
+            nn.Linear(in_features=1, out_features=512),
+            nn.GELU(),
+            nn.Linear(in_features=512, out_features=512),
+            nn.GELU(),
+            nn.Linear(in_features=512, out_features=512),
+            nn.GELU(),
+            nn.Linear(in_features=512, out_features=512),
+            nn.GELU(),
+            nn.Linear(in_features=512, out_features=input_dim),
+        )
+        self.std_net = nn.Sequential(
+            nn.Linear(in_features=1, out_features=512),
+            nn.GELU(),
+            nn.Linear(in_features=512, out_features=512),
+            nn.GELU(),
+            nn.Linear(in_features=512, out_features=512),
+            nn.GELU(),
+            nn.Linear(in_features=512, out_features=512),
+            nn.GELU(),
+            nn.Linear(in_features=512, out_features=input_dim),
+        )
+
+        # Define GLU
+        self.glu = nn.GLU(dim=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        # Check the input shape
+        validate_shape(x, (None, None))
+        batch_size, n_bins = x.shape
+
+        # Standardize each spectrum individually
+        mean = torch.mean(x, dim=1, keepdim=True)
+        std = torch.std(x, dim=1, keepdim=True)
+        x = (x - mean.repeat(1, n_bins)) / std.repeat(1, n_bins)
+
+        # Process the mean and std
+        mean = torch.log10(1 + mean)
+        mean = self.mean_net(mean)
+        std = torch.log10(1 + std)
+        std = self.std_net(std)
+
+        # Reassemble input features depending on the mode
+        if self.mode == "glu":
+            x_1 = self.glu(torch.cat((x, mean), dim=1))
+            x_2 = self.glu(torch.cat((x, std), dim=1))
+            x = torch.cat((x_1, x_2), dim=1)
+            validate_shape(x, (batch_size, 2 * n_bins))
+        elif self.mode == "concat":
+            x = torch.cat((x, mean, std), dim=1)
+            validate_shape(x, (batch_size, n_bins * 3))
+        else:
+            raise ValueError(f"Invalid mode: {self.mode}!")
 
         return x
