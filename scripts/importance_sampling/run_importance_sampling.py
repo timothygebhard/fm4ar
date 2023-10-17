@@ -5,6 +5,7 @@ This script currently only works for the Vasist-2023 dataset.
 
 import argparse
 import logging
+import sys
 import time
 from pathlib import Path
 
@@ -32,6 +33,11 @@ from fm4ar.models.continuous.flow_matching import FlowMatching
 from fm4ar.nested_sampling.config import load_config as load_ns_config
 from fm4ar.nested_sampling.posteriors import load_posterior
 from fm4ar.utils.config import load_config as load_ml_config
+from fm4ar.utils.htcondor import (
+    CondorSettings,
+    create_submission_file,
+    condor_submit_bid,
+)
 from fm4ar.utils.multiproc import get_number_of_available_cores
 
 
@@ -45,7 +51,7 @@ def get_cli_arguments() -> argparse.Namespace:
         "--experiment-dir",
         type=Path,
         required=True,
-        help="Path to the experiment directory with (nautilus) posterior.",
+        help="Path to the experiment directory.",
     )
     parser.add_argument(
         "--n-samples",
@@ -59,6 +65,11 @@ def get_cli_arguments() -> argparse.Namespace:
         default=1000,
         choices=[400, 1000],
         help="Resolution R = ∆λ/λ of the spectra (default 1000).",
+    )
+    parser.add_argument(
+        "--start-submission",
+        action="store_true",
+        help="If True, create a submission file and launch a job.",
     )
     args = parser.parse_args()
 
@@ -107,7 +118,7 @@ def process_theta_i(
     # to this function because it seems like in that case, the multiprocessing
     # parallelization does not work properly (there is only ever one process
     # at a time doing work). This function can therefore only be called when
-    # the other scope provides these variables!
+    # the outer scope provides these variables!
 
     # Compute the prior: Since we are using a box-uniform prior, we only need
     # to check if the parameters are within the bounds
@@ -187,6 +198,10 @@ def handle_nested_sampling_posterior() -> tuple[np.ndarray, np.ndarray]:
     """
     Load posterior samples from nested sampling, apply a KDE, and draw
     samples with corresponding probabilities from the KDE.
+
+    Note: This function accesses values from an outer scope! (This is
+    ugly, but in case of the `simulator`, there seems to be no other
+    way that works with multiprocessing?)
     """
 
     # Load the nested sampling posterior
@@ -219,6 +234,10 @@ def handle_nested_sampling_posterior() -> tuple[np.ndarray, np.ndarray]:
 def handle_trained_ml_model() -> tuple[np.ndarray, np.ndarray]:
     """
     Load a trained ML model and draw samples from it.
+
+    Note: This function accesses values from an outer scope! (This is
+    ugly, but in case of the `simulator`, there seems to be no other
+    way that works with multiprocessing?)
     """
 
     # Construct uncertainties
@@ -229,7 +248,7 @@ def handle_trained_ml_model() -> tuple[np.ndarray, np.ndarray]:
         torch.stack(
             [
                 torch.from_numpy(x_0),
-                torch.from_numpy(wavelengths),
+                torch.from_numpy(wlen),
                 torch.from_numpy(noise_level),
             ],
             dim=1,
@@ -295,14 +314,57 @@ if __name__ == "__main__":
     # Get the command line arguments
     args = get_cli_arguments()
 
+    # -------------------------------------------------------------------------
+    # Either prepare a submission file and launch a job...
+    # -------------------------------------------------------------------------
+
+    if args.start_submission:
+
+        # We only need to request a GPU if we are using a trained ML model
+        num_gpus = int((args.experiment_dir / "model__best.pt").exists())
+
+        # Collect arguments that we need to pass to the actual job
+        arguments = [
+            Path(__file__).resolve().as_posix(),
+            f"--experiment-dir {args.experiment_dir}",
+            f"--n-samples {args.n_samples}",
+            f"--resolution {args.resolution}",
+        ]
+
+        # Create a submission file for the importance sampling job
+        condor_settings = CondorSettings(
+            num_cpus=96,
+            memory_cpus=65_000,
+            num_gpus=num_gpus,
+            memory_gpus=15_000,
+            arguments=arguments,
+            log_file_name="importance_sampling",
+            bid=25,
+        )
+        file_path = create_submission_file(
+            condor_settings=condor_settings,
+            experiment_dir=args.experiment_dir,
+            file_name="importance_sampling.sub",
+        )
+
+        # Submit the job to HTCondor
+        condor_submit_bid(file_path=file_path, bid=condor_settings.bid)
+
+        # Exit early
+        sys.exit(0)
+
+    # -------------------------------------------------------------------------
+    # ...or actually run the importance sampling
+    # -------------------------------------------------------------------------
+
     # Set up simulator and compute target spectrum
     print("Simulating target spectrum...", end=" ")
     simulator = Simulator(noisy=False, R=args.resolution)
     if (result := simulator(THETA_0)) is None:
         raise RuntimeError("Simulation of target spectrum failed!")
     else:
-        wavelengths, x_0 = result
-    n_bins = len(wavelengths)
+        wlen, x_0 = result
+    n_bins = len(wlen)
     print("Done!\n")
 
     # Get the mask that indicates which parameters are free.
@@ -319,7 +381,7 @@ if __name__ == "__main__":
     # sampling posterior. In this case, we load the nested sampling posterior,
     # fit a KDE, and sample from it / use it compute probabilities.
     else:
-        print("No trained model found, assuming nested sampling posterior!\n")
+        print("No ML model found, assuming nested sampling posterior!\n")
         theta, probs = handle_nested_sampling_posterior()
 
     # For each sample, compute the raw weight, likelihood, prior, and prob.
@@ -342,7 +404,7 @@ if __name__ == "__main__":
     likelihoods = likelihoods[mask]
     priors = priors[mask]
     n = len(theta)
-    print(f"Dropped {np.sum(~mask):,} samples with prior=0!")
+    print(f"Dropped {np.sum(~mask):,} samples where prior=0!")
     print(f"Remaining samples: {n:,} ({100 * n / args.n_samples:.2f}%)\n")
 
     # Compute the importance sampling weights (raw and normalized)
