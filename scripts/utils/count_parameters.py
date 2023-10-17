@@ -40,6 +40,8 @@ if __name__ == "__main__":
     config["local"]["wandb"] = False
     config["local"]["device"] = "cpu"
     config["local"]["n_workers"] = 0
+    if "wandb" in config["local"]:
+        del config["local"]["wandb"]
 
     # Load data and build model (needed to infer theta_dim and context_dim)
     pm, dataset = prepare_new(
