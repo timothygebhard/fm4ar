@@ -5,13 +5,13 @@ Utility functions for PyTorch.
 from collections import OrderedDict
 from math import prod
 from pathlib import Path
-from typing import Any, Callable, Iterable, Literal, Type
+from typing import Any, Iterable, Literal, Type
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler as lrs
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset, random_split
 
 from fm4ar.nn.modules import Sine
 from fm4ar.utils.resampling import resample_spectrum
@@ -29,18 +29,9 @@ def check_for_nans(x: torch.Tensor, label: str = "tensor") -> None:
         raise ValueError(f"Inf values detected in {label}, aborting!")
 
 
-def get_activation_from_string(
-    name: str,
-) -> Callable[[torch.Tensor], torch.Tensor]:
+def get_activation_from_string(name: str) -> torch.nn.Module:
     """
-    Map the name of an activation function name to the corresponding
-    activation function from `torch.nn.functional`.
-
-    Args:
-        name: Name of the activation function.
-
-    Returns:
-        The activation function for the given name.
+    Build and return an activation function with the given name.
     """
 
     match name.lower():
@@ -250,10 +241,10 @@ def get_lr(optimizer: torch.optim.Optimizer) -> list[float]:
 
 
 def split_dataset_into_train_and_test(
-    dataset: torch.utils.data.Dataset,
+    dataset: Dataset,
     train_fraction: float,
     random_seed: int = 42,
-) -> tuple[torch.utils.data.Dataset, torch.utils.data.Dataset]:
+) -> tuple[Dataset, Dataset]:
     """
     Split the given `dataset` into a train set and a test set.
 
@@ -279,7 +270,7 @@ def split_dataset_into_train_and_test(
     train_size = int(train_fraction * len(dataset))  # type: ignore
     test_size = len(dataset) - train_size  # type: ignore
 
-    train_dataset, test_dataset = torch.utils.data.random_split(
+    train_dataset, test_dataset = random_split(
         dataset=dataset,
         lengths=[train_size, test_size],
         generator=generator,
@@ -434,7 +425,7 @@ def collate_pretrain(
 
 
 def build_train_and_test_loaders(
-    dataset: torch.utils.data.Dataset,
+    dataset: Dataset,
     train_fraction: float,
     batch_size: int,
     num_workers: int,
