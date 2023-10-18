@@ -2,8 +2,9 @@
 Different embedding networks and convenience functions.
 """
 
+from collections.abc import Sequence
 from os.path import expandvars
-from math import pi
+from math import pi, log
 from typing import Any, Literal
 
 import numpy as np
@@ -14,6 +15,7 @@ from fm4ar.nn.modules import Mean
 from fm4ar.nn.resnets import DenseResidualNet
 from fm4ar.utils.ieee754 import float2bits
 from fm4ar.utils.torchutils import (
+    get_mlp,
     load_and_or_freeze_model_weights,
     validate_shape,
 )
@@ -121,6 +123,8 @@ def create_embedding_net_stage(
             stage = DropFeatures()
         case "Float2Bits":
             stage = Float2Bits()
+        case "Float2BitsTransformer":
+            stage = Float2BitsTransformer(input_dim=input_dim[-1], **kwargs)
         case "PrecomputedPCAEmbedding":
             stage = PrecomputedPCAEmbedding(**kwargs)
         case "PositionalEncoding":
@@ -687,3 +691,134 @@ class StandardizeIndividually(nn.Module):
             raise ValueError(f"Invalid mode: {self.mode}!")
 
         return x
+
+
+class Float2BitsTransformer(nn.Module):
+    """
+    Network that combines a float2bit standardization with a transformer
+    architecture to learn context embeddings.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,  # number of input features (flux, wavelength, noise)
+        latent_dim: int,  # dimension of latent embeddings
+        output_dim: int,   # dimension of output embeddings
+        n_heads: int,
+        n_blocks: int,
+    ) -> None:
+        """
+        Instantiate a TransformerEmbedding module.
+        """
+
+        super().__init__()
+
+        # Store the parameters
+        self.input_dim = input_dim
+        self.latent_dim = latent_dim
+        self.output_dim = output_dim
+        self.n_heads = n_heads
+        self.n_blocks = n_blocks
+
+        # Define MLP to map the flux from bit pattern to the latent dimension
+        self.flux_mlp = get_mlp(
+            input_dim=32,
+            output_dim=latent_dim,
+            hidden_dims=(1024, 1024, 1024),
+            activation="gelu",
+            batch_norm=True,
+        )
+
+        # Define the transformer backbone
+        self.transformer = nn.Sequential(
+            nn.TransformerEncoder(  # type: ignore
+                encoder_layer=nn.TransformerEncoderLayer(
+                    d_model=latent_dim,
+                    nhead=n_heads,
+                    dim_feedforward=1024,
+                    activation="gelu",
+                    batch_first=True,
+                ),
+                num_layers=n_blocks,
+            ),
+            Mean(dim=1),
+            nn.Linear(in_features=latent_dim, out_features=output_dim),
+            nn.Tanh(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the embedding network.
+        """
+
+        # Expected shape: (batch_size, n_bins, n_features)
+        validate_shape(x, (None, None, self.input_dim))
+        batch_size, n_bins, _ = x.shape
+
+        # Split input features
+        flux, wlen, *_ = torch.split(x, 1, dim=2)
+        wlen = wlen.squeeze(2)
+
+        # Compute positional encoding for the wavelengths
+        encoded_wlen = self.positional_encoding(wlen, self.latent_dim)
+        validate_shape(encoded_wlen, (batch_size, n_bins, self.latent_dim))
+
+        # Map flux to bit pattern and then to latent dimension
+        encoded_flux = float2bits(flux, precision="single")
+        validate_shape(encoded_flux, (batch_size, n_bins, 32))
+        encoded_flux = self.flux_mlp(flux)
+        validate_shape(encoded_flux, (batch_size, n_bins, self.latent_dim))
+
+        # Combine the flux and the positional encoding
+        transformer_input = encoded_flux + encoded_wlen
+
+        # Apply the embedding network
+        output = self.transformer(transformer_input)
+        validate_shape(output, (batch_size, self.output_dim))
+
+        return torch.Tensor(output)
+
+    @staticmethod
+    def positional_encoding(
+        x: torch.Tensor,
+        latent_dim: int,
+    ) -> torch.Tensor:
+        """
+        Compute a value-based positional encoding for the input tensor.
+
+        Args:
+            x: Tensor of shape `(batch_size, n_bins)`.
+            latent_dim: The latent dimensionality for the encoding.
+
+        Returns:
+             A tensor of shape `(batch_size, n_bins, latent_dim)`.
+        """
+
+        # Ensure latent_dim is even
+        if latent_dim % 2 != 0:
+            raise ValueError("Latent dimension must be even.")
+
+        # Expand dims for broadcasting
+        x_exp = x.unsqueeze(-1)
+
+        # Calculate div_term and expand dims for broadcasting
+        # 1. Define the base of the exponent in the original formula
+        # 2. Calculate the exponent term, which is log(base) / latent_dim
+        # 3. Generate a sequence [0, 2, 4, ..., latent_dim - 2]
+        # 4. Compute div_term using exp function for the decreasing series
+        # 5. Expand dims for broadcasting
+        base = 1 / 10_000
+        exponent_term = log(base) / latent_dim
+        sequence = torch.arange(0, latent_dim, 2, device=x.device).float()
+        div_term = torch.exp(sequence * exponent_term)
+        div_term = div_term.unsqueeze(0).unsqueeze(0)
+
+        # Calculate sine and cosine values
+        sine_terms = torch.sin(x_exp * div_term)
+        cosine_terms = torch.cos(x_exp * div_term)
+
+        # Interleave sine and cosine terms
+        result = torch.stack((sine_terms, cosine_terms), dim=-1)
+        result = result.view(x.shape[0], x.shape[1], latent_dim)
+
+        return result
