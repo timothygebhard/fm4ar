@@ -446,13 +446,16 @@ class TransformerEmbedding(nn.Module):
         encoded_flux = torch.stack((flux, mean, std), dim=2)
         validate_shape(encoded_flux, (batch_size, n_bins, 3))
         encoded_flux = self.mlp(encoded_flux)
+        check_for_nans(encoded_flux, "encoded_flux")
         validate_shape(encoded_flux, (batch_size, n_bins, self.latent_dim))
 
         # Combine the flux and the positional encoding
         transformer_input = encoded_flux + encoded_wlen
+        check_for_nans(transformer_input, "transformer_input")
 
         # Apply the embedding network
         output = self.transformer(transformer_input)
+        check_for_nans(output, "output")
         validate_shape(output, (batch_size, self.output_dim))
 
         return torch.Tensor(output)
