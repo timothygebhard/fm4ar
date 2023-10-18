@@ -721,12 +721,15 @@ class Float2BitsTransformer(nn.Module):
         self.n_blocks = n_blocks
 
         # Define MLP to map the flux from bit pattern to the latent dimension
+        # Note: We can't (easily) use batch norm here because the tensor is 3D
+        # and `Linear` and `BatchNorm1D` seem to have different conventions for
+        # the "extra" dimension (in this case: the wavelength dimension)
         self.flux_mlp = get_mlp(
             input_dim=32,
             output_dim=latent_dim,
             hidden_dims=(1024, 1024, 1024),
             activation="gelu",
-            batch_norm=True,
+            batch_norm=False,
         )
 
         # Define the transformer backbone
