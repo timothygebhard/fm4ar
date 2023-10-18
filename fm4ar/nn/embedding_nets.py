@@ -431,13 +431,12 @@ class TransformerEmbedding(nn.Module):
         encoded_wlen = positional_encoding(wlen, self.latent_dim)
         validate_shape(encoded_wlen, (batch_size, n_bins, self.latent_dim))
 
-        # Send the flux through the MLP
-        mean = torch.log10(
-            1 + torch.mean(flux, dim=1, keepdim=True).repeat(1, n_bins)
-        )
-        std = torch.log10(
-            1 + torch.std(flux, dim=1, keepdim=True).repeat(1, n_bins)
-        )
+        # Standardize the flux and send it through the MLP
+        mean = torch.mean(flux, dim=1, keepdim=True).repeat(1, n_bins)
+        std = torch.std(flux, dim=1, keepdim=True).repeat(1, n_bins)
+        flux = (flux - mean) / std
+        mean = torch.log10(1 + mean)
+        std = torch.log10(1 + std)
         check_for_nans(mean, "mean")
         check_for_nans(std, "std")
         validate_shape(mean, (batch_size, n_bins))
