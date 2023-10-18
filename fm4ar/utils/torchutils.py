@@ -58,6 +58,46 @@ def get_activation_from_string(
             raise ValueError("Invalid activation function!")
 
 
+def get_mlp(
+    input_dim: int,
+    hidden_dims: list[int],
+    output_dim: int,
+    activation: str,
+    dropout: float = 0.0,
+    batch_norm: bool = False,
+) -> nn.Sequential:
+    """
+    Build and return an MLP with the given parameters.
+
+    Args:
+        input_dim: Dimension of the input.
+        hidden_dims: List of hidden dimensions.
+        output_dim: Dimension of the output.
+        activation: Name of the activation function.
+        dropout: Dropout probability.
+        batch_norm: Whether to use batch normalization.
+
+    Returns:
+        A multi-layer perceptron with the given parameters.
+    """
+
+    layers = torch.nn.ModuleList()
+    dims = [input_dim] + hidden_dims + [output_dim]
+
+    # Note: There seems to be no clear consensus about the order of the
+    # activation function and the batch normalization layer.
+    for i in range(len(dims) - 1):
+        layers.append(nn.Linear(dims[i], dims[i + 1]))
+        if i < len(dims) - 2:
+            layers.append(get_activation_from_string(activation))
+            if batch_norm:
+                layers.append(torch.nn.BatchNorm1d(dims[i + 1]))
+            if dropout > 0.0:
+                layers.append(torch.nn.Dropout(dropout))
+
+    return nn.Sequential(*layers)
+
+
 def get_number_of_model_parameters(
     model: nn.Module,
     requires_grad_flags: tuple[bool, ...] = (True, False),
