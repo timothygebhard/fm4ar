@@ -15,6 +15,7 @@ from fm4ar.nn.modules import Mean
 from fm4ar.nn.resnets import DenseResidualNet
 from fm4ar.utils.ieee754 import float2bits
 from fm4ar.utils.torchutils import (
+    check_for_nans,
     get_mlp,
     load_and_or_freeze_model_weights,
     validate_shape,
@@ -437,6 +438,11 @@ class TransformerEmbedding(nn.Module):
         std = torch.log10(
             1 + torch.std(flux, dim=1, keepdim=True).repeat(1, n_bins)
         )
+        check_for_nans(mean, "mean")
+        check_for_nans(std, "std")
+        validate_shape(mean, (batch_size, n_bins))
+        validate_shape(std, (batch_size, n_bins))
+
         encoded_flux = torch.stack((flux, mean, std), dim=2)
         validate_shape(encoded_flux, (batch_size, n_bins, 3))
         encoded_flux = self.mlp(encoded_flux)
