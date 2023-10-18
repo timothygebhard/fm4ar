@@ -388,13 +388,13 @@ class TransformerEmbedding(nn.Module):
         self.n_blocks = n_blocks
 
         # Define layers
-        self.mlp = nn.Sequential(
-            nn.Linear(in_features=1, out_features=1024),
-            nn.GELU(),
-            nn.Linear(in_features=1024, out_features=1024),
-            nn.GELU(),
-            nn.Linear(in_features=1024, out_features=latent_dim // 2),
-            nn.Tanh(),
+        self.mlp = get_mlp(
+            input_dim=3,
+            output_dim=latent_dim,
+            hidden_dims=(1024, ),
+            activation="gelu",
+            batch_norm=False,
+            dropout=0.0,
         )
         self.transformer = nn.Sequential(
             nn.TransformerEncoder(  # type: ignore
@@ -423,32 +423,29 @@ class TransformerEmbedding(nn.Module):
 
         # Split input features
         flux, wlen, *_ = torch.split(x, 1, dim=2)
+        flux = flux.squeeze(2)
         wlen = wlen.squeeze(2)
 
-        if self.latent_dim % 4 != 0:
-            raise ValueError("The latent dimension must be even!")
-
         # Compute positional encoding for the wavelengths
-        freqs = []
-        for i in range(int(self.latent_dim / 4)):
-            freqs.append(torch.sin(wlen / 10_000 ** (4 * i / self.latent_dim)))
-            freqs.append(torch.cos(wlen / 10_000 ** (4 * i / self.latent_dim)))
-        encoded_wlen = torch.stack(freqs, dim=2)
-        validate_shape(
-            encoded_wlen, (batch_size, n_bins, self.latent_dim // 2)
-        )
+        encoded_wlen = positional_encoding(wlen, self.latent_dim)
+        validate_shape(encoded_wlen, (batch_size, n_bins, self.latent_dim))
 
         # Send the flux through the MLP
-        encoded_flux = self.mlp(flux)
-        validate_shape(
-            encoded_flux, (batch_size, n_bins, self.latent_dim // 2)
+        mean = torch.log10(
+            1 + torch.mean(flux, dim=1, keepdim=True).repeat(1, n_bins)
         )
+        std = torch.log10(
+            1 + torch.std(flux, dim=1, keepdim=True).repeat(1, n_bins)
+        )
+        encoded_flux = torch.stack((flux, mean, std), dim=2)
+        validate_shape(encoded_flux, (batch_size, n_bins, 3))
+        encoded_flux = self.mlp(encoded_flux)
+        validate_shape(encoded_flux, (batch_size, n_bins, self.latent_dim))
 
         # Combine the flux and the positional encoding
-        transformer_input = torch.cat([encoded_flux, encoded_wlen], dim=2)
+        transformer_input = encoded_flux + encoded_wlen
 
         # Apply the embedding network
-        # Expected shape: (batch_size, output_dim)
         output = self.transformer(transformer_input)
         validate_shape(output, (batch_size, self.output_dim))
 
@@ -764,7 +761,7 @@ class Float2BitsTransformer(nn.Module):
         wlen = wlen.squeeze(2)
 
         # Compute positional encoding for the wavelengths
-        encoded_wlen = self.positional_encoding(wlen, self.latent_dim)
+        encoded_wlen = positional_encoding(wlen, self.latent_dim)
         validate_shape(encoded_wlen, (batch_size, n_bins, self.latent_dim))
 
         # Map flux to bit pattern and then to latent dimension
@@ -782,47 +779,47 @@ class Float2BitsTransformer(nn.Module):
 
         return torch.Tensor(output)
 
-    @staticmethod
-    def positional_encoding(
-        x: torch.Tensor,
-        latent_dim: int,
-    ) -> torch.Tensor:
-        """
-        Compute a value-based positional encoding for the input tensor.
 
-        Args:
-            x: Tensor of shape `(batch_size, n_bins)`.
-            latent_dim: The latent dimensionality for the encoding.
+def positional_encoding(
+    x: torch.Tensor,
+    latent_dim: int,
+) -> torch.Tensor:
+    """
+    Compute a value-based positional encoding for the input tensor.
 
-        Returns:
-             A tensor of shape `(batch_size, n_bins, latent_dim)`.
-        """
+    Args:
+        x: Tensor of shape `(batch_size, n_bins)`.
+        latent_dim: The latent dimensionality for the encoding.
 
-        # Ensure latent_dim is even
-        if latent_dim % 2 != 0:
-            raise ValueError("Latent dimension must be even.")
+    Returns:
+         A tensor of shape `(batch_size, n_bins, latent_dim)`.
+    """
 
-        # Expand dims for broadcasting
-        x_exp = x.unsqueeze(-1)
+    # Ensure latent_dim is even
+    if latent_dim % 2 != 0:
+        raise ValueError("Latent dimension must be even.")
 
-        # Calculate div_term and expand dims for broadcasting
-        # 1. Define the base of the exponent in the original formula
-        # 2. Calculate the exponent term, which is log(base) / latent_dim
-        # 3. Generate a sequence [0, 2, 4, ..., latent_dim - 2]
-        # 4. Compute div_term using exp function for the decreasing series
-        # 5. Expand dims for broadcasting
-        base = 1 / 10_000
-        exponent_term = log(base) / latent_dim
-        sequence = torch.arange(0, latent_dim, 2, device=x.device).float()
-        div_term = torch.exp(sequence * exponent_term)
-        div_term = div_term.unsqueeze(0).unsqueeze(0)
+    # Expand dims for broadcasting
+    x_exp = x.unsqueeze(-1)
 
-        # Calculate sine and cosine values
-        sine_terms = torch.sin(x_exp * div_term)
-        cosine_terms = torch.cos(x_exp * div_term)
+    # Calculate div_term and expand dims for broadcasting
+    # 1. Define the base of the exponent in the original formula
+    # 2. Calculate the exponent term, which is log(base) / latent_dim
+    # 3. Generate a sequence [0, 2, 4, ..., latent_dim - 2]
+    # 4. Compute div_term using exp function for the decreasing series
+    # 5. Expand dims for broadcasting
+    base = 1 / 10_000
+    exponent_term = log(base) / latent_dim
+    sequence = torch.arange(0, latent_dim, 2, device=x.device).float()
+    div_term = torch.exp(sequence * exponent_term)
+    div_term = div_term.unsqueeze(0).unsqueeze(0)
 
-        # Interleave sine and cosine terms
-        result = torch.stack((sine_terms, cosine_terms), dim=-1)
-        result = result.view(x.shape[0], x.shape[1], latent_dim)
+    # Calculate sine and cosine values
+    sine_terms = torch.sin(x_exp * div_term)
+    cosine_terms = torch.cos(x_exp * div_term)
 
-        return result
+    # Interleave sine and cosine terms
+    result = torch.stack((sine_terms, cosine_terms), dim=-1)
+    result = result.view(x.shape[0], x.shape[1], latent_dim)
+
+    return result
