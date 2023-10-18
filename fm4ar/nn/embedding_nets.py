@@ -757,6 +757,7 @@ class Float2BitsTransformer(nn.Module):
 
         # Split input features
         flux, wlen, *_ = torch.split(x, 1, dim=2)
+        flux = flux.squeeze(2)
         wlen = wlen.squeeze(2)
 
         # Compute positional encoding for the wavelengths
@@ -766,7 +767,7 @@ class Float2BitsTransformer(nn.Module):
         # Map flux to bit pattern and then to latent dimension
         encoded_flux = float2bits(flux, precision="single")
         validate_shape(encoded_flux, (batch_size, n_bins, 32))
-        encoded_flux = self.flux_mlp(flux)
+        encoded_flux = self.flux_mlp(encoded_flux)
         validate_shape(encoded_flux, (batch_size, n_bins, self.latent_dim))
 
         # Combine the flux and the positional encoding
