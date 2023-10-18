@@ -3,6 +3,7 @@ Utility functions for PyTorch.
 """
 
 from collections import OrderedDict
+from collections.abc import Sequence
 from math import prod
 from pathlib import Path
 from typing import Any, Iterable, Literal, Type
@@ -51,11 +52,11 @@ def get_activation_from_string(name: str) -> torch.nn.Module:
 
 def get_mlp(
     input_dim: int,
-    hidden_dims: list[int],
+    hidden_dims: Sequence[int],
     output_dim: int,
     activation: str,
-    dropout: float = 0.0,
     batch_norm: bool = False,
+    dropout: float = 0.0,
 ) -> nn.Sequential:
     """
     Build and return an MLP with the given parameters.
@@ -65,15 +66,16 @@ def get_mlp(
         hidden_dims: List of hidden dimensions.
         output_dim: Dimension of the output.
         activation: Name of the activation function.
-        dropout: Dropout probability.
         batch_norm: Whether to use batch normalization.
+        dropout: Dropout probability (between 0 and 1).
 
     Returns:
         A multi-layer perceptron with the given parameters.
     """
 
+    # Prepare list of layers
     layers = torch.nn.ModuleList()
-    dims = [input_dim] + hidden_dims + [output_dim]
+    dims = [input_dim] + list(hidden_dims) + [output_dim]
 
     # Note: There seems to be no clear consensus about the order of the
     # activation function and the batch normalization layer.
