@@ -374,6 +374,7 @@ class TransformerEmbedding(nn.Module):
         output_dim: int,   # dimension of output embeddings
         n_heads: int,
         n_blocks: int,
+        norm_first: bool = False,
     ) -> None:
         """
         Instantiate a TransformerEmbedding module.
@@ -387,6 +388,7 @@ class TransformerEmbedding(nn.Module):
         self.output_dim = output_dim
         self.n_heads = n_heads
         self.n_blocks = n_blocks
+        self.norm_first = norm_first
 
         # Define layers
         self.mlp = get_mlp(
@@ -405,6 +407,7 @@ class TransformerEmbedding(nn.Module):
                     dim_feedforward=1024,
                     activation="gelu",
                     batch_first=True,
+                    norm_first=norm_first,
                 ),
                 num_layers=n_blocks,
             ),
@@ -711,6 +714,8 @@ class Float2BitsTransformer(nn.Module):
         output_dim: int,   # dimension of output embeddings
         n_heads: int,
         n_blocks: int,
+        norm_first: bool = False,
+        precision: Literal["half", "single", "double"] = "single",
     ) -> None:
         """
         Instantiate a TransformerEmbedding module.
@@ -724,15 +729,20 @@ class Float2BitsTransformer(nn.Module):
         self.output_dim = output_dim
         self.n_heads = n_heads
         self.n_blocks = n_blocks
+        self.norm_first = norm_first
+        self.precision = precision
+
+        # Determine the number of bits
+        self.n_bits = {"half": 16, "single": 32, "double": 64}[precision]
 
         # Define MLP to map the flux from bit pattern to the latent dimension
         # Note: We can't (easily) use batch norm here because the tensor is 3D
         # and `Linear` and `BatchNorm1D` seem to have different conventions for
         # the "extra" dimension (in this case: the wavelength dimension)
         self.flux_mlp = get_mlp(
-            input_dim=32,
+            input_dim=self.n_bits,
             output_dim=latent_dim,
-            hidden_dims=(1024, 1024, 1024),
+            hidden_dims=(256, 256, 256),
             activation="gelu",
             batch_norm=False,
         )
@@ -746,12 +756,12 @@ class Float2BitsTransformer(nn.Module):
                     dim_feedforward=1024,
                     activation="gelu",
                     batch_first=True,
+                    norm_first=norm_first,
                 ),
                 num_layers=n_blocks,
             ),
             Mean(dim=1),
             nn.Linear(in_features=latent_dim, out_features=output_dim),
-            nn.Tanh(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -773,8 +783,8 @@ class Float2BitsTransformer(nn.Module):
         validate_shape(encoded_wlen, (batch_size, n_bins, self.latent_dim))
 
         # Map flux to bit pattern and then to latent dimension
-        encoded_flux = float2bits(flux, precision="single")
-        validate_shape(encoded_flux, (batch_size, n_bins, 32))
+        encoded_flux = float2bits(flux, precision=self.precision)
+        validate_shape(encoded_flux, (batch_size, n_bins, self.n_bits))
         encoded_flux = self.flux_mlp(encoded_flux)
         validate_shape(encoded_flux, (batch_size, n_bins, self.latent_dim))
 
