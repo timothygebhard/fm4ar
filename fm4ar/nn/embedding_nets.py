@@ -15,7 +15,6 @@ from fm4ar.nn.modules import Mean
 from fm4ar.nn.resnets import DenseResidualNet
 from fm4ar.utils.ieee754 import float2bits
 from fm4ar.utils.torchutils import (
-    check_for_nans,
     get_mlp,
     load_and_or_freeze_model_weights,
     validate_shape,
@@ -633,8 +632,12 @@ class StandardizeIndividually(nn.Module):
 
     def __init__(
         self,
-        input_dim: int,
         mode: Literal["glu", "concat"],
+        input_dim: int,
+        hidden_dims: Sequence[int] = (512, 512, 512),
+        activation: str = "gelu",
+        batch_norm: bool = False,
+        dropout: float = 0.0,
     ) -> None:
 
         super().__init__()
@@ -642,28 +645,22 @@ class StandardizeIndividually(nn.Module):
         self.input_dim = input_dim
         self.mode = mode
 
-        # Define small networks for the mean and std
-        self.mean_net = nn.Sequential(
-            nn.Linear(in_features=1, out_features=512),
-            nn.GELU(),
-            nn.Linear(in_features=512, out_features=512),
-            nn.GELU(),
-            nn.Linear(in_features=512, out_features=512),
-            nn.GELU(),
-            nn.Linear(in_features=512, out_features=512),
-            nn.GELU(),
-            nn.Linear(in_features=512, out_features=input_dim),
+        # Define small MLPs for the mean and std
+        self.mean_net = get_mlp(
+            input_dim=1,
+            output_dim=input_dim,
+            hidden_dims=hidden_dims,
+            activation=activation,
+            batch_norm=batch_norm,
+            dropout=dropout,
         )
-        self.std_net = nn.Sequential(
-            nn.Linear(in_features=1, out_features=512),
-            nn.GELU(),
-            nn.Linear(in_features=512, out_features=512),
-            nn.GELU(),
-            nn.Linear(in_features=512, out_features=512),
-            nn.GELU(),
-            nn.Linear(in_features=512, out_features=512),
-            nn.GELU(),
-            nn.Linear(in_features=512, out_features=input_dim),
+        self.std_net = get_mlp(
+            input_dim=1,
+            output_dim=input_dim,
+            hidden_dims=hidden_dims,
+            activation=activation,
+            batch_norm=batch_norm,
+            dropout=dropout,
         )
 
         # Define GLU
