@@ -393,7 +393,7 @@ class TransformerEmbedding(nn.Module):
         self.mlp = get_mlp(
             input_dim=3,
             output_dim=latent_dim,
-            hidden_dims=(512, 1024, 512,),
+            hidden_dims=(1024, 1024, 1024),
             activation="gelu",
             batch_norm=False,
             dropout=0.0,
@@ -409,10 +409,10 @@ class TransformerEmbedding(nn.Module):
                     norm_first=norm_first,
                 ),
                 num_layers=n_blocks,
+                enable_nested_tensor=False,
             ),
             Mean(dim=1),
             nn.Linear(in_features=latent_dim, out_features=output_dim),
-            # nn.Tanh(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -421,7 +421,6 @@ class TransformerEmbedding(nn.Module):
         """
 
         # Expected shape: (batch_size, n_bins, n_features)
-        # validate_shape(x, (None, None, self.input_dim))
         batch_size, n_bins, _ = x.shape
 
         # Split input features
@@ -431,7 +430,6 @@ class TransformerEmbedding(nn.Module):
 
         # Compute positional encoding for the wavelengths
         encoded_wlen = positional_encoding(wlen, self.latent_dim)
-        # validate_shape(encoded_wlen, (batch_size, n_bins, self.latent_dim))
 
         # Standardize the flux and send it through the MLP
         mean = torch.mean(flux, dim=1, keepdim=True).repeat(1, n_bins)
@@ -439,25 +437,14 @@ class TransformerEmbedding(nn.Module):
         flux = (flux - mean) / std
         mean = torch.log10(1 + mean)
         std = torch.log10(1 + std)
-        # check_for_nans(mean, "mean")
-        # check_for_nans(std, "std")
-        # validate_shape(mean, (batch_size, n_bins))
-        # validate_shape(std, (batch_size, n_bins))
-
         encoded_flux = torch.stack((flux, mean, std), dim=2)
-        # validate_shape(encoded_flux, (batch_size, n_bins, 3))
         encoded_flux = self.mlp(encoded_flux)
-        # check_for_nans(encoded_flux, "encoded_flux")
-        # validate_shape(encoded_flux, (batch_size, n_bins, self.latent_dim))
 
         # Combine the flux and the positional encoding
         transformer_input = encoded_flux + encoded_wlen
-        # check_for_nans(transformer_input, "transformer_input")
 
-        # Apply the embedding network
+        # Send through the transformer
         output = self.transformer(transformer_input)
-        # check_for_nans(output, "output")
-        # validate_shape(output, (batch_size, self.output_dim))
 
         return torch.Tensor(output)
 
@@ -756,6 +743,7 @@ class Float2BitsTransformer(nn.Module):
                     norm_first=norm_first,
                 ),
                 num_layers=n_blocks,
+                enable_nested_tensor=False,
             ),
             Mean(dim=1),
             nn.Linear(in_features=latent_dim, out_features=output_dim),
