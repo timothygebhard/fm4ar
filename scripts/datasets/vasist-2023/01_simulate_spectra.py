@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-from fm4ar.datasets.vasist_2023.prior import NAMES, Prior, THETA_0
+from fm4ar.datasets.vasist_2023.prior import NAMES, Prior, SIGMA, THETA_0
 from fm4ar.datasets.vasist_2023.simulation import Simulator
 from fm4ar.utils.paths import get_datasets_dir
 
@@ -70,6 +70,15 @@ def get_cli_arguments() -> argparse.Namespace:
         default=10,
         help="Simulation time limit per spectrum (in seconds).",
     )
+    parser.add_argument(
+        "--with-noise",
+        action="store_true",
+        help=(
+            "If set, generate a noise vector for each spectrum. This is "
+            "useful for generating the test set, where the noise vectors "
+            "should remain fixed for all evaluation runs."
+        ),
+    )
     args = parser.parse_args()
 
     return args
@@ -99,6 +108,7 @@ if __name__ == "__main__":
     wlen = np.empty(0)
     list_of_theta = []
     list_of_flux = []
+    list_of_noise = []
 
     # Run the simulation
     print("Simulating spectra:", flush=True)
@@ -116,13 +126,19 @@ if __name__ == "__main__":
         # Simulate spectrum and store results if successful
         result = simulator(theta)
         if result is not None:
+
             wlen, flux = result
             list_of_theta.append(theta)
             list_of_flux.append(flux)
 
+            if args.with_noise:
+                noise = prior.rng.normal(loc=0, scale=SIGMA, size=len(wlen))
+                list_of_noise.append(noise)
+
     # Convert lists to arrays
     theta = np.array(list_of_theta)
     flux = np.array(list_of_flux)
+    noise = np.array(list_of_noise)
 
     print(f"\nNumber of successful simulations: {len(theta)}\n", flush=True)
 
@@ -135,6 +151,8 @@ if __name__ == "__main__":
         hdf_file.create_dataset(name="theta", data=theta, dtype=np.float32)
         hdf_file.create_dataset(name="wlen", data=wlen, dtype=np.float32)
         hdf_file.create_dataset(name="flux", data=flux, dtype=np.float32)
+        if args.with_noise:
+            hdf_file.create_dataset(name="noise", data=noise, dtype=np.float32)
     print("Done!\n", flush=True)
 
     print(f"This took {time.time() - script_start:.1f} seconds.\n")
