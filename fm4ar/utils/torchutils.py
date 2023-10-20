@@ -561,7 +561,8 @@ def get_weights_from_pt_file(
     """
 
     # Load the full checkpoint
-    checkpoint = torch.load(file_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint = torch.load(file_path, map_location=device)
 
     # Get the weights that start with `prefix`
     weights = OrderedDict(
