@@ -283,8 +283,6 @@ def split_dataset_into_train_and_test(
 
 def collate_and_corrupt(
     batch_as_list: list[tuple[torch.Tensor, torch.Tensor]],
-    resampling_std: float = 0.1,
-    min_fraction: float = 0.2,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Collate the given batch and corrupt it by resampling the wavelength
@@ -294,18 +292,19 @@ def collate_and_corrupt(
 
     Args:
         batch_as_list: Batch as a list of tuples `(theta_i, x_i)`.
-        resampling_std: Standard deviation of the lognormal distribution
-            from which the resampling factor is drawn.
-        min_fraction: Minimum fraction of wavelengths to be selected.
 
     Returns:
         A 2-tuple: `(theta, x)`.
     """
 
+    # Define some constants that might require tweaking
+    RESAMPLING_STD = 0.1
+    DISCARD_FRACTION = 0.2  # discard 20% of the wavelengths
+
     # Determine target wavelength grid for resampling
     # Note: Because the first and last bin usually end up containing NaNs,
     # this is different from the `new_wlen` below which is the actual grid.
-    resampling_factor = float(10 ** np.random.normal(0, resampling_std))
+    resampling_factor = float(10 ** np.random.normal(0, RESAMPLING_STD))
     n_bins_original = int(batch_as_list[0][1].shape[0])
     min_wlen = float(batch_as_list[0][1][:, 1].min())
     max_wlen = float(batch_as_list[0][1][:, 1].max())
@@ -341,10 +340,9 @@ def collate_and_corrupt(
     x = torch.stack(resampled_x_list, dim=0)
 
     # Randomly select subset of wavelengths
-    # fraction = float(np.random.uniform(min_fraction, 1.0))
-    # idx = torch.randperm(x.shape[1])
-    # mask = idx < (fraction * x.shape[1])
-    # x = x[:, mask].reshape(x.shape[0], -1, x.shape[2])
+    idx = torch.randperm(x.shape[1])
+    mask = idx < (DISCARD_FRACTION * x.shape[1])
+    x = x[:, mask].reshape(x.shape[0], -1, x.shape[2])
 
     return theta.float(), x.float()
 
@@ -371,7 +369,7 @@ def collate_pretrain(
 
     # Define some constants that might require tweaking
     RESAMPLING_STD = 0.1
-    DISCARD_FRACTION = 0.2  # discard 20% of the wavelengths
+    DISCARD_FRACTION = 0.5  # discard 50% of the wavelengths
 
     # Determine target wavelength grid for resampling
     # Note: Because the first and last bin usually end up containing NaNs,
@@ -480,7 +478,7 @@ def build_train_and_test_loaders(
         pin_memory=True,
         num_workers=num_workers,
         worker_init_fn=lambda _: np.random.seed(random_seed),
-        collate_fn=collate_functions.get(train_collate_fn),  # type: ignore
+        collate_fn=collate_functions.get(train_collate_fn),
     )
     test_loader = DataLoader(
         dataset=test_dataset,
@@ -489,7 +487,7 @@ def build_train_and_test_loaders(
         pin_memory=True,
         num_workers=num_workers,
         worker_init_fn=lambda _: np.random.seed(random_seed),
-        collate_fn=collate_functions.get(test_collate_fn),  # type: ignore
+        collate_fn=collate_functions.get(test_collate_fn),
     )
 
     return train_loader, test_loader
