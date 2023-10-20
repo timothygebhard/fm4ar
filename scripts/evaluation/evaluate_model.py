@@ -52,6 +52,12 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Path to the experiment directory with config and checkpoint.",
     )
     parser.add_argument(
+        "--file-name",
+        type=str,
+        default="selected.hdf",
+        help="Name of the HDF file to load (combines with --which).",
+    )
+    parser.add_argument(
         "--get-logprob",
         action="store_true",
         help="Whether to compute the log probability of the samples.",
@@ -86,7 +92,6 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--which",
         type=str,
-        choices=["train", "test"],
         default="test",
         help="Which dataset to use for evaluation purposes.",
     )
@@ -240,8 +245,8 @@ def run_evaluation(
         args.n_dataset_samples = 1000
 
     # Update the experiment configuration
-    # TODO: Should we add noise to the input spectra here or not?
     config["data"]["which"] = args.which
+    config["data"]["file_name"] = args.file_name
     config["data"]["add_noise_to_x"] = False
     if args.n_dataset_samples is not None:
         config["data"]["n_samples"] = int(args.n_dataset_samples)
