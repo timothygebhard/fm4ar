@@ -335,12 +335,6 @@ class Base:
             criterion, False otherwise.
         """
 
-        # Define some shortcuts
-        early_stopping = stage_config.get("early_stopping")
-        gradient_clipping_config = stage_config.get("gradient_clipping")
-        use_amp = stage_config.get("use_amp", False)
-        logprob_epochs = stage_config.get("logprob_epochs")
-
         # Run for as long as the runtime limits allow
         while not runtime_limits.limits_exceeded(self.epoch):
 
@@ -356,8 +350,7 @@ class Base:
                 train_loss = train_epoch(
                     pm=self,
                     dataloader=train_loader,
-                    gradient_clipping_config=gradient_clipping_config,
-                    use_amp=use_amp,
+                    stage_config=stage_config,
                 )
                 train_time = time.time() - train_start
                 print(f"Done! This took {train_time:,.2f} seconds.\n")
@@ -368,8 +361,7 @@ class Base:
                 test_loss, test_logprob = test_epoch(
                     pm=self,
                     dataloader=test_loader,
-                    epoch=self.epoch,
-                    logprob_epochs=logprob_epochs,
+                    stage_config=stage_config,
                 )
                 test_time = time.time() - test_start
                 print(f"Done! This took {test_time:,.2f} seconds.\n")
@@ -400,7 +392,7 @@ class Base:
             print("Done!")
 
             # Check if we should stop early
-            if self.stop_early(patience=early_stopping):
+            if self.stop_early(patience=stage_config.get("early_stopping")):
                 print("Early stopping criterion reached, ending training!")
                 return True
 
@@ -446,8 +438,7 @@ class Base:
 def train_epoch(
     pm: Base,
     dataloader: DataLoader,
-    gradient_clipping_config: dict[str, Any] | None = None,
-    use_amp: bool = True,
+    stage_config: dict[str, Any],
 ) -> float:
     """
     Train the posterior model for one epoch.
@@ -455,17 +446,15 @@ def train_epoch(
     Args:
         pm: Posterior model to train.
         dataloader: Dataloader for training data.
-
-        gradient_clipping_config: Configuration for gradient clipping.
-            If `None` or `{}`, no gradient clipping is performed.
-            Otherwise, it is expected to be a dictionary that can be
-            passed to `torch.nn.utils.clip_grad_norm_`. It must at
-            least contain the key "max_norm".
-        use_amp: Whether to use automatic mixed precision.
+        stage_config: Configuration for the current training stage.
 
     Returns:
         Average loss over the epoch.
     """
+
+    # Define shortcuts
+    use_amp = stage_config.get("use_amp", False)
+    gradient_clipping_config = stage_config.get("gradient_clipping", {})
 
     # Check if we can use automatic mixed precision
     if use_amp and pm.device == torch.device("cpu"):
@@ -505,10 +494,7 @@ def train_epoch(
 
             loss.backward()  # type: ignore
 
-            if (
-                gradient_clipping_config is not None
-                and gradient_clipping_config
-            ):
+            if gradient_clipping_config:
                 torch.nn.utils.clip_grad_norm_(
                     parameters=pm.model.parameters(),
                     **gradient_clipping_config,
@@ -526,10 +512,7 @@ def train_epoch(
 
             scaler.scale(loss).backward()  # type: ignore
 
-            if (
-                gradient_clipping_config is not None
-                and gradient_clipping_config
-            ):
+            if gradient_clipping_config:
                 scaler.unscale_(pm.optimizer)  # type: ignore
                 torch.nn.utils.clip_grad_norm_(
                     parameters=pm.model.parameters(),
@@ -557,8 +540,7 @@ def train_epoch(
 def test_epoch(
     pm: Union[Base, "FlowMatching", "NormalizingFlow"],
     dataloader: DataLoader,
-    epoch: int,
-    logprob_epochs: int | None = None,
+    stage_config: dict[str, Any],
 ) -> tuple[float, float | None]:
     """
     Test the posterior model on the test set for one epoch.
@@ -566,13 +548,7 @@ def test_epoch(
     Args:
         pm: Posterior model to test.
         dataloader: Dataloader for test data.
-        epoch: Current epoch (note: count starts at 1).
-        logprob_epochs: Evaluate the log probability of the true
-            parameter values every `logprob_epochs` epochs.
-            If `None`, a default value is chosen based on `pm`: For
-            `NormalizingFlow` models, the log probability is evaluated
-            every epochs, while for `FlowMatching` models, it is only
-            evaluated every 10 epochs.
+        stage_config: Configuration for the current training stage.
 
     Returns:
         A 2-tuple, consisting of:
@@ -593,6 +569,7 @@ def test_epoch(
         model_type = "NormalizingFlow"
 
     # Set default value for `logprob_epochs`
+    logprob_epochs = stage_config.get("logprob_epochs")
     if logprob_epochs is None:
         logprob_epochs = 10 if model_type == "FlowMatching" else 1
 
@@ -644,7 +621,7 @@ def test_epoch(
             # Compute log probability of true parameter values of first batch
             if (
                 logprob_epochs > 0
-                and (epoch - 1) % logprob_epochs == 0
+                and (pm.epoch - 1) % logprob_epochs == 0
                 and batch_idx == 0
             ):
                 logprob = pm.log_prob_batch(
