@@ -6,7 +6,6 @@ from typing import Any
 
 import numpy as np
 import torch
-from torch import nn
 from torchdiffeq import odeint
 
 from fm4ar.models.continuous.model import create_cf_model
@@ -164,6 +163,7 @@ class FlowMatching(Base):
         self,
         theta: torch.Tensor,
         context: torch.Tensor | None,
+        time_prior_exponent: float | None = None,
     ) -> torch.Tensor:
         """
         Calculates loss as the the mean squared error between the
@@ -173,22 +173,37 @@ class FlowMatching(Base):
         Args:
             theta: Parameters.
             context: Context (i.e., observed data).
+            time_prior_exponent: Exponent of the power law distribution
+                from which the time `t` is sampled. If `None`, the
+                default exponent from the config is used. This can be
+                used, e.g., to increase the exponent during training.
 
         Returns:
             Loss tensor.
         """
 
-        mse = nn.MSELoss()
+        # Sample a time t and some starting parameters theta_0
+        t = self.sample_t(
+            num_samples=len(theta),
+            time_prior_exponent=time_prior_exponent
+        )
+        theta_0 = self.sample_theta_0(num_samples=len(theta))
 
-        t = self.sample_t(len(theta))
-        theta_0 = self.sample_theta_0(len(theta))
-        theta_1 = theta
-        theta_t = ot_conditional_flow(theta_0, theta_1, t, self.sigma_min)
+        # Use optimal transport path to interpolate theta_t between theta_0
+        # (starting values) and theta_1 (target parameters)
+        theta_t = ot_conditional_flow(
+            theta_0=theta_0,
+            theta_1=theta,
+            t=t,
+            sigma_min=self.sigma_min,
+        )
 
+        # Compute the true vectorfield and the predicted vectorfield
         true_vf = theta - (1 - self.sigma_min) * theta_0
         pred_vf = self.model(t=t, theta=theta_t, context=context)
 
-        loss = mse(pred_vf, true_vf)
+        # Calculate loss as MSE between the true and predicted vectorfield
+        loss = torch.nn.functional.mse_loss(pred_vf, true_vf)
 
         return torch.Tensor(loss)
 
@@ -325,14 +340,26 @@ class FlowMatching(Base):
 
         return torch.Tensor(theta_1)
 
-    def sample_t(self, batch_size: int) -> torch.Tensor:
+    def sample_t(
+        self,
+        num_samples: int,
+        time_prior_exponent: float | None = None,
+    ) -> torch.Tensor:
         """
-        Sample time `t` from a power law distribution.
-        For `time_prior_exponent=0`, this is a uniform distribution.
+        Sample time `t` (in [0, 1]) from a power law distribution.
         """
 
-        t = torch.rand(batch_size, device=self.device)
-        return torch.pow(t, 1 / (1 + self.time_prior_exponent))
+        # If time_prior_exponent is not provided, use the default value
+        if time_prior_exponent is None:
+            time_prior_exponent = self.time_prior_exponent
+
+        # Sample t from a power law distribution
+        # exponent = 0 corresponds to a uniform distribution (equal weights)
+        # exponent = 1 corresponds to a linear distribution (more weight on 1)
+        t = torch.rand(num_samples, device=self.device)
+        t = torch.pow(t, 1 / (1 + time_prior_exponent))
+
+        return t
 
     def sample_theta_0(self, num_samples: int) -> torch.Tensor:
         """
