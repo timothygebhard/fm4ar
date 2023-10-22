@@ -429,8 +429,8 @@ class Base:
         if patience is None:
             return False
 
-        min_idx = int(self.history["test_loss"].idxmin())
-        last_idx = int(self.history.index[-1])
+        min_idx = int(self.history["test_loss"].values.argmin())
+        last_idx = len(self.history)
 
         return bool(last_idx - min_idx > patience)
 
@@ -455,6 +455,7 @@ def train_epoch(
     # Define shortcuts
     use_amp = stage_config.get("use_amp", False)
     gradient_clipping_config = stage_config.get("gradient_clipping", {})
+    loss_kwargs = stage_config.get("loss_kwargs", {})
 
     # Check if we can use automatic mixed precision
     if use_amp and pm.device == torch.device("cpu"):
@@ -507,7 +508,11 @@ def train_epoch(
 
             # Note: Backward passes under autocast are not recommended
             with autocast():
-                loss = pm.loss(theta=theta, context=context)
+                loss = pm.loss(
+                    theta=theta,
+                    context=context,
+                    **loss_kwargs,
+                )
                 check_for_nans(loss, "train loss")
 
             scaler.scale(loss).backward()  # type: ignore
