@@ -163,7 +163,7 @@ class FlowMatching(Base):
         self,
         theta: torch.Tensor,
         context: torch.Tensor | None,
-        time_prior_exponent: float | None = None,
+        **kwargs: Any,
     ) -> torch.Tensor:
         """
         Calculates loss as the the mean squared error between the
@@ -173,14 +173,14 @@ class FlowMatching(Base):
         Args:
             theta: Parameters.
             context: Context (i.e., observed data).
-            time_prior_exponent: Exponent of the power law distribution
-                from which the time `t` is sampled. If `None`, the
-                default exponent from the config is used. This can be
-                used, e.g., to increase the exponent during training.
 
         Returns:
             Loss tensor.
         """
+
+        # Get the time prior exponent from the kwargs, if provided. This can
+        # be used, e.g., to increase the time prior exponent during training.
+        time_prior_exponent = kwargs.get("time_prior_exponent", None)
 
         # Sample a time t and some starting parameters theta_0
         t = self.sample_t(

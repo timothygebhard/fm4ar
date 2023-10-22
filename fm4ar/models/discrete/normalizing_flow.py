@@ -98,6 +98,7 @@ class NormalizingFlow(Base):
         self,
         theta: torch.Tensor,
         context: torch.Tensor | None,
+        **kwargs: Any,
     ) -> torch.Tensor:
         """
         Compute the loss for the given `theta` and `context` (i.e.,

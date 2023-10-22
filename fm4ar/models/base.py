@@ -145,6 +145,7 @@ class Base:
         self,
         theta: torch.Tensor,
         context: torch.Tensor,
+        **kwargs: Any,
     ) -> torch.Tensor:
         """
         Compute the loss for a batch.
@@ -508,11 +509,7 @@ def train_epoch(
 
             # Note: Backward passes under autocast are not recommended
             with autocast():
-                loss = pm.loss(
-                    theta=theta,
-                    context=context,
-                    **loss_kwargs,
-                )
+                loss = pm.loss(theta=theta, context=context, **loss_kwargs)
                 check_for_nans(loss, "train loss")
 
             scaler.scale(loss).backward()  # type: ignore
@@ -578,6 +575,9 @@ def test_epoch(
     if logprob_epochs is None:
         logprob_epochs = 10 if model_type == "FlowMatching" else 1
 
+    # Get additional keyword arguments for loss function
+    loss_kwargs = stage_config.get("loss_kwargs", {})
+
     # We don't need to compute gradients for the test set
     with torch.no_grad():
 
@@ -614,7 +614,7 @@ def test_epoch(
                 context = context.to(pm.device, non_blocking=True)
 
             # Compute test loss
-            loss = pm.loss(theta=theta, context=context)
+            loss = pm.loss(theta=theta, context=context, **loss_kwargs)
             check_for_nans(loss, "test loss")
 
             # Define maximum number of samples to use for log probability.
