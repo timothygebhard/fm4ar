@@ -44,8 +44,14 @@ def get_activation_from_string(name: str) -> torch.nn.Module:
             return torch.nn.LeakyReLU()
         case "relu":
             return torch.nn.ReLU()
+        case "sigmoid":
+            return torch.nn.Sigmoid()
         case "sine":
             return Sine()
+        case "swish":
+            return torch.nn.SiLU()
+        case "tanh":
+            return torch.nn.Tanh()
         case _:
             raise ValueError("Invalid activation function!")
 
