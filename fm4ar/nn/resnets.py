@@ -36,6 +36,7 @@ class DenseResidualNet(nn.Module):
         output_dim: int,
         hidden_dims: tuple[int, ...],
         activation: str = "elu",
+        final_activation: str | None = None,
         dropout: float = 0.0,
         batch_norm: bool = True,
         context_features: int | None = None,
@@ -48,6 +49,8 @@ class DenseResidualNet(nn.Module):
             output_dim: Dimensionality of the network output.
             hidden_dims: Dimensionalities of the hidden layers.
             activation: Activation function used in the residual blocks.
+            final_activation: Activation function used after the final
+                layer. If None, no activation is used (default).
             dropout: Dropout probability for residual blocks used for
                 regularization.
             batch_norm: Whether to use batch normalization.
@@ -109,6 +112,16 @@ class DenseResidualNet(nn.Module):
             + [nn.Linear(self.hidden_dims[-1], self.output_dim)]
         )
 
+        # Define final activation function
+        # The default usecase for this is to use a sigmoid activation function
+        # in case the target parameters have been scaled to the range [0, 1]
+        if final_activation is not None:
+            self.final_activation = get_activation_from_string(
+                final_activation
+            )
+        else:
+            self.final_activation = nn.Identity()
+
     def forward(
         self,
         x: torch.Tensor,
@@ -127,5 +140,7 @@ class DenseResidualNet(nn.Module):
         ):
             x = residual_block(x, context=context)
             x = resize_layer(x)
+
+        x = self.final_activation(x)
 
         return x
