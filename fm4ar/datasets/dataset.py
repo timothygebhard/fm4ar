@@ -2,12 +2,16 @@
 Wrapper classes for datasets.
 """
 
-from typing import Any
+from typing import Any, Optional, TYPE_CHECKING
 
 import torch
 from torch.utils.data import Dataset
 
 from fm4ar.datasets.standardization import Standardizer
+
+# Prevent circular imports
+if TYPE_CHECKING:
+    from fm4ar.datasets.scaling import Scaler
 
 
 class ArDataset(Dataset):
@@ -24,6 +28,7 @@ class ArDataset(Dataset):
         noise_floor: float = 0.0,
         names: list[str] | None = None,
         ranges: list[tuple[float, float]] | None = None,
+        theta_scaler: Optional["Scaler"] = None,
         standardizer: Standardizer | None = None,
         standardize_theta: bool = True,
         standardize_flux: bool = False,
@@ -48,6 +53,7 @@ class ArDataset(Dataset):
                 for the Ardevol Martinez et al. (2022) train dataset.]
             names: Names of the parameters (in order).
             ranges: Ranges of the parameters (in order).
+            theta_scaler: Scaler to use for the parameters.
             standardizer: Standardizer to use for standardizing theta
                 and the flux. [Uses pre-computed mean and std.] If None
                 is passed, a default standardizer with mean=0 and std=1
@@ -67,13 +73,17 @@ class ArDataset(Dataset):
         self.noise_floor = noise_floor
         self.names = names
         self.ranges = ranges
+        self.add_noise_to_flux = add_noise_to_flux
+
+        # TODO: This allows backward compatibility with old config files.
+        #   This should be removed at some point.
+        self.theta_scaler = theta_scaler
         self.standardizer = (
             Standardizer() if standardizer is None
             else standardizer
         )
         self.standardize_theta = standardize_theta
         self.standardize_flux = standardize_flux
-        self.add_noise_to_flux = add_noise_to_flux
 
     @property
     def noise_levels_as_tensor(self) -> torch.Tensor:
@@ -84,7 +94,7 @@ class ArDataset(Dataset):
         if isinstance(self.noise_levels, float):
             return torch.ones_like(self.wlen) * self.noise_levels
         else:
-            return self.noise_levels
+            return torch.Tensor(self.noise_levels)
 
     def add_noise(self, flux: torch.Tensor) -> torch.Tensor:
         """
@@ -133,11 +143,15 @@ class ArDataset(Dataset):
         if self.add_noise_to_flux:
             flux = self.add_noise(flux)
 
+        # TODO: Update this once we no longer need backward compatibility
         # If requested, standardize the flux and the pararameters
-        if self.standardize_flux:
-            flux = self.standardizer.standardize_flux(flux)
-        if self.standardize_theta:
-            theta = self.standardizer.standardize_theta(theta)
+        if self.theta_scaler is None:
+            if self.standardize_flux:
+                flux = self.standardizer.standardize_flux(flux)
+            if self.standardize_theta:
+                theta = self.standardizer.standardize_theta(theta)
+        else:
+            theta = self.theta_scaler.forward(theta)
 
         # Combine flux with wavelengths and noise levels along dim=1.
         # For now, we call this dimension "features".

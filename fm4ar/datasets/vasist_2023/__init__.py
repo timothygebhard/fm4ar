@@ -7,6 +7,7 @@ import numpy as np
 import torch
 
 from fm4ar.datasets.dataset import ArDataset
+from fm4ar.datasets.scaling import get_theta_scaler
 from fm4ar.datasets.standardization import get_standardizer
 from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, LABELS, SIGMA
 from fm4ar.utils.paths import get_datasets_dir
@@ -31,7 +32,12 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
         wlen = np.array(hdf_file["wlen"], dtype=np.float32)
 
     # Load standardization parameters
+    # TODO: Update once we do not need to maintain backward compatibility
     standardizer = get_standardizer(config)
+    if "theta_scaler" in config["data"]:
+        theta_scaler = get_theta_scaler(config)
+    else:
+        theta_scaler = None
 
     # If requested, select only a subset of the parameters
     if config["data"].get("parameters") is not None:
@@ -52,6 +58,7 @@ def load_vasist_2023_dataset(config: dict) -> ArDataset:
         noise_floor=0.0,
         names=names,
         ranges=ranges,
+        theta_scaler=theta_scaler,
         standardizer=standardizer,
         standardize_theta=config["data"].get("standardize_theta", True),
         standardize_flux=config["data"].get("standardize_flux", False),
