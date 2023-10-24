@@ -289,7 +289,7 @@ if __name__ == "__main__":
         # Create a submission file for the importance sampling job
         condor_settings = CondorSettings(
             num_cpus=96,
-            memory_cpus=65_000,
+            memory_cpus=100_000,
             num_gpus=num_gpus,
             memory_gpus=15_000,
             arguments=arguments,
