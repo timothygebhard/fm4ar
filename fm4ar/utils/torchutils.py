@@ -305,7 +305,7 @@ def collate_and_corrupt(
 
     # Define some constants that might require tweaking
     RESAMPLING_STD = 0.1
-    DISCARD_FRACTION = 0.2  # discard 20% of the wavelengths
+    DISCARD_FRACTION = 0.50  # discard 50% of the wavelengths
 
     # Determine target wavelength grid for resampling
     # Note: Because the first and last bin usually end up containing NaNs,
@@ -347,7 +347,7 @@ def collate_and_corrupt(
 
     # Randomly select subset of wavelengths
     idx = torch.randperm(x.shape[1])
-    mask = idx < (DISCARD_FRACTION * x.shape[1])
+    mask = idx > (DISCARD_FRACTION * x.shape[1])
     x = x[:, mask].reshape(x.shape[0], -1, x.shape[2])
 
     return theta.float(), x.float()
