@@ -19,6 +19,11 @@ from torcheval.metrics.functional import r2_score
 
 from tqdm import tqdm
 
+from fm4ar.utils.htcondor import (
+    CondorSettings,
+    create_submission_file,
+    condor_submit_bid,
+)
 from fm4ar.utils.config import load_config
 from fm4ar.nn.resnets import DenseResidualNet
 from fm4ar.nn.embedding_nets import create_embedding_net
@@ -26,8 +31,14 @@ from fm4ar.datasets import load_dataset
 from fm4ar.utils.torchutils import (
     build_train_and_test_loaders,
     get_lr,
+    get_number_of_model_parameters,
+    # load_and_or_freeze_model_weights,
     perform_scheduler_step,
 )
+
+
+def soft_clip(flux: torch.Tensor, bound: float = 100.0) -> torch.Tensor:
+    return torch.Tensor(flux / (1 + torch.abs(flux / bound)))
 
 
 class ModelSaver:
@@ -66,6 +77,7 @@ class ModelSaver:
 def get_optimizer_and_scheduler(
     encoder: torch.nn.Module,
     decoder: torch.nn.Module,
+    n_batches: int,
 ) -> tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.OneCycleLR]:
     """
     Define an optimizer and a learning rate scheduler.
@@ -75,7 +87,7 @@ def get_optimizer_and_scheduler(
     params = chain(encoder.parameters(), decoder.parameters())
 
     # Define the optimizer and the scheduler
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         params=params,
         lr=5.0e-5,
     )
@@ -83,8 +95,8 @@ def get_optimizer_and_scheduler(
         optimizer=optimizer,
         max_lr=5.0e-5,
         epochs=args.epochs,
-        steps_per_epoch=len(train_loader),
-        pct_start=0.1,
+        steps_per_epoch=n_batches,
+        pct_start=0.2,
     )
 
     return optimizer, scheduler
@@ -98,7 +110,7 @@ def train_batch(
     decoder: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.OneCycleLR,
-    scaler: torch.cuda.amp.GradScaler,
+    scaler: GradScaler,
     tq: tqdm,
 ) -> float:
     """
@@ -112,7 +124,7 @@ def train_batch(
 
     with autocast(enabled=(device.type == "cuda")):
         z = encoder(x_corrupt)
-        true_flux = x_vanilla[:, :, 0]
+        true_flux = soft_clip(x_vanilla[:, :, 0])
         pred_flux = decoder(z, context=z)
         loss = torch.nn.functional.mse_loss(pred_flux, true_flux)
 
@@ -148,6 +160,7 @@ def train_epoch(
     decoder: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.OneCycleLR,
+    scaler: torch.cuda.amp.GradScaler,
     train_loader: DataLoader,
 ) -> tuple[float, float]:
     """
@@ -179,7 +192,7 @@ def train_epoch(
     train_time = time.time() - train_start
     avg_train_loss = float(np.mean(train_losses))
 
-    print(f"Mean train loss: {avg_train_loss:.9f}")
+    print(f"Mean train loss: {avg_train_loss:.3e}")
     print(f"Training time:   {train_time:.2f} seconds\n")
 
     return avg_train_loss, train_time
@@ -201,7 +214,7 @@ def test_batch(
     x_corrupt = torch.Tensor(x_corrupt.to(device, non_blocking=True))
 
     z = encoder(x_corrupt)
-    true_flux = x_vanilla[:, :, 0]
+    true_flux = soft_clip(x_vanilla[:, :, 0])
     pred_flux = decoder(z, context=z)
 
     loss = torch.nn.functional.mse_loss(pred_flux, true_flux).item()
@@ -240,6 +253,7 @@ def test_epoch(
     with (
         torch.no_grad(),
         tqdm(test_loader, unit=" batches", ncols=80) as tq,
+        autocast(enabled=(device.type == "cuda")),
     ):
         for x_vanilla, x_corrupt in tq:
             loss, r2 = test_batch(
@@ -257,80 +271,64 @@ def test_epoch(
     avg_test_loss = float(np.mean(test_losses))
     avg_test_r2_score = float(np.mean(r2_scores))
 
-    print(f"Mean test loss:  {avg_test_loss:.9f}")
+    print(f"Mean test loss:  {avg_test_loss:.3e}")
     print(f"Mean R2 score:   {avg_test_r2_score:.3f}")
     print(f"Test time:       {test_time:.2f} seconds\n")
 
     return avg_test_loss, avg_test_r2_score, test_time
 
 
-def log_metrics(
-    epoch: int,
-    train_loss: float,
-    test_loss: float,
-    learning_rate: float,
-    train_time: float,
-    test_time: float,
-    test_r2_score: float,
-    # pretrain_dir: Path,
-    use_wandb: bool = True,
-) -> None:
+def create_submission_file_and_launch_job(args: argparse.Namespace) -> None:
     """
-    Log metrics to wandb.
+    Create a submission file and launch the job.
     """
 
-    # Log to local file
-    # write_history(
-    #     experiment_dir=pretrain_dir,
-    #     epoch=epoch,
-    #     train_loss=train_loss,
-    #     test_loss=test_loss,
-    #     learning_rates=[learning_rate],
-    #     extra_info={
-    #         "train_time": train_time,
-    #         "test_time": test_time,
-    #         "test_r2_score": test_r2_score,
-    #     },
-    #     overwrite=True,
-    # )
+    # Ensure the `pretrain` subdirectory exists
+    pretrain_dir = args.experiment_dir / "pretrain"
+    pretrain_dir.mkdir(exist_ok=True)
 
-    # Log to wandb
-    if use_wandb:
-        wandb.log(
-            {
-                "epoch": epoch,
-                "learning_rate": learning_rate,
-                "train_loss": train_loss,
-                "test_loss": test_loss,
-                "train_time": train_time,
-                "test_time": test_time,
-                "test_r2_score": test_r2_score,
-            }
-        )
+    # Collect arguments
+    arguments = [
+        Path(__file__).resolve().as_posix(),
+        f"--experiment-dir {args.experiment_dir}",
+        f"--batch-size {args.batch_size}",
+        f"--epochs {args.epochs}",
+        "--disable-wandb" if args.disable_wandb else "",
+    ]
+
+    # Create a submission file
+    condor_settings = CondorSettings(
+        num_cpus=10,
+        num_gpus=1,
+        memory_cpus=65_000,
+        memory_gpus=85_000,
+        arguments=arguments,
+        log_file_name="pretrain",
+        bid=35,
+    )
+    file_path = create_submission_file(
+        condor_settings=condor_settings,
+        experiment_dir=pretrain_dir,
+    )
+
+    # Launch the job
+    condor_submit_bid(file_path=file_path, bid=condor_settings.bid)
 
 
-if __name__ == "__main__":
-
-    script_start = time.time()
-    print("\nPRE-TRAIN TRANSFORMER-BASED CONTEXT EMBEDDING NET\n")
+def run_pretraining(args: argparse.Namespace) -> None:
+    """
+    Run the pre-training.
+    """
 
     # Set random seed and float precision
     torch.manual_seed(0)
     torch.set_float32_matmul_precision("high")  # type: ignore
 
-    # Define argument parser
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--batch-size", type=int, default=128)
-    parser.add_argument("--disable-wandb", action="store_true")
-    parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--experiment-dir", type=Path)
-    args = parser.parse_args()
-
     # Check if CUDA is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Define some shortcuts
-    num_workers = 4 if device.type == "cuda" else 0
+    num_workers = 8 if device.type == "cuda" else 0
     use_wandb = not args.disable_wandb
 
     # Load the experiment config
@@ -353,10 +351,6 @@ if __name__ == "__main__":
         train_collate_fn="collate_pretrain",
         test_collate_fn="collate_pretrain",
     )
-    parameter_names = (
-        dataset.names if dataset.names is not None
-        else [f"Parameter {i}" for i in range(dataset.theta_dim)]
-    )
 
     # Construct the embedding network
     encoder_kwargs = config["model"]["context_embedding_kwargs"]
@@ -370,8 +364,35 @@ if __name__ == "__main__":
     decoder_kwargs = config["model"]["decoder_kwargs"]
     decoder = DenseResidualNet(**decoder_kwargs).to(device)
 
+    # Load weights of decoder and freeze them
+    # TODO: This needs to be generalized
+    # load_and_or_freeze_model_weights(
+    #     model=decoder,
+    #     freeze_weights=False,
+    #     load_weights={
+    #         "file_path": (
+    #             "/home/tgebhard/projects/fm4ar/experiments/fm/"
+    #             "vasist-2023/pretrain-autoencoder-1/pretrain/"
+    #             "decoder__best.pt"
+    #         ),
+    #         "prefix": "",
+    #     }
+    # )
+
+    # Print the number of trainable parameters
+    print("Number of parameters (trainable / total):")
+    for name, model in [("Encoder", encoder), ("Decoder", decoder)]:
+        total = get_number_of_model_parameters(model)
+        trainable = get_number_of_model_parameters(model, (True,))
+        print(f"{name}: {trainable:,} / {total:,}")
+    print("\n")
+
     # Define an optimizer and a learning rate scheduler
-    optimizer, scheduler = get_optimizer_and_scheduler(encoder, decoder)
+    optimizer, scheduler = get_optimizer_and_scheduler(
+        encoder=encoder,
+        decoder=decoder,
+        n_batches=len(train_loader),
+    )
 
     # Initialize wandb
     if use_wandb:
@@ -405,6 +426,7 @@ if __name__ == "__main__":
             decoder=decoder,
             optimizer=optimizer,
             scheduler=scheduler,
+            scaler=scaler,
             train_loader=train_loader,
         )
 
@@ -421,17 +443,18 @@ if __name__ == "__main__":
         model_saver(test_loss=test_loss, encoder=encoder, decoder=decoder)
 
         # Log metrics to wandb
-        log_metrics(
-            epoch=epoch,
-            train_loss=train_loss,
-            test_loss=test_loss,
-            learning_rate=get_lr(optimizer)[0],
-            train_time=train_time,
-            test_time=test_time,
-            test_r2_score=test_r2_score,
-            # pretrain_dir=pretrain_dir,
-            use_wandb=use_wandb,
-        )
+        if use_wandb:
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "learning_rate": get_lr(optimizer)[0],
+                    "train_loss": train_loss,
+                    "test_loss": test_loss,
+                    "train_time": train_time,
+                    "test_time": test_time,
+                    "test_r2_score": test_r2_score,
+                }
+            )
 
         # Take a learning rate step
         perform_scheduler_step(
@@ -440,7 +463,25 @@ if __name__ == "__main__":
             end_of="epoch",
         )
 
-    if use_wandb:
-        wandb.finish()
+
+if __name__ == "__main__":
+
+    script_start = time.time()
+    print("\nPRE-TRAIN CONTEXT EMBEDDING NET\n")
+
+    # Define argument parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch-size", type=int, default=1024)
+    parser.add_argument("--disable-wandb", action="store_true")
+    parser.add_argument("--epochs", type=int, default=16)
+    parser.add_argument("--experiment-dir", type=Path)
+    parser.add_argument("--start-submission", action="store_true")
+    args = parser.parse_args()
+
+    # Either create a submission file or run the pre-training
+    if args.start_submission:
+        create_submission_file_and_launch_job(args)
+    else:
+        run_pretraining(args)
 
     print(f"This took {time.time() - script_start:.2f} seconds!\n")
