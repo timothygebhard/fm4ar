@@ -2,14 +2,17 @@
 Wrapper class and helper functions for discrete flow models.
 """
 
-from functools import lru_cache
+from typing import overload
 
 import torch
 import torch.nn as nn
-from glasflow.nflows import distributions, flows
 
 from fm4ar.nn.embedding_nets import create_embedding_net
-from fm4ar.nn.nsf import create_transform
+from fm4ar.nn.flows import (
+    FlowWrapper,
+    create_glasflow_flow,
+    create_normflows_flow,
+)
 from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
 
 
@@ -17,43 +20,48 @@ class DiscreteFlowModel(nn.Module):
     """
     This class is a wrapper that combines an embedding net for the
     context with the actual discrete flow that models the posterior.
-
-    Besides consistency with the continuous flow model, this wrapper
-    exists for two reasons:
-    (1) some embedding networks take tuples as input, which is not
-        supported by the nflows package. This is why we handle the
-        context embedding separately here.
-    (2) parallelization across multiple GPUs requires a `forward()`
-        method, but the relevant method for training is `log_prob()`.
     """
 
     def __init__(
         self,
-        flow: flows.base.Flow,
+        flow_wrapper: FlowWrapper,
         context_embedding_net: nn.Module,
     ) -> None:
         """
         Initialize a DiscreteFlowModel instance.
 
         Args:
-            flow: The (discrete) flow object that models the posterior.
-                Technically, this already supports an embedding net for
-                the context, but we handle this separately here and
-                assume that flow.embedding_net is the identity.
+            flow_wrapper: Wrapped version of the actual (discrete) flow
+                that models the posterior.
             context_embedding_net: The context embedding network.
         """
 
         super().__init__()
 
         self.context_embedding_net = context_embedding_net
-        self.flow = flow
+        self.flow_wrapper = flow_wrapper
 
-    @lru_cache(maxsize=1)
+    @overload
+    def get_context_embedding(self, context: None) -> None:
+        ...
+
+    @overload
     def get_context_embedding(self, context: torch.Tensor) -> torch.Tensor:
+        ...
+
+    # TODO: Should we bring back caching here?
+    def get_context_embedding(
+        self,
+        context: torch.Tensor | None,
+    ) -> torch.Tensor | None:
         """
         Get the embedding of the context.
         """
-        return torch.Tensor(self.context_embedding_net(context))
+
+        if context is None:
+            return None
+        else:
+            return torch.Tensor(self.context_embedding_net(context))
 
     def forward(
         self,
@@ -66,16 +74,7 @@ class DiscreteFlowModel(nn.Module):
         train the model using the NPE loss function.
         """
 
-        # Unconditional case
-        if context is None:
-            return torch.Tensor(self.flow.log_prob(theta))
-
-        # Conditional case
-        # Note that we do not use `get_context_embedding()` here, because we
-        # only want to use the cache during inference but not during training
-        else:
-            context_embedding = self.context_embedding_net(context)
-            return torch.Tensor(self.flow.log_prob(theta, context_embedding))
+        return self.flow_wrapper.log_prob(theta=theta, context=context)
 
 
 def create_df_model(model_kwargs: dict) -> DiscreteFlowModel:
@@ -108,32 +107,39 @@ def create_df_model(model_kwargs: dict) -> DiscreteFlowModel:
         embedding_net_kwargs=context_embedding_kwargs,
     )
 
-    # Construct the actual discrete normalizing flow
-    # We set the embedding net to the identity, because we handle the context
-    # embedding separately in the `DiscreteFlowModel` wrapper.
+    # Define some shortcuts
     posterior_kwargs = model_kwargs["posterior_kwargs"]
+    flow_library = posterior_kwargs.pop("flow_library", "glasflow")
     freeze_weights = posterior_kwargs.pop("freeze_weights", False)
     load_weights = posterior_kwargs.pop("load_weights", {})
-    transform = create_transform(
-        theta_dim=theta_dim,
-        context_dim=embedded_context_dim,
-        **posterior_kwargs,
-    )
-    distribution = distributions.StandardNormal((theta_dim,))
-    flow = flows.Flow(
-        transform=transform,
-        distribution=distribution,
-        embedding_net=nn.Identity(),
-    )
+
+    # Construct the actual discrete normalizing flow
+    if flow_library == "glasflow":
+        flow_wrapper = create_glasflow_flow(
+            theta_dim=theta_dim,
+            context_dim=embedded_context_dim,
+            posterior_kwargs=posterior_kwargs,
+        )
+    elif flow_library == "normflows":
+        flow_wrapper = create_normflows_flow(
+            theta_dim=theta_dim,
+            context_dim=embedded_context_dim,
+            posterior_kwargs=posterior_kwargs,
+        )
+    else:
+        raise ValueError(f"Unknown flow library: {flow_library}")
 
     # Load pre-trained weights or freeze the weights of the flow
     load_and_or_freeze_model_weights(
-        model=flow,
+        model=flow_wrapper.flow,
         freeze_weights=freeze_weights,
         load_weights=load_weights,
     )
 
-    return DiscreteFlowModel(
-        flow=flow,
+    # Combine the flow and the context embedding net
+    df_model = DiscreteFlowModel(
+        flow_wrapper=flow_wrapper,
         context_embedding_net=context_embedding_net,
     )
+
+    return df_model

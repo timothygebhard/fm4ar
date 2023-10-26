@@ -1,11 +1,11 @@
 """
-Tests for `fm4ar.nn.nsf`.
+Tests for `fm4ar.nn.flows`.
 """
 
 import pytest
 import torch
 
-from fm4ar.nn.nsf import (
+from fm4ar.nn.flows import (
     create_base_transform,
     create_linear_transform,
     create_transform,
@@ -14,13 +14,13 @@ from fm4ar.nn.nsf import (
 
 def test__create_base_transform() -> None:
     """
-    Test `fm4ar.nn.nsf.create_base_transform()`.
+    Test `fm4ar.nn.flows.create_base_transform()`.
     """
 
     # Case 1: rq-coupling, param_dim=1
     base_transform = create_base_transform(
         i=3,
-        param_dim=1,
+        theta_dim=1,
         context_dim=7,
         base_transform_type="rq-coupling",
     )
@@ -33,7 +33,7 @@ def test__create_base_transform() -> None:
     # Case 2: rq-coupling, param_dim>1
     base_transform = create_base_transform(
         i=3,
-        param_dim=5,
+        theta_dim=5,
         context_dim=7,
         base_transform_type="rq-coupling",
     )
@@ -46,7 +46,7 @@ def test__create_base_transform() -> None:
     # Case 3: rq-autoregressive
     base_transform = create_base_transform(
         i=3,
-        param_dim=5,
+        theta_dim=5,
         context_dim=7,
         base_transform_type="rq-autoregressive",
     )
@@ -58,12 +58,12 @@ def test__create_base_transform() -> None:
 
     # Case 4: ValueError
     with pytest.raises(ValueError):
-        create_base_transform(i=3, param_dim=5, base_transform_type="invalid")
+        create_base_transform(i=3, theta_dim=5, base_transform_type="invalid")
 
 
 def test__create_linear_transform() -> None:
     """
-    Test `fm4ar.nn.nsf.create_linear_transform()`.
+    Test `fm4ar.nn.flows.create_linear_transform()`.
     """
 
     linear_transform = create_linear_transform(param_dim=5)
@@ -76,16 +76,15 @@ def test__create_linear_transform() -> None:
 
 def test__create_transform() -> None:
     """
-    Test `fm4ar.nn.nsf.create_transform()`.
+    Test `fm4ar.nn.flows.create_transform()`.
     """
 
     transform = create_transform(
         num_flow_steps=3,
         theta_dim=5,
         context_dim=7,
-        base_transform_kwargs=dict(
-            base_transform_type="rq-coupling",
-        ),
+        base_transform_type="rq-coupling",
+        base_transform_kwargs={},
     )
     out = transform(inputs=torch.randn(11, 5), context=torch.randn(11, 7))
     assert isinstance(out, tuple)

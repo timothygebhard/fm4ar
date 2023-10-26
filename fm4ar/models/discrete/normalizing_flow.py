@@ -39,12 +39,13 @@ class NormalizingFlow(Base):
 
         self.model.eval()
 
-        if context is None:
-            log_prob = torch.Tensor(self.model.flow.log_prob(theta))
-        else:
-            context_embedding = self.model.get_context_embedding(context)
-            log_prob = self.model.flow.log_prob(theta, context_embedding)
-        return torch.squeeze(log_prob)
+        context_embedding = self.model.get_context_embedding(context)
+        log_prob = self.model.flow_wrapper.log_prob(
+            theta=theta,
+            context=context_embedding,
+        )
+
+        return log_prob
 
     def sample_batch(
         self,
@@ -60,15 +61,13 @@ class NormalizingFlow(Base):
 
         self.model.eval()
 
-        if context is None:
-            samples = self.model.flow.sample(num_samples)
-        else:
-            context_embedding = self.model.get_context_embedding(context)
-            samples = self.model.flow.sample(
-                num_samples=1,  # this means "1 per context"
-                context=context_embedding
-            )
-        return torch.squeeze(samples)
+        context_embedding = self.model.get_context_embedding(context)
+        samples = self.model.flow_wrapper.sample(
+            num_samples=num_samples,
+            context=context_embedding,
+        )
+
+        return samples
 
     def sample_and_log_prob_batch(
         self,
@@ -84,15 +83,13 @@ class NormalizingFlow(Base):
 
         self.model.eval()
 
-        if context is None:
-            sample, log_prob = self.model.flow.sample_and_log_prob(num_samples)
-        else:
-            context_embedding = self.model.get_context_embedding(context)
-            sample, log_prob = self.model.flow.sample_and_log_prob(
-                num_samples=1,  # this means "1 per context"
-                context=context_embedding,
-            )
-        return torch.squeeze(sample), torch.squeeze(log_prob)
+        context_embedding = self.model.get_context_embedding(context)
+        samples, log_prob = self.model.flow_wrapper.sample_and_log_prob(
+            num_samples=num_samples,
+            context=context_embedding,
+        )
+
+        return samples, log_prob
 
     def loss(
         self,
