@@ -74,7 +74,16 @@ class DiscreteFlowModel(nn.Module):
         train the model using the NPE loss function.
         """
 
-        return self.flow_wrapper.log_prob(theta=theta, context=context)
+        # Get the embedding of the context
+        # We call `get_context_embedding()` here instead of directly passing
+        # the context to `context_embedding_net()` because this will handle
+        # the case where `context` is None.
+        context_embedding = self.get_context_embedding(context)
+
+        return self.flow_wrapper.log_prob(
+            theta=theta,
+            context=context_embedding,
+        )
 
 
 def create_df_model(model_kwargs: dict) -> DiscreteFlowModel:
