@@ -29,14 +29,17 @@ from fm4ar.utils.torchutils import get_activation_from_string
 # Unified interface
 # -----------------------------------------------------------------------------
 
-class FlowWrapper:
+class FlowWrapper(torch.nn.Module):
     """
     This is a thin wrapper around the different flow implementations
     that handles different conventions, e.g., for `.sample()`.
+
+    Note: This inherits from `torch.nn.Module` so calling `.to()` on
+    the model will also move the `flow` to the correct device.
     """
 
     def __init__(self, flow: nf.NormalizingFlow | flows.Flow) -> None:
-
+        super().__init__()
         self.flow = flow
 
     def sample(
