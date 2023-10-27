@@ -2,6 +2,7 @@
 Wrapper class and helper functions for continuous flow models.
 """
 
+from copy import deepcopy
 from functools import lru_cache
 
 import torch
@@ -120,6 +121,9 @@ def create_cf_model(model_kwargs: dict) -> ContinuousFlowModel:
     Returns:
         The continuous flow model.
     """
+
+    # Make a deep copy of the model kwargs to avoid side effects
+    model_kwargs = deepcopy(model_kwargs)
 
     # Extract dimensions of `theta` and `context`.
     # For the context, we allow a tuple of dimensions to handle cases where

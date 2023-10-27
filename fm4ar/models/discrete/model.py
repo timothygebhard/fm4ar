@@ -2,6 +2,7 @@
 Wrapper class and helper functions for discrete flow models.
 """
 
+from copy import deepcopy
 from typing import overload
 
 import torch
@@ -98,6 +99,9 @@ def create_df_model(model_kwargs: dict) -> DiscreteFlowModel:
     Returns:
         The discrete flow model.
     """
+
+    # Make a deep copy of the model kwargs to avoid side effects
+    model_kwargs = deepcopy(model_kwargs)
 
     # Extract dimensions of `theta` and `context`.
     # For the context, we allow a tuple of dimensions to handle cases where
