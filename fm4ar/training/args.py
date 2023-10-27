@@ -33,16 +33,6 @@ def get_cli_arguments() -> argparse.Namespace:  # pragma: no cover
             "training itself). Ignored for local training."
         ),
     )
-    parser.add_argument(
-        "--update-config",
-        action="store_true",
-        help=(
-            "If this flag is used, the configuration in the model checkpoint "
-            "will be replaced with the configuration from the experiment dir. "
-            "This can be useful, e.g., if there was a bug in the config, or "
-            "if you want to increase the number of epochs, or ..."
-        ),
-    )
     args = parser.parse_args()
 
     return args
