@@ -48,11 +48,19 @@ if __name__ == "__main__":
     old_config = deepcopy(checkpoint["config"])
     print("Done!\n")
 
+    # Add the theta_dim and context_dim to the model settings
+    # These are added in the `prepare_new()` method when starting a new
+    # training run, and dropping them here would cause an error when building
+    # the model from the checkpoint file in `prepare_resume()`.
+    new_config["model"]["theta_dim"] = checkpoint["model"]["theta_dim"]
+    new_config["model"]["context_dim"] = checkpoint["model"]["context_dim"]
+
     # Compute the difference between the old and the new config
-    print("Difference between old and new config:")
+    print("Difference between old and new config:\n")
     diff = DeepDiff(old_config, new_config)
-    print(diff.pretty())
-    print()
+    for line in diff.pretty().split("\n"):
+        print(f"  {line}")
+    print("\n")
 
     # Ask for confirmation
     if not confirm("Do you want to update the config in the checkpoint?"):
