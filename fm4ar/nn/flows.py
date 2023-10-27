@@ -14,6 +14,7 @@ The glasflow-based NSF implementation is mostly based on the uci.py
 example from https://github.com/bayesiains/nsf.
 """
 
+from copy import deepcopy
 from typing import Any
 
 import torch
@@ -122,6 +123,9 @@ def create_normflows_flow(
     Create a normflows-based normalizing flow.
     """
 
+    # Make a deep copy of the posterior kwargs to avoid side effects
+    posterior_kwargs = deepcopy(posterior_kwargs)
+
     # Define shortcuts
     num_flow_steps = posterior_kwargs["num_flow_steps"]
     base_transform_type = posterior_kwargs["base_transform_type"]
@@ -174,6 +178,9 @@ def create_glasflow_flow(
     """
     Create a glasflow-based normalizing flow.
     """
+
+    # Make a deep copy of the posterior kwargs to avoid side effects
+    posterior_kwargs = deepcopy(posterior_kwargs)
 
     # Define series of transforms
     transform = create_transform(
