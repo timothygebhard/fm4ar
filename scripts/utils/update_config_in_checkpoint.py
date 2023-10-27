@@ -6,7 +6,6 @@ import argparse
 import time
 from copy import deepcopy
 from pathlib import Path
-from pprint import pprint
 from shutil import copyfile
 
 import torch
@@ -52,12 +51,12 @@ if __name__ == "__main__":
     # Compute the difference between the old and the new config
     print("Difference between old and new config:")
     diff = DeepDiff(old_config, new_config)
-    pprint(diff, indent=2)
+    print(diff.pretty())
     print()
 
     # Ask for confirmation
     if not confirm("Do you want to update the config in the checkpoint?"):
-        print("Aborting!")
+        print("\nAborting!\n")
         exit(0)
     print()
 
