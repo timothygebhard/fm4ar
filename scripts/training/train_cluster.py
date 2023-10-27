@@ -91,6 +91,7 @@ if __name__ == "__main__":
                 experiment_dir=args.experiment_dir,
                 checkpoint_name=args.checkpoint_name,
                 config=config,
+                update_config=args.update_config,
             )
             print()
 
