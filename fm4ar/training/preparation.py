@@ -120,20 +120,21 @@ def prepare_resume(
     pm = build_model(
         experiment_dir=experiment_dir,
         file_path=file_path,
+        config=config,
+        update_config=update_config,
         device=config["local"]["device"],
     )
     print("Done!", flush=True)
+
+    # Print some debug information
+    if update_config:
+        print("Note: The configuration in the checkpoint was updated!\n")
 
     # Load the dataset (using config from checkpoint)
     name = pm.config["data"]["name"]
     print(f"Loading dataset '{name}'...", end=" ")
     dataset = load_dataset(config=pm.config)
     print("Done!", flush=True)
-
-    # Reload the configuration from the experiment directory if desired
-    if update_config:
-        pm.config = config
-        print("Updated model configuration!")
 
     # Initialize Weights & Biases; this will produce some output to stderr
     if config["local"].get("wandb", False):
