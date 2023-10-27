@@ -49,6 +49,7 @@ if __name__ == "__main__":
             Path(__file__).resolve().as_posix(),
             f"--experiment-dir {args.experiment_dir}",
             f"--checkpoint-name {args.checkpoint_name}"
+            "--update-config" if args.update_config else "",
         ]
 
         # Combine condor settings from config file with job arguments and the

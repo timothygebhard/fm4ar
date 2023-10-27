@@ -91,6 +91,7 @@ def prepare_resume(
     experiment_dir: Path,
     checkpoint_name: str,
     config: dict,
+    update_config: bool = False,
 ) -> tuple[Base, ArDataset]:
     """
     Prepare a training run by resuming from a checkpoint, that is, load
@@ -101,6 +102,12 @@ def prepare_resume(
         experiment_dir: Path to the experiment directory.
         checkpoint_name: Name of the checkpoint file.
         config: Full experiment configuration.
+        update_config: If `True`, replace the configuration in the model
+            checkpoint with the configuration from the experiment with
+            the `config` passed to this function. This can be useful for
+            small bug fixes; however, if the updated configuration is
+            not compatible with the model in the checkpoint, this will
+            lead to an error.
 
     Returns:
         A tuple, `(pm, dataset)`, where `pm` is the posterior model
@@ -122,6 +129,11 @@ def prepare_resume(
     print(f"Loading dataset '{name}'...", end=" ")
     dataset = load_dataset(config=pm.config)
     print("Done!", flush=True)
+
+    # Reload the configuration from the experiment directory if desired
+    if update_config:
+        pm.config = config
+        print("Updated model configuration!")
 
     # Initialize Weights & Biases; this will produce some output to stderr
     if config["local"].get("wandb", False):
