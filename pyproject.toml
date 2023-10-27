@@ -25,6 +25,7 @@ dependencies = [
     "click",
     "coolname",
     "corner",
+    "deepdiff",
     "dill",
     "gitpython",
     "glasflow~=0.2.0",
