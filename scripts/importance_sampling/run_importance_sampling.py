@@ -15,7 +15,8 @@ from p_tqdm import p_map
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
 
-from fm4ar.datasets.standardization import get_standardizer
+# from fm4ar.datasets.standardization import get_standardizer
+from fm4ar.datasets.scaling import get_theta_scaler
 from fm4ar.datasets.vasist_2023.prior import (
     LOWER,
     UPPER,
@@ -68,6 +69,12 @@ def get_cli_arguments() -> argparse.Namespace:
         "--start-submission",
         action="store_true",
         help="If True, create a submission file and launch a job.",
+    )
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        default=1.0e-3,
+        help="Tolerance parameter for FM models; ignored otherwise.",
     )
     args = parser.parse_args()
 
@@ -122,10 +129,12 @@ def process_theta_i(
     # to check if the parameters are within the bounds
     prior = float(
         np.prod(
-            [
-                float(LOWER[i] <= theta_i[i] <= UPPER[i])
-                for i in range(len(theta_i))
-            ]
+            np.array(
+                [
+                    float(LOWER[i] <= theta_i[i] <= UPPER[i])
+                    for i in range(len(theta_i))
+                ]
+            )
         )
     )
 
@@ -223,12 +232,13 @@ def handle_trained_ml_model() -> tuple[np.ndarray, np.ndarray]:
     # Load experiment config and construct a standardizer for the data
     print("Loading standardizer...", end=" ")
     config = load_ml_config(args.experiment_dir)
-    standardizer = get_standardizer(config=config)
+    # standardizer = get_standardizer(config=config)
+    theta_scaler = get_theta_scaler(config=config)
     print("Done!\n")
 
     # Define additional keywords for the model
     if isinstance(model, FlowMatching):
-        model_kwargs = dict(tolerance=1e-3)
+        model_kwargs = dict(tolerance=args.tolerance)
     else:
         model_kwargs = dict()
 
@@ -242,9 +252,10 @@ def handle_trained_ml_model() -> tuple[np.ndarray, np.ndarray]:
         with torch.no_grad():
             theta_chunk, log_probs_chunk = model.sample_and_log_prob_batch(
                 context=context.repeat(chunk_size, 1, 1).to(device),
-                **model_kwargs,  # type: ignore
+                **model_kwargs,
             )
-        theta_chunk = standardizer.inverse_theta(theta_chunk.cpu())
+        # theta_chunk = standardizer.inverse_theta(theta_chunk.cpu())
+        theta_chunk = theta_scaler.inverse(theta_chunk.cpu())
         probs_chunk = torch.exp(log_probs_chunk.cpu())
         theta_chunks.append(theta_chunk.cpu())
         probs_chunks.append(probs_chunk.cpu())
