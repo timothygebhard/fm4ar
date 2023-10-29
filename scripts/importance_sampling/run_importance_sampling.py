@@ -47,6 +47,15 @@ def get_cli_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--checkpoint-file",
+        type=str,
+        default="model__best.pt",
+        help=(
+            "Name of the checkpoint file that contains the trained model. "
+            "Will be ignored when running on nested sampling results."
+        ),
+    )
+    parser.add_argument(
         "--experiment-dir",
         type=Path,
         required=True,
@@ -223,7 +232,7 @@ def handle_trained_ml_model() -> tuple[np.ndarray, np.ndarray]:
 
     # Load the trained model
     print("Loading trained model...", end=" ")
-    file_path = args.experiment_dir / "model__best.pt"
+    file_path = args.experiment_dir / args.checkpoint_file
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = build_model(file_path=file_path, device=device)
     model.model.eval()
