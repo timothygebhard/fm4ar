@@ -371,15 +371,16 @@ if __name__ == "__main__":
     likelihoods = np.array(likelihoods).flatten()
     priors = np.array(priors).flatten()
 
-    # Drop everything that has a prior of 0 (i.e., is outside the bounds)
-    mask = priors > 0
+    # Drop everything that has a prior of 0 (i.e., is outside the bounds), or
+    # where the simulation failed (i.e., the spectrum contains NaNs)
+    mask = np.logical_and(priors > 0, ~np.isnan(x).any(axis=1))
     theta = theta[mask]
     probs = probs[mask]
     x = x[mask]
     likelihoods = likelihoods[mask]
     priors = priors[mask]
     n = len(theta)
-    print(f"Dropped {np.sum(~mask):,} samples where prior=0!")
+    print(f"Dropped {np.sum(~mask):,} samples (prior=0 or NaN in spectrum)!")
     print(f"Remaining samples: {n:,} ({100 * n / args.n_samples:.2f}%)\n")
 
     # Compute the importance sampling weights (raw and normalized)
@@ -397,19 +398,20 @@ if __name__ == "__main__":
 
     # Save the results
     print("Saving results...", end=" ")
-    dtype = np.float32
+    single = np.float32
+    double = np.float64
     file_path = args.experiment_dir / "importance_sampling_results.hdf"
     with h5py.File(file_path, "w") as f:
         f.create_dataset(name="parameter_mask", data=parameter_mask)
-        f.create_dataset(name="theta_0", data=THETA_0, dtype=dtype)
-        f.create_dataset(name="x_0", data=x_0, dtype=dtype)
-        f.create_dataset(name="theta", data=theta, dtype=dtype)
-        f.create_dataset(name="probs", data=probs, dtype=dtype)
-        f.create_dataset(name="x", data=x, dtype=dtype)
-        f.create_dataset(name="likelihoods", data=likelihoods, dtype=dtype)
-        f.create_dataset(name="raw_weights", data=raw_is_weights, dtype=dtype)
-        f.create_dataset(name="priors", data=priors, dtype=dtype)
-        f.create_dataset(name="weights", data=is_weights, dtype=dtype)
+        f.create_dataset(name="theta_0", data=THETA_0, dtype=single)
+        f.create_dataset(name="x_0", data=x_0, dtype=single)
+        f.create_dataset(name="theta", data=theta, dtype=single)
+        f.create_dataset(name="probs", data=probs, dtype=double)
+        f.create_dataset(name="x", data=x, dtype=single)
+        f.create_dataset(name="likelihoods", data=likelihoods, dtype=double)
+        f.create_dataset(name="raw_weights", data=raw_is_weights, dtype=double)
+        f.create_dataset(name="priors", data=priors, dtype=double)
+        f.create_dataset(name="weights", data=is_weights, dtype=double)
     print("Done!")
 
     # Create corner plot comparing the results
