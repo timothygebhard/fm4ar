@@ -146,7 +146,7 @@ if __name__ == "__main__":
     print("Saving to an HDF file...", end=" ", flush=True)
     target_dir = get_datasets_dir() / "vasist-2023" / args.output_dir
     target_dir.mkdir(parents=True, exist_ok=True)
-    file_path = target_dir / f"random-seed_{effective_random_seed:06d}.hdf"
+    file_path = target_dir / f"random-seed_{effective_random_seed:07d}.hdf"
     with h5py.File(file_path, "w") as hdf_file:
         hdf_file.create_dataset(name="theta", data=theta, dtype=np.float32)
         hdf_file.create_dataset(name="wlen", data=wlen, dtype=np.float32)
