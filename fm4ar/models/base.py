@@ -444,8 +444,9 @@ class Base:
         print("Saving snapshot...", end=" ")
         self.save_model(
             prefix="snapshot",
-            name=f"{self.epoch:3d}",
+            name=f"{self.epoch:04d}",
             save_training_info=False,
+            target_dir=snapshots_dir,
         )
         print("Done!")
 
