@@ -223,6 +223,7 @@ class Base:
         name: str = "latest",
         prefix: str = "model",
         save_training_info: bool = True,
+        target_dir: Path | None = None,
     ) -> None:
         """
         Save the posterior model to disk.
@@ -233,6 +234,9 @@ class Base:
             save_training_info: Whether to save training information
                 that is required to continue training (i.e., the state
                 dicts of the optimizer and LR scheduler).
+            target_dir: Directory to which the model should be saved.
+                Usually, this is the experiment directory, but it can
+                also be a different directory (e.g., "snapshots").
         """
 
         # If no experiment directory is given, we don't save anything
@@ -257,7 +261,9 @@ class Base:
                 data["scheduler_state_dict"] = self.scheduler.state_dict()
 
         # Save the data to disk
-        file_path = self.experiment_dir / f"{prefix}__{name}.pt"
+        if target_dir is None:
+            target_dir = self.experiment_dir
+        file_path = target_dir / f"{prefix}__{name}.pt"
         torch.save(obj=data, f=file_path)
 
     def load_model(
@@ -372,6 +378,7 @@ class Base:
                 scheduler=self.scheduler,
                 loss=test_loss,
                 end_of="epoch",
+                on_lower=self.save_snapshot,  # only for ReduceLROnPlateau
             )
 
             # Log relevant metrics (both locally and on wandb)
@@ -420,6 +427,27 @@ class Base:
             print("Saving best model...", end=" ")
             self.save_model(name="best", save_training_info=False)
             print("Done!")
+
+    def save_snapshot(self) -> None:
+        """
+        Save a snapshot of the model.
+        """
+
+        # If no experiment directory is given, we don't save anything
+        if self.experiment_dir is None:
+            return
+
+        # Create the snapshots directory if it doesn't exist yet
+        snapshots_dir = self.experiment_dir / "snapshots"
+        snapshots_dir.mkdir(exist_ok=True)
+
+        print("Saving snapshot...", end=" ")
+        self.save_model(
+            prefix="snapshot",
+            name=f"{self.epoch:3d}",
+            save_training_info=False,
+        )
+        print("Done!")
 
     def stop_early(self, patience: int | None) -> bool:
         """

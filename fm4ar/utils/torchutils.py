@@ -6,7 +6,7 @@ from collections import OrderedDict
 from collections.abc import Sequence
 from math import prod
 from pathlib import Path
-from typing import Any, Iterable, Literal, Type
+from typing import Any, Callable, Iterable, Literal, Type
 
 import numpy as np
 import torch
@@ -205,8 +205,9 @@ def get_scheduler_from_kwargs(
 
 def perform_scheduler_step(
     scheduler: lrs.LRScheduler | lrs.ReduceLROnPlateau,
-    loss: Any = None,
+    loss: float | None = None,
     end_of: Literal["epoch", "batch"] = "epoch",
+    on_lower: Callable[[], None] | None = None,
 ) -> None:
     """
     Wrapper for `scheduler.step()`. If scheduler is `ReduceLROnPlateau`,
@@ -217,24 +218,47 @@ def perform_scheduler_step(
         loss: Validation loss (only required for `ReduceLROnPlateau`).
         end_of: Whether the scheduler is called at the end of an epoch
             or at the end of a batch.
+        on_lower: Callback function that is called when the learning
+            rate is lowered (only supported for `ReduceLROnPlateau`).
+            If `None`, no callback is called.
     """
 
-    # Different schedulers need to be called at different times:
-    if isinstance(scheduler, lrs.CosineAnnealingLR) and end_of == "epoch":
-        scheduler.step()
-    if (
-        isinstance(scheduler, lrs.CosineAnnealingWarmRestarts)
-        and end_of == "epoch"
-    ):
-        scheduler.step()
-    if isinstance(scheduler, lrs.CyclicLR) and end_of == "batch":
-        scheduler.step()
-    elif isinstance(scheduler, lrs.OneCycleLR) and end_of == "batch":
-        scheduler.step()
-    elif isinstance(scheduler, lrs.ReduceLROnPlateau) and end_of == "epoch":
-        scheduler.step(loss)
-    elif isinstance(scheduler, lrs.StepLR) and end_of == "epoch":
-        scheduler.step()
+    if end_of == "batch":
+
+        # CyclicLR and OneCycleLR need to be called at the end of each batch
+        end_of_batch_schedulers = (lrs.CyclicLR, lrs.OneCycleLR)
+        if isinstance(scheduler, end_of_batch_schedulers):
+            scheduler.step()
+
+    elif end_of == "epoch":
+
+        # StepLR, CosineAnnealingLR and CosineAnnealingWarmRestarts need
+        # to be called at the end of each epoch
+        end_of_epoch_schedulers = (
+            lrs.CosineAnnealingLR,
+            lrs.CosineAnnealingWarmRestarts,
+            lrs.StepLR,
+        )
+        if isinstance(scheduler, end_of_epoch_schedulers):
+            scheduler.step()
+
+        # ReduceLROnPlateau requires special treatment as it needs to be
+        # called with the validation loss. It is also the only scheduler
+        # that supports a callback function that is called every time the
+        # learning rate is lowered.
+        if isinstance(scheduler, lrs.ReduceLROnPlateau):
+
+            if loss is None:
+                raise ValueError("Must provide loss for ReduceLROnPlateau!")
+
+            old_lr = get_lr(scheduler.optimizer)[0]
+            scheduler.step(loss)
+            new_lr = get_lr(scheduler.optimizer)[0]
+            if new_lr < old_lr and on_lower is not None:
+                on_lower()
+
+    else:
+        raise ValueError("Invalid value for `end_of`!")
 
 
 def get_lr(optimizer: torch.optim.Optimizer) -> list[float]:
