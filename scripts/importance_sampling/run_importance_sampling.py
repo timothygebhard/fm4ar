@@ -15,13 +15,11 @@ from p_tqdm import p_map
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
 
-# from fm4ar.datasets.standardization import get_standardizer
 from fm4ar.datasets.scaling import get_theta_scaler
 from fm4ar.datasets.vasist_2023.prior import (
     LOWER,
     UPPER,
     NAMES,
-    LABELS,
     SIGMA,
     THETA_0,
 )
@@ -30,7 +28,6 @@ from fm4ar.models.build_model import build_model
 from fm4ar.models.continuous.flow_matching import FlowMatching
 from fm4ar.nested_sampling.config import load_config as load_ns_config
 from fm4ar.nested_sampling.posteriors import load_posterior
-from fm4ar.nested_sampling.plotting import create_posterior_plot
 from fm4ar.utils.config import load_config as load_ml_config
 from fm4ar.utils.htcondor import (
     CondorSettings,
@@ -66,6 +63,12 @@ def get_cli_arguments() -> argparse.Namespace:
         type=int,
         default=10_000,
         help="Number of samples to draw from proposal distribution.",
+    )
+    parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=42,
+        help="Random seed for sampling from proposal distribution.",
     )
     parser.add_argument(
         "--resolution",
@@ -241,7 +244,6 @@ def handle_trained_ml_model() -> tuple[np.ndarray, np.ndarray]:
     # Load experiment config and construct a standardizer for the data
     print("Loading standardizer...", end=" ")
     config = load_ml_config(args.experiment_dir)
-    # standardizer = get_standardizer(config=config)
     theta_scaler = get_theta_scaler(config=config)
     print("Done!\n")
 
@@ -263,7 +265,6 @@ def handle_trained_ml_model() -> tuple[np.ndarray, np.ndarray]:
                 context=context.repeat(chunk_size, 1, 1).to(device),
                 **model_kwargs,
             )
-        # theta_chunk = standardizer.inverse_theta(theta_chunk.cpu())
         theta_chunk = theta_scaler.inverse(theta_chunk.cpu())
         probs_chunk = torch.exp(log_probs_chunk.cpu())
         theta_chunks.append(theta_chunk.cpu())
@@ -303,6 +304,7 @@ if __name__ == "__main__":
             Path(__file__).resolve().as_posix(),
             f"--experiment-dir {args.experiment_dir}",
             f"--n-samples {args.n_samples}",
+            f"--random-seed {args.random_seed}",
             f"--resolution {args.resolution}",
         ]
 
@@ -311,7 +313,7 @@ if __name__ == "__main__":
             num_cpus=96,
             memory_cpus=100_000,
             num_gpus=num_gpus,
-            memory_gpus=15_000,
+            memory_gpus=35_000,
             arguments=arguments,
             log_file_name="importance_sampling",
             bid=25,
@@ -331,6 +333,10 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # ...or actually run the importance sampling
     # -------------------------------------------------------------------------
+
+    # Set the random seed (both for numpy and torch)
+    np.random.seed(args.random_seed)
+    torch.manual_seed(args.random_seed)
 
     # Set up simulator and compute target spectrum
     print("Simulating target spectrum...", end=" ")
@@ -396,11 +402,16 @@ if __name__ == "__main__":
     print(f"Effective sample size: {n_eff:.2f}")
     print(f"Sample efficiency:     {100 * sample_efficiency:.2f}%\n")
 
+    # Create a directory for the results
+    output_dir = args.experiment_dir / "importance_sampling"
+    output_dir.mkdir(exist_ok=True)
+
     # Save the results
     print("Saving results...", end=" ")
     single = np.float32
     double = np.float64
-    file_path = args.experiment_dir / "importance_sampling_results.hdf"
+    file_name = f"random_seed-{args.random_seed:03d}.hdf"
+    file_path = output_dir / file_name
     with h5py.File(file_path, "w") as f:
         f.create_dataset(name="parameter_mask", data=parameter_mask)
         f.create_dataset(name="theta_0", data=THETA_0, dtype=single)
@@ -412,19 +423,6 @@ if __name__ == "__main__":
         f.create_dataset(name="raw_weights", data=raw_is_weights, dtype=double)
         f.create_dataset(name="priors", data=priors, dtype=double)
         f.create_dataset(name="weights", data=is_weights, dtype=double)
-    print("Done!")
-
-    # Create corner plot comparing the results
-    print("Creating posterior plot...", end=" ")
-    create_posterior_plot(
-        samples=theta,
-        weights=is_weights,
-        parameter_mask=parameter_mask,
-        names=np.array(LABELS)[parameter_mask].tolist(),
-        ground_truth=THETA_0[parameter_mask],
-        sample_efficiency=sample_efficiency,
-        experiment_dir=args.experiment_dir.resolve(),
-    )
     print("Done!")
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds.\n")
