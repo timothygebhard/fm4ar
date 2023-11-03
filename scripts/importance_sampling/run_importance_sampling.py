@@ -315,7 +315,7 @@ if __name__ == "__main__":
             num_gpus=num_gpus,
             memory_gpus=35_000,
             arguments=arguments,
-            log_file_name="importance_sampling",
+            log_file_name=f"importance_sampling__seed-{args.random_seed:03d}",
             bid=25,
         )
         file_path = create_submission_file(
