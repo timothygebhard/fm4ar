@@ -60,7 +60,7 @@ if __name__ == "__main__":
         condor_settings.log_file_name = "log.$$([NumJobStarts])"
 
         # Create submission file
-        print("Creating submission file...", end=" ")
+        print("Creating submission file...", end=" ", flush=True)
         file_path = create_submission_file(
             condor_settings=condor_settings,
             experiment_dir=args.experiment_dir,
@@ -85,7 +85,7 @@ if __name__ == "__main__":
         # Check if there exists a checkpoint file from which we can resume
         checkpoint_file_path = args.experiment_dir / args.checkpoint_name
         if checkpoint_file_path.exists():
-            print("Checkpoint found, resuming training run!")
+            print("Checkpoint found, resuming training!", flush=True)
             pm, dataset = prepare_resume(
                 experiment_dir=args.experiment_dir,
                 checkpoint_name=args.checkpoint_name,
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
         # If no checkpoint file exists, we need to start from scratch
         else:
-            print("No checkpoint found, starting new training run!")
+            print("No checkpoint found, starting new training!", flush=True)
             pm, dataset = prepare_new(
                 experiment_dir=args.experiment_dir,
                 config=config,

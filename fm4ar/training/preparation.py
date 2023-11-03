@@ -33,7 +33,7 @@ def prepare_new(
 
     # Load the dataset
     name = config["data"]["name"]
-    print(f"Loading dataset '{name}'...", end=" ")
+    print(f"Loading dataset '{name}'...", end=" ", flush=True)
     dataset = load_dataset(config=config)
     print("Done!", flush=True)
 
@@ -42,7 +42,7 @@ def prepare_new(
     config["model"]["context_dim"] = dataset.context_dim
 
     # Initialize the posterior model
-    print("Building model from configuration...", end=" ")
+    print("Building model from configuration...", end=" ", flush=True)
     pm = build_model(
         experiment_dir=experiment_dir,
         config=config,
@@ -52,7 +52,7 @@ def prepare_new(
 
     # Initialize Weights & Biases (if desired)
     if pm.use_wandb:
-        print("\n\nInitializing Weights & Biases:")
+        print("\n\nInitializing Weights & Biases:", flush=True)
 
         # Add number of model parameters to the config
         augmented_config = config.copy()
@@ -108,20 +108,20 @@ def prepare_resume(
     """
 
     # Instantiate the posterior model
-    print("Building model from checkpoint...", end=" ")
+    print("Building model from checkpoint...", end=" ", flush=True)
     file_path = experiment_dir / checkpoint_name
     pm = build_model(
         experiment_dir=experiment_dir,
         file_path=file_path,
         device=config["local"]["device"],
     )
-    print("Done!", flush=True)
+    print("Done!")
 
     # Load the dataset (using config from checkpoint)
     name = pm.config["data"]["name"]
-    print(f"Loading dataset '{name}'...", end=" ")
+    print(f"Loading dataset '{name}'...", end=" ", flush=True)
     dataset = load_dataset(config=pm.config)
-    print("Done!", flush=True)
+    print("Done!")
 
     # Initialize Weights & Biases; this will produce some output to stderr
     if config["local"].get("wandb", False):
