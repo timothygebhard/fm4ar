@@ -59,6 +59,12 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Path to the experiment directory.",
     )
     parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=1,
+        help="Number of parallel jobs to start on the cluster.",
+    )
+    parser.add_argument(
         "--n-samples",
         type=int,
         default=10_000,
@@ -85,7 +91,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--tolerance",
         type=float,
-        default=1.0e-3,
+        default=1.0e-4,
         help="Tolerance parameter for FM models; ignored otherwise.",
     )
     args = parser.parse_args()
@@ -299,12 +305,18 @@ if __name__ == "__main__":
         # We only need to request a GPU if we are using a trained ML model
         num_gpus = int((args.experiment_dir / "model__best.pt").exists())
 
-        # Collect arguments that we need to pass to the actual job
+        # If we are running multiple jobs, the random seed is determined by
+        # the process number on HTCondor. This seems like the simplest way to
+        # parallelize importance sampling over multiple jobs.
+        random_seed = "$(Process)" if args.n_jobs > 1 else args.random_seed
+
+        # Collect arguments that we need to pass to the actual job (we can
+        # drop the `start_submission` and the `n_jobs` arguments here)
         arguments = [
             Path(__file__).resolve().as_posix(),
             f"--experiment-dir {args.experiment_dir}",
             f"--n-samples {args.n_samples}",
-            f"--random-seed {args.random_seed}",
+            f"--random-seed {random_seed}",
             f"--resolution {args.resolution}",
         ]
 
@@ -315,8 +327,9 @@ if __name__ == "__main__":
             num_gpus=num_gpus,
             memory_gpus=35_000,
             arguments=arguments,
-            log_file_name=f"importance_sampling__seed-{args.random_seed:03d}",
+            log_file_name=f"importance_sampling.$(Process)",
             bid=25,
+            queue=args.n_jobs,
         )
         file_path = create_submission_file(
             condor_settings=condor_settings,
