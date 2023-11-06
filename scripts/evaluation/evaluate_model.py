@@ -9,7 +9,7 @@ file and launch a new evaluation job on the cluster.
 import argparse
 import time
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any,  Literal
 
 import h5py
 import numpy as np
@@ -18,6 +18,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from fm4ar.datasets import load_dataset
+from fm4ar.datasets.scaling import Scaler
+from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER
 from fm4ar.models.build_model import build_model
 from fm4ar.models.continuous.flow_matching import FlowMatching
 from fm4ar.models.discrete.normalizing_flow import NormalizingFlow
@@ -58,9 +60,16 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Name of the HDF file to load (combines with --which).",
     )
     parser.add_argument(
-        "--get-logprob",
-        action="store_true",
+        "--get-logprob-samples",
+        type=bool,
+        default=False,
         help="Whether to compute the log probability of the samples.",
+    )
+    parser.add_argument(
+        "--get-logprob-theta",
+        type=bool,
+        default=True,
+        help="Whether to compute the log probability of the theta.",
     )
     parser.add_argument(
         "--n-dataset-samples",
@@ -71,7 +80,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--n-posterior-samples",
         type=int,
-        default=1024,
+        default=10_000,
         help="Number of samples to draw from posterior.",
     )
     parser.add_argument(
@@ -86,7 +95,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--tolerance",
         type=float,
-        default=1e-3,
+        default=1e-4,
         help="Tolerance for ODE solver (only needed for flow matching).",
     )
     parser.add_argument(
@@ -113,8 +122,7 @@ def get_logprob_of_theta(
 
     model.model.eval()
 
-    # TODO: Computing the log probability with AMP does not seem to work with
-    #   the `NormalizingFlow` models from the glasflow package ... ?!
+    # AMP only makes sense for `FlowMatching` models
     use_amp = isinstance(model, FlowMatching)
 
     # For some reason, this does occasionally crash with an assertion
@@ -144,9 +152,10 @@ def get_samples(
     model: FlowMatching | NormalizingFlow,
     x: torch.Tensor,
     n_samples: int,
-    inverse_theta: Callable[[torch.Tensor], torch.Tensor],
-    device: Literal["cpu", "cuda"],
-    get_logprob: bool = False,
+    theta_scaler: Scaler,
+    batch_size: int = 512,
+    device: Literal["cpu", "cuda"] = "cuda",
+    get_logprob_samples: bool = False,
     **model_kwargs: Any,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -155,33 +164,59 @@ def get_samples(
 
     model.model.eval()
 
-    # TODO: For now, we disable AMP also for posterior sampling when using a
-    #   `NormalizingFlow` model, at least until we understand the issue
+    # AMP only makes sense for `FlowMatching` models
     use_amp = isinstance(model, FlowMatching)
 
     with (
         torch.autocast(device_type=device, enabled=use_amp),
         torch.no_grad(),
     ):
+
         # Prepare input for model
-        x = x.tile(n_samples, 1, 1).to(device)
+        x = x.tile(batch_size, 1, 1).to(device)
 
-        # Draw samples from the posterior and compute log probability
-        if get_logprob:
-            (
-                samples_as_tensor,
-                logprob_as_tensor,
-            ) = model.sample_and_log_prob_batch(x, **model_kwargs)
-            logprob = logprob_as_tensor.cpu().numpy()
-        else:
-            samples_as_tensor = model.sample_batch(x, **model_kwargs)
-            logprob = np.full(shape=n_samples, fill_value=np.nan)
+        # Draw samples in a batch-wise fashion (this is generally faster).
+        # This also allows us to discard samples that are outside the prior
+        # and still get the correct number of samples in the end.
+        all_samples = np.array([])
+        all_logprob = np.array([])
+        while len(all_samples) < n_samples:
 
-        # Map samples back to original units
-        samples_as_tensor = inverse_theta(samples_as_tensor.cpu())
-        samples = samples_as_tensor.numpy().squeeze()
+            # Draw samples from the posterior and compute log probability
+            if get_logprob_samples:
+                (
+                    samples_torch,
+                    logprob_torch,
+                ) = model.sample_and_log_prob_batch(x, **model_kwargs)
+                logprob_numpy = logprob_torch.cpu().numpy()
+            else:
+                samples_torch = model.sample_batch(x, **model_kwargs)
+                logprob_numpy = np.full(shape=n_samples, fill_value=np.nan)
 
-    return samples, logprob
+            # Map samples back to original units
+            samples_torch = theta_scaler.inverse(samples_torch.cpu())
+            samples_numpy = samples_torch.numpy().squeeze()
+
+            # Discard samples that are outside the prior range
+            idx = np.all(
+                np.logical_and(
+                    samples_numpy >= np.array(LOWER),
+                    samples_numpy <= np.array(UPPER),
+                ),
+                axis=1,
+            )
+            samples_numpy = samples_numpy[idx]
+            logprob_numpy = logprob_numpy[idx]
+
+            # Store accepted samples
+            all_samples = np.concatenate([all_samples, samples_numpy], axis=0)
+            all_logprob = np.concatenate([all_logprob, logprob_numpy], axis=0)
+
+    # Make sure we have the correct number of samples
+    all_samples = all_samples[:n_samples]
+    all_logprob = all_logprob[:n_samples]
+
+    return all_samples, all_logprob
 
 
 def prepare_submission_file_and_launch_job(
@@ -198,19 +233,18 @@ def prepare_submission_file_and_launch_job(
 
     # Collect arguments for the job: Start with the path to this script,
     # then add all the arguments that we got from the command line
-    # TODO: Is there a better way to do this?
-    job_arguments = [Path(__file__).resolve().as_posix()]
-    for key, value in vars(args).items():
-        key = key.replace("_", "-")
-        if (
-            key == "start-submission"
-            or (key == "get-logprob" and not value)
-            or value is None
-        ):
-            continue
-        else:
-            value = "" if isinstance(value, bool) else str(value)
-            job_arguments.append(f"--{key} {value}")
+    job_arguments = [
+        Path(__file__).resolve().as_posix(),
+        f"--device {args.device}",
+        f"--experiment-dir {args.experiment_dir}",
+        f"--file-name {args.file_name}",
+        f"--get-logprob-samples {args.get_logprob_samples}",
+        f"--get-logprob-theta {args.get_logprob_theta}",
+        f"--n-dataset-samples {args.n_dataset_samples}",
+        f"--n-posterior-samples {args.n_posterior_samples}",
+        f"--tolerance {args.tolerance}",
+        f"--which {args.which}",
+    ]
 
     # Combine condor arguments with the rest of the condor settings
     condor_settings = CondorSettings(**config["local"]["condor"])
@@ -252,6 +286,10 @@ def run_evaluation(
         config["data"]["n_samples"] = int(args.n_dataset_samples)
 
     # Load the dataset
+    # Note: The test set should load the flux with a fixed noise realization
+    # for each sample. There is currently no way to specify the key that needs
+    # to be loaded from the HDF file, so we need to manually make sure that
+    # the test file contains something like `flux` = `raw_flux` + `'noise`.
     print("Loading dataset...", end=" ")
     dataset = load_dataset(config)
     dataloader = DataLoader(
@@ -287,7 +325,7 @@ def run_evaluation(
     for theta, x in tqdm(dataloader, ncols=80):
 
         # Compute log probability of theta
-        if args.get_logprob:
+        if args.get_logprob_theta:
             logprob_theta = get_logprob_of_theta(
                 model=model,
                 theta=theta,
@@ -302,9 +340,9 @@ def run_evaluation(
             model=model,
             x=x,
             n_samples=args.n_posterior_samples,
-            inverse_theta=dataset.standardizer.inverse_theta,
+            theta_scaler=dataset.theta_scaler,
             device=args.device,
-            get_logprob=args.get_logprob,
+            get_logprob_samples=args.get_logprob_samples,
             **model_kwargs,
         )
         list_of_samples.append(samples)
@@ -330,8 +368,9 @@ def run_evaluation(
         f.attrs["git_hash"] = get_git_hash()
         f.create_dataset(name="theta", data=thetas)
         f.create_dataset(name="samples", data=samples)
-        if args.get_logprob:
+        if args.get_logprob_theta:
             f.create_dataset(name="logprob_theta", data=logprob_thetas)
+        if args.get_logprob_samples:
             f.create_dataset(name="logprob_samples", data=logprob_samples)
     print("Done!")
 
