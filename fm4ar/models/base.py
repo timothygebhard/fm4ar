@@ -445,7 +445,7 @@ class Base:
         self.save_model(
             prefix="snapshot",
             name=f"{self.epoch:04d}",
-            save_training_info=False,
+            save_training_info=True,
             target_dir=snapshots_dir,
         )
         print("Done!")
