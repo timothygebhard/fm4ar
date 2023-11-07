@@ -41,6 +41,12 @@ def get_cli_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1024,
+        help="Batch size for evaluation.",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         choices=["cpu", "cuda"],
@@ -178,8 +184,8 @@ def get_samples(
         # Draw samples in a batch-wise fashion (this is generally faster).
         # This also allows us to discard samples that are outside the prior
         # and still get the correct number of samples in the end.
-        all_samples = np.array([])
-        all_logprob = np.array([])
+        all_samples = np.empty(shape=(0, len(LOWER)))
+        all_logprob = np.empty(shape=(0, ))
         while len(all_samples) < n_samples:
 
             # Draw samples from the posterior and compute log probability
@@ -235,6 +241,7 @@ def prepare_submission_file_and_launch_job(
     # then add all the arguments that we got from the command line
     job_arguments = [
         Path(__file__).resolve().as_posix(),
+        f"--batch-size {args.batch_size}",
         f"--device {args.device}",
         f"--experiment-dir {args.experiment_dir}",
         f"--file-name {args.file_name}",
@@ -342,6 +349,7 @@ def run_evaluation(
             n_samples=args.n_posterior_samples,
             theta_scaler=dataset.theta_scaler,
             device=args.device,
+            batch_size=args.batch_size,
             get_logprob_samples=args.get_logprob_samples,
             **model_kwargs,
         )
