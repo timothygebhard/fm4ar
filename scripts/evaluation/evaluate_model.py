@@ -191,7 +191,7 @@ def get_samples(
                 logprob_numpy = logprob_torch.cpu().numpy()
             else:
                 samples_torch = model.sample_batch(x, **model_kwargs)
-                logprob_numpy = np.full(shape=n_samples, fill_value=np.nan)
+                logprob_numpy = np.full(shape=batch_size, fill_value=np.nan)
 
             # Map samples back to original units
             samples_torch = theta_scaler.inverse(samples_torch.cpu())
