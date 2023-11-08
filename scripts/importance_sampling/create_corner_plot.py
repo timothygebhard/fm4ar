@@ -31,7 +31,11 @@ if __name__ == "__main__":
 
     # Load results from HDF
     print("Loading results...", end=" ", flush=True)
-    file_path = args.experiment_dir / "importance_sampling_results.hdf"
+    file_path = (
+        args.experiment_dir
+        / "importance_sampling"
+        / "importance_sampling_results.hdf"
+    )
     with h5py.File(file_path, "r") as hdf_file:
         theta = np.array(hdf_file["theta"])
         weights = np.array(hdf_file["weights"])
