@@ -77,6 +77,12 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Random seed for sampling from proposal distribution.",
     )
     parser.add_argument(
+        "--random-seed-offset",
+        type=int,
+        default=0,
+        help="Offset for the random seed.",
+    )
+    parser.add_argument(
         "--resolution",
         type=int,
         default=1000,
@@ -317,6 +323,7 @@ if __name__ == "__main__":
             f"--experiment-dir {args.experiment_dir}",
             f"--n-samples {args.n_samples}",
             f"--random-seed {random_seed}",
+            f"--random-seed-offset {args.random_seed_offset}",
             f"--resolution {args.resolution}",
         ]
 
@@ -348,8 +355,9 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
 
     # Set the random seed (both for numpy and torch)
-    np.random.seed(args.random_seed)
-    torch.manual_seed(args.random_seed)
+    effective_random_seed = args.random_seed + args.random_seed_offset
+    np.random.seed(effective_random_seed)
+    torch.manual_seed(effective_random_seed)
 
     # Set up simulator and compute target spectrum
     print("Simulating target spectrum...", end=" ")
@@ -423,7 +431,7 @@ if __name__ == "__main__":
     print("Saving results...", end=" ")
     single = np.float32
     double = np.float64
-    file_name = f"random_seed-{args.random_seed:03d}.hdf"
+    file_name = f"random_seed-{effective_random_seed:03d}.hdf"
     file_path = output_dir / file_name
     with h5py.File(file_path, "w") as f:
         f.create_dataset(name="parameter_mask", data=parameter_mask)
