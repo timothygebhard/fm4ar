@@ -104,7 +104,7 @@ if __name__ == "__main__":
                 # Define criteria for spectra to keep
                 mean = np.mean(src["flux"][a:b], axis=1)
                 # mask = (1e-5 <= mean) & (mean <= 1e5)
-                mask = (1e-6 <= mean)
+                mask = (1e-5 <= mean)
 
                 # Select spectra that meet the criteria
                 flux = np.array(src["flux"][a:b])[mask]
@@ -120,7 +120,12 @@ if __name__ == "__main__":
                 dst["theta"][-n:] = theta
 
             # Print some information about how many spectra we selected
-            print("Before:", src["theta"].shape[0])
-            print("After: ", dst["theta"].shape[0])
+            print("\nNumber of spectra:")
+            before = src["theta"].shape[0]
+            after = dst["theta"].shape[0]
+            dropped = before - after
+            print(f'Before:  {before:,}')
+            print(f'After:   {after:,}')
+            print(f'Dropped: {dropped:,} ({dropped / before:.1f}%)')
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")
