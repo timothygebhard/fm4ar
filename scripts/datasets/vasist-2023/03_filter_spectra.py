@@ -126,6 +126,6 @@ if __name__ == "__main__":
             dropped = before - after
             print(f'Before:  {before:,}')
             print(f'After:   {after:,}')
-            print(f'Dropped: {dropped:,} ({dropped / before:.1f}%)')
+            print(f'Dropped: {dropped:,} ({100 * dropped / before:.1f}%)')
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")
