@@ -1,6 +1,11 @@
 """
-Select spectra from the Vasist-2023 dataset that meet certain criteria.
+Filter out spectra that do not meet certain criteria.
 """
+
+# TODO: Ideally, we would define the filter criteria in the `data`
+#   section of a config file. This would allow us to easily change
+#   the criteria without having to change the code, plus it would
+#   be more explicit.
 
 import argparse
 import time
@@ -33,7 +38,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--output-file-name",
         type=str,
-        default="selected.hdf",
+        default="filtered.hdf",
         help="Name of the output HDF file with the selected spectra.",
     )
     parser.add_argument(
@@ -95,7 +100,8 @@ if __name__ == "__main__":
 
                 # Define criteria for spectra to keep
                 mean = np.mean(src["flux"][a:b], axis=1)
-                mask = (1e-5 <= mean) & (mean <= 1e5)
+                # mask = (1e-5 <= mean) & (mean <= 1e5)
+                mask = (1e-6 <= mean)
 
                 # Select spectra that meet the criteria
                 flux = np.array(src["flux"][a:b])[mask]
