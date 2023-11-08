@@ -82,21 +82,24 @@ if __name__ == "__main__":
         # Open the HDF file with all the spectra
         with h5py.File(target_dir / "merged.hdf", "r") as src:
 
-            # # Copy over wavelengths
+            # Copy over wavelengths
             dst.create_dataset(
                 name="wlen",
                 data=src["wlen"][...],
                 dtype=np.float32,
             )
 
-            # Select spectra: For this, we loop over chunks of 4096 spectra at
-            # a time (to limit memory consumption) and copy over the ones that
-            # meet the criteria
+            # Prepare indices for looping over the file in chunks
+            buffer_size = 4096
+            n = len(src["flux"])
+            idx = (
+                np.r_[0 : n : buffer_size, n] if n > buffer_size
+                else np.array([0, n])
+            )
+            limits = list(zip(idx[:-1], idx[1:], strict=True))
+
             print("Selecting spectra:")
-            idx = np.arange(0, len(src["flux"]), 4096)
-            for a, b in tqdm(
-                list(zip(idx[:-1], idx[1:], strict=True)), ncols=80
-            ):
+            for a, b in tqdm(limits, ncols=80):
 
                 # Define criteria for spectra to keep
                 mean = np.mean(src["flux"][a:b], axis=1)
