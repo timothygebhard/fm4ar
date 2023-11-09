@@ -67,6 +67,12 @@ if __name__ == "__main__":
 
         # Prepare datasets in the output HDF file
         dst.create_dataset(
+            name="noise",
+            shape=(0, args.n_bins),
+            maxshape=(None, args.n_bins),
+            dtype=np.float32,
+        )
+        dst.create_dataset(
             name="theta",
             shape=(0, args.n_parameters),
             maxshape=(None, args.n_parameters),
@@ -109,15 +115,25 @@ if __name__ == "__main__":
                 # Select spectra that meet the criteria
                 flux = np.array(src["flux"][a:b])[mask]
                 theta = np.array(src["theta"][a:b])[mask]
-                n = len(flux)
+                if "noise" in src.keys():
+                    noise = np.array(src["noise"][a:b])[mask]
 
                 # Resize the datasets in the output HDF file
+                n = len(flux)
                 dst["flux"].resize((dst["flux"].shape[0] + n), axis=0)
                 dst["theta"].resize((dst["theta"].shape[0] + n), axis=0)
+                if "noise" in src.keys():
+                    dst["noise"].resize((dst["noise"].shape[0] + n), axis=0)
 
                 # Save the selected spectra and theta
                 dst["flux"][-n:] = flux
                 dst["theta"][-n:] = theta
+                if "noise" in src.keys():
+                    dst["noise"][-n:] = noise
+
+            # Drop the noise dataset if it is empty
+            if "noise" in dst.keys() and len(dst["noise"]) == 0:
+                del dst["noise"]
 
             # Print some information about how many spectra we selected
             print("\nNumber of spectra:")
