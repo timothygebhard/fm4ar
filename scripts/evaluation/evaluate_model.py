@@ -314,8 +314,8 @@ def run_evaluation(args: argparse.Namespace) -> None:
     # which is given by `args.job` and `args.n_jobs`.
     print("Loading dataset...", end=" ")
     dataset = load_dataset(config)
-    dataset.flux = dataset.flux[args.job :: args.n_jobs]
-    dataset.theta = dataset.wlen[args.job :: args.n_jobs]
+    dataset.flux = dataset.flux[args.job :: args.n_jobs, :]
+    dataset.theta = dataset.wlen[args.job :: args.n_jobs, :]
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=1,
@@ -380,7 +380,7 @@ def run_evaluation(args: argparse.Namespace) -> None:
     print()
 
     # Convert lists to numpy arrays
-    thetas = np.array(list_of_thetas)
+    thetas = np.array(list_of_thetas).squeeze(1)
     samples = np.array(list_of_samples)
     logprob_thetas = np.array(list_of_logprob_thetas)
     logprob_samples = np.array(list_of_logprob_samples)
