@@ -60,6 +60,12 @@ if __name__ == "__main__":
     dst_file_path = target_dir / "merged.hdf"
     with h5py.File(dst_file_path, "w") as f:
         f.create_dataset(
+            name="noise",
+            shape=(0, args.n_bins),
+            maxshape=(None, args.n_bins),
+            dtype=np.float32,
+        )
+        f.create_dataset(
             name="theta",
             shape=(0, args.n_parameters),
             maxshape=(None, args.n_parameters),
@@ -89,6 +95,8 @@ if __name__ == "__main__":
                 # Load data from source HDF file
                 theta = np.array(src["theta"])
                 flux = np.array(src["flux"])
+                if "noise" in src.keys():
+                    noise = np.array(src["noise"])
 
                 # Only keep files with at least one spectrum
                 if len(theta) == 0:
@@ -96,6 +104,7 @@ if __name__ == "__main__":
 
                 # Exclude spectra with NaNs
                 mask = np.isnan(flux).any(axis=1)
+                noise = noise[~mask]
                 theta = theta[~mask]
                 flux = flux[~mask]
                 n = (~mask).sum()
@@ -104,10 +113,14 @@ if __name__ == "__main__":
                 # Resize datasets in output HDF file
                 dst["theta"].resize(dst["theta"].shape[0] + n, axis=0)
                 dst["flux"].resize(dst["flux"].shape[0] + n, axis=0)
+                if "noise" in src.keys():
+                    dst["noise"].resize(dst["noise"].shape[0] + n, axis=0)
 
                 # Write data to output HDF file
                 dst["theta"][-n:] = theta
                 dst["flux"][-n:] = flux
+                if "noise" in src.keys():
+                    dst["noise"][-n:] = noise
 
                 # Copy over wavelengths
                 if "wlen" not in dst:
@@ -116,6 +129,10 @@ if __name__ == "__main__":
                         data=src["wlen"][...],
                         dtype=np.float32,
                     )
+
+            # Drop noise dataset if its empty
+            if "noise" in dst.keys() and len(dst["noise"]) == 0:
+                del dst["noise"]
 
         # Get total number of spectra
         n_spectra = dst["theta"].shape[0]
