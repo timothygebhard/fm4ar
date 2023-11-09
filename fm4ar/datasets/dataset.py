@@ -23,7 +23,7 @@ class ArDataset(Dataset):
         flux: torch.Tensor,
         wlen: torch.Tensor,
         noise_levels: float | torch.Tensor,
-        theta_scaler: Scaler,
+        theta_scaler: "Scaler",
         noise_floor: float = 0.0,
         names: list[str] | None = None,
         ranges: list[tuple[float, float]] | None = None,
