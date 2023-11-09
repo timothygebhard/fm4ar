@@ -334,7 +334,7 @@ if __name__ == "__main__":
             num_gpus=num_gpus,
             memory_gpus=35_000,
             arguments=arguments,
-            log_file_name=f"importance_sampling.$(Process)",
+            log_file_name="importance_sampling.$(Process)",
             bid=25,
             queue=args.n_jobs,
         )
