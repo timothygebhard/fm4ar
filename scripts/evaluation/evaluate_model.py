@@ -1,5 +1,5 @@
 """
-Evaluate a trained model either on the training or test set.
+Evaluate a trained model (usually on the test set).
 
 This script can either be run directly on a GPU node, or it can be
 invoked using the `--start-submission` flag to prepare a submission
@@ -78,10 +78,22 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Whether to compute the log probability of the theta.",
     )
     parser.add_argument(
+        "--job",
+        type=int,
+        default=0,
+        help="Job number for parallel processing; must be in [0, n_jobs).",
+    )
+    parser.add_argument(
         "--n-dataset-samples",
         type=int,
-        default=None,
-        help="Number of samples from the test set to use.",
+        default=10_000,
+        help="Number of spectra for which to draw posterior samples.",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=1,
+        help="Number of jobs to run in parallel.",
     )
     parser.add_argument(
         "--n-posterior-samples",
@@ -225,10 +237,7 @@ def get_samples(
     return all_samples, all_logprob
 
 
-def prepare_submission_file_and_launch_job(
-    args: argparse.Namespace,
-    config: dict[str, Any],
-) -> None:
+def prepare_submission_file_and_launch_job(args: argparse.Namespace) -> None:
     """
     Create a submission file and launch a new job on the cluster, which
     will run *without* the `--start-submission` flag. This job will then
@@ -247,16 +256,26 @@ def prepare_submission_file_and_launch_job(
         f"--file-name {args.file_name}",
         f"--get-logprob-samples {args.get_logprob_samples}",
         f"--get-logprob-theta {args.get_logprob_theta}",
+        "--job $(Process)",
         f"--n-dataset-samples {args.n_dataset_samples}",
+        f"--n-jobs {args.n_jobs}",
         f"--n-posterior-samples {args.n_posterior_samples}",
         f"--tolerance {args.tolerance}",
         f"--which {args.which}",
     ]
 
-    # Combine condor arguments with the rest of the condor settings
-    condor_settings = CondorSettings(**config["local"]["condor"])
-    condor_settings.log_file_name = f"evaluate_on_{args.which}"
-    condor_settings.arguments = job_arguments
+    # Prepare the condor settings. The evaluation basically happens only on
+    # the GPU, so we don't need a lot of CPUs, and just enough memory to load
+    # the dataset and hold the results.
+    condor_settings = CondorSettings(
+        num_cpus=1,
+        memory_cpus=50_000,
+        num_gpus=1,
+        arguments=job_arguments,
+        log_file_name=f"evaluate_on_{args.which}.$(Process)",
+        queue=args.n_jobs,
+        bid=25,
+    )
 
     # Create submission file and submit job
     file_path = create_submission_file(
@@ -271,39 +290,38 @@ def prepare_submission_file_and_launch_job(
     print("Done!\n")
 
 
-def run_evaluation(
-    args: argparse.Namespace,
-    config: dict[str, Any],
-) -> None:
+def run_evaluation(args: argparse.Namespace) -> None:
     """
     Run the actual evaluation (either on test or training data).
     """
 
     script_start = time.time()
 
-    # Update args: Default to 1000 samples from the training set
-    if args.n_dataset_samples is None and args.which == "train":
-        args.n_dataset_samples = 1000
+    # Load the experiment configuration
+    config = load_config(experiment_dir=args.experiment_dir)
 
     # Update the experiment configuration
     config["data"]["which"] = args.which
     config["data"]["file_name"] = args.file_name
     config["data"]["add_noise_to_x"] = False
-    if args.n_dataset_samples is not None:
-        config["data"]["n_samples"] = int(args.n_dataset_samples)
+    config["data"]["n_samples"] = int(args.n_dataset_samples)
 
     # Load the dataset
-    # Note: The test set should load the flux with a fixed noise realization
+    # Note 1: The test set should load the flux with a fixed noise realization
     # for each sample. There is currently no way to specify the key that needs
     # to be loaded from the HDF file, so we need to manually make sure that
     # the test file contains something like `flux` = `raw_flux` + `'noise`.
+    # Note 2: We need to select the subset of the dataset for the current job,
+    # which is given by `args.job` and `args.n_jobs`.
     print("Loading dataset...", end=" ")
     dataset = load_dataset(config)
+    dataset.flux = dataset.flux[args.job :: args.n_jobs]
+    dataset.theta = dataset.wlen[args.job :: args.n_jobs]
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=1,
         shuffle=False,
-        num_workers=0,
+        num_workers=1,
     )
     print("Done!")
 
@@ -357,7 +375,7 @@ def run_evaluation(
         list_of_logprob_samples.append(logprob_samples)
 
         # Store theta (in original units)
-        theta = dataset.standardizer.inverse_theta(theta)
+        theta = dataset.theta_scaler.inverse(theta)
         list_of_thetas.append(theta.numpy())
 
     print()
@@ -368,9 +386,13 @@ def run_evaluation(
     logprob_thetas = np.array(list_of_logprob_thetas)
     logprob_samples = np.array(list_of_logprob_samples)
 
+    # Prepare the results directory
+    evaluation_dir = args.experiment_dir / "evaluation"
+    evaluation_dir.mkdir(exist_ok=True)
+
     # Save the results to an HDF file
     print("Saving results...", end=" ")
-    file_path = args.experiment_dir / f"results_on_{args.which}_set.hdf"
+    file_path = evaluation_dir / f"results_{args.which}__{args.job:03d}.hdf"
     with h5py.File(file_path, "w") as f:
         f.attrs["model_hash"] = model_hash
         f.attrs["git_hash"] = get_git_hash()
@@ -391,7 +413,6 @@ if __name__ == "__main__":
 
     # Parse arguments and load experiment configuration
     args = get_cli_arguments()
-    config = load_config(experiment_dir=args.experiment_dir)
 
     # Make sure we don't try to run the actual evaluation on the login node
     check_if_on_login_node(start_submission=args.start_submission)
@@ -399,6 +420,6 @@ if __name__ == "__main__":
     # Check if we need to prepare a submission file and launch a new job, or
     # if we run the actual evaluation
     if args.start_submission:
-        prepare_submission_file_and_launch_job(args=args, config=config)
+        prepare_submission_file_and_launch_job(args=args)
     else:
-        run_evaluation(args=args, config=config)
+        run_evaluation(args=args)
