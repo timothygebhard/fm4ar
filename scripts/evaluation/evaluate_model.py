@@ -62,7 +62,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--file-name",
         type=str,
-        default="selected.hdf",
+        default="filtered.hdf",
         help="Name of the HDF file to load (combines with --which).",
     )
     parser.add_argument(
@@ -284,10 +284,9 @@ def prepare_submission_file_and_launch_job(args: argparse.Namespace) -> None:
         file_name=f"evaluate_on_{args.which}.sub",
     )
 
-    print("Done!")
-    print("Submitting job...", end=" ")
-    condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
     print("Done!\n")
+
+    condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
 
 
 def run_evaluation(args: argparse.Namespace) -> None:
