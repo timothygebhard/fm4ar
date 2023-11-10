@@ -315,7 +315,7 @@ def run_evaluation(args: argparse.Namespace) -> None:
     print("Loading dataset...", end=" ")
     dataset = load_dataset(config)
     dataset.flux = dataset.flux[args.job :: args.n_jobs, :]
-    dataset.theta = dataset.wlen[args.job :: args.n_jobs, :]
+    dataset.theta = dataset.theta[args.job :: args.n_jobs, :]
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=1,
