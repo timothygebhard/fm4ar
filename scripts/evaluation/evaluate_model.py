@@ -84,9 +84,16 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Job number for parallel processing; must be in [0, n_jobs).",
     )
     parser.add_argument(
+        "--method",
+        type=str,
+        default="dopri8",  # dopri5 is faster but sometimes gives errors
+        choices=["dopri5", "dopri8"],
+        help="Method for ODE solver (only needed for flow matching).",
+    )
+    parser.add_argument(
         "--n-dataset-samples",
         type=int,
-        default=10_000,
+        default=1_000,
         help="Number of spectra for which to draw posterior samples.",
     )
     parser.add_argument(
@@ -334,7 +341,10 @@ def run_evaluation(args: argparse.Namespace) -> None:
 
     # Define model-specific keyword arguments
     if isinstance(model, FlowMatching):
-        model_kwargs = {"tolerance": args.tolerance}
+        model_kwargs = {
+            "tolerance": args.tolerance,
+            "method": args.method,
+        }
     else:
         model_kwargs = {}
 
