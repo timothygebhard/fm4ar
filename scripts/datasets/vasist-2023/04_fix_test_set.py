@@ -37,10 +37,14 @@ if __name__ == "__main__":
 
         # Overwrite the flux dataset with the noisy flux
         # This is what will be loaded by default by the data loading code!
+        print("Replacing pure flux with noisy flux...", end=" ", flush=True)
         del f["flux"]
         f.create_dataset("flux", data=flux + noise, dtype=np.float32)
+        print("Done!")
 
         # Store the raw flux
+        print("Storing raw flux...", end=" ", flush=True)
         f.create_dataset("raw_flux", data=flux, dtype=np.float32)
+        print("Done!")
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds.\n")
