@@ -87,7 +87,6 @@ def get_cli_arguments() -> argparse.Namespace:
         "--method",
         type=str,
         default="dopri5",  # dopri8 is more stable, but MUCH slower
-        choices=["dopri5", "dopri8"],
         help="Method for ODE solver (only needed for flow matching).",
     )
     parser.add_argument(
@@ -208,15 +207,29 @@ def get_samples(
         while len(all_samples) < n_samples:
 
             # Draw samples from the posterior and compute log probability
-            if get_logprob_samples:
-                (
-                    samples_torch,
-                    logprob_torch,
-                ) = model.sample_and_log_prob_batch(x, **model_kwargs)
-                logprob_numpy = logprob_torch.cpu().numpy()
-            else:
-                samples_torch = model.sample_batch(x, **model_kwargs)
-                logprob_numpy = np.full(shape=batch_size, fill_value=np.nan)
+            # For flow matching, this can sometimes give an AssertionError,
+            # which (probably) means the ODE was too stiff. In this case, we
+            # just try again with a different random batch. (Alternatively,
+            # one can try to use `dopri8` instead of `dopri5` as the solver,
+            # but this is MUCH slower.)
+            try:
+                if get_logprob_samples:
+                    (
+                        samples_torch,
+                        logprob_torch,
+                    ) = model.sample_and_log_prob_batch(x, **model_kwargs)
+                    logprob_numpy = logprob_torch.cpu().numpy()
+                else:
+                    samples_torch = model.sample_batch(x, **model_kwargs)
+                    logprob_numpy = np.full(batch_size, np.nan)
+
+            # Skip this batch if we get an assertion error due to a stiff ODE
+            except AssertionError as e:
+                if "underflow in dt nan" in str(e):
+                    print("\nGot AssertionError! Trying another batch...\n")
+                    continue
+                else:
+                    raise e
 
             # Map samples back to original units
             samples_torch = theta_scaler.inverse(samples_torch.cpu())
