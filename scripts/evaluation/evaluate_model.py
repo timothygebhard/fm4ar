@@ -264,6 +264,7 @@ def prepare_submission_file_and_launch_job(args: argparse.Namespace) -> None:
         f"--get-logprob-samples {args.get_logprob_samples}",
         f"--get-logprob-theta {args.get_logprob_theta}",
         "--job $(Process)",
+        f"--method {args.method}",
         f"--n-dataset-samples {args.n_dataset_samples}",
         f"--n-jobs {args.n_jobs}",
         f"--n-posterior-samples {args.n_posterior_samples}",
