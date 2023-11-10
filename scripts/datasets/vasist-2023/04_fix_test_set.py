@@ -31,6 +31,10 @@ if __name__ == "__main__":
     # Open the HDF file
     with h5py.File(args.file_path, "a") as f:
 
+        # Check that we do not accidentally run this script twice
+        if "raw_flux" in f.keys():
+            raise RuntimeError("raw_flux dataset already exists!")
+
         # Load flux and noise
         flux = np.array(f["flux"])
         noise = np.array(f["noise"])
