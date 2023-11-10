@@ -86,7 +86,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--method",
         type=str,
-        default="dopri8",  # dopri5 is faster but sometimes gives errors
+        default="dopri5",  # dopri8 is more stable, but MUCH slower
         choices=["dopri5", "dopri8"],
         help="Method for ODE solver (only needed for flow matching).",
     )
