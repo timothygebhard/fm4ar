@@ -35,7 +35,6 @@ if __name__ == "__main__":
     data: dict[str, list[np.ndarray]] = {}
     with h5py.File(file_paths[0], "r") as f:
         for key in f.keys():
-
             data[key] = []
 
     # Loop over all HDF files and collect the data
