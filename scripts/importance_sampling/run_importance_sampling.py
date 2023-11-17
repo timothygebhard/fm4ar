@@ -28,6 +28,7 @@ from fm4ar.models.build_model import build_model
 from fm4ar.models.continuous.flow_matching import FlowMatching
 from fm4ar.nested_sampling.config import load_config as load_ns_config
 from fm4ar.nested_sampling.posteriors import load_posterior
+from fm4ar.nn.flows import create_unconditional_nsf
 from fm4ar.utils.config import load_config as load_ml_config
 from fm4ar.utils.htcondor import (
     CondorSettings,
@@ -57,6 +58,13 @@ def get_cli_arguments() -> argparse.Namespace:
         type=Path,
         required=True,
         help="Path to the experiment directory.",
+    )
+    parser.add_argument(
+        "--model-type",
+        type=str,
+        choices=["ml", "nested_sampling", "unconditional_flow"],
+        default="ml",
+        help="Type of model to assume for importance sampling.",
     )
     parser.add_argument(
         "--n-jobs",
@@ -114,7 +122,7 @@ def get_parameter_mask() -> np.ndarray:
     # In case of an ML model, the config.yaml should contain a "parameters"
     # key with a list of the indices of the free parameters. If there is no
     # explicit "parameters" key, we assume that all parameters are free.
-    if (args.experiment_dir / "model__best.pt").exists():
+    if args.model_type == "ml":
         ml_config = load_ml_config(args.experiment_dir)
         parameters = ml_config["data"].get("parameters")
         if parameters is None:
@@ -123,6 +131,10 @@ def get_parameter_mask() -> np.ndarray:
             parameter_mask = np.array(
                 [i in parameters for i in range(len(NAMES))]
             )
+
+    # TODO: We still need to define a config file for the unconditional flow
+    elif args.model_type == "unconditional_flow":
+        parameter_mask = np.ones(len(NAMES), dtype=bool)
 
     # For nested sampling posteriors, the config.yaml (which has a different
     # structure!) explicitly lists all parameters, and we need to select the
@@ -136,9 +148,7 @@ def get_parameter_mask() -> np.ndarray:
     return parameter_mask
 
 
-def process_theta_i(
-    theta_i: np.ndarray,
-) -> tuple[np.ndarray, float, float]:
+def process_theta_i(theta_i: np.ndarray) -> tuple[np.ndarray, float, float]:
     """
     Returns the (raw) weight, likelihood, prior, and model probability.
     """
@@ -180,6 +190,45 @@ def process_theta_i(
     )
 
     return x_i, likelihood, prior
+
+
+def handle_unconditional_flow() -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load a trained unconditional flow model and draw samples from it.
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # Create scaler
+    # TODO: Probably this should not be hardcoded!
+    config = dict(data=dict(name="vasist-2023", theta_scaler="standardizer"))
+    scaler = get_theta_scaler(config=config)
+
+    # Load the unconditional flow model
+    print("Loading unconditional flow model...", end=" ")
+    model = create_unconditional_nsf()
+    model.to(device)
+    print("Done!")
+
+    # Load the checkpoint
+    print("Loading checkpoint...", end=" ")
+    file_path = Path(args.experiment_dir / "model__best.pt")
+    state_dict = torch.load(file_path, map_location=torch.device(device))
+    model.load_state_dict(state_dict)
+    print("Done!")
+
+    # Draw samples from the unconditional flow model
+    print("Drawing samples from unconditional flow...", end=" ", flush=True)
+    model.eval()
+    with torch.no_grad():
+        samples, logprob = model.sample(num_samples=args.n_samples)
+    samples = scaler.inverse(samples.cpu()).numpy()
+    probs = torch.exp(logprob).cpu().numpy()
+    theta = np.array(args.n_samples * [THETA_0])
+    theta[:, parameter_mask] = samples
+    print("Done!\n")
+
+    return theta, probs
 
 
 def handle_nested_sampling_posterior() -> tuple[np.ndarray, np.ndarray]:
@@ -308,8 +357,8 @@ if __name__ == "__main__":
 
     if args.start_submission:
 
-        # We only need to request a GPU if we are using a trained ML model
-        num_gpus = int((args.experiment_dir / "model__best.pt").exists())
+        # We only need to request a GPU if we are using ML-based model
+        num_gpus = 1 if args.model_type in ["ml", "unconditional_flow"] else 0
 
         # If we are running multiple jobs, the random seed is determined by
         # the process number on HTCondor. This seems like the simplest way to
@@ -321,6 +370,7 @@ if __name__ == "__main__":
         arguments = [
             Path(__file__).resolve().as_posix(),
             f"--experiment-dir {args.experiment_dir}",
+            f"--model-type {args.model_type}",
             f"--n-samples {args.n_samples}",
             f"--random-seed {random_seed}",
             f"--random-seed-offset {args.random_seed_offset}",
@@ -373,17 +423,15 @@ if __name__ == "__main__":
     # All other parameters are fixed to theta_0 (required for simulation).
     parameter_mask = get_parameter_mask()
 
-    # Check if the experiment directory we got contains a trained model.
-    # In this case, we load the trained model and sample from it.
-    if (args.experiment_dir / "model__best.pt").exists():
-        print("Found trained ML model!\n")
+    # Handle the different model types
+    if args.model_type == "ml":
+        print("Running for ML model (FMPE / NPE)!\n")
         theta, probs = handle_trained_ml_model()
-
-    # Otherwise, we assume that the experiment directory contains a nested
-    # sampling posterior. In this case, we load the nested sampling posterior,
-    # fit a KDE, and sample from it / use it compute probabilities.
+    elif args.model_type == "unconditional_flow":
+        print("Running for unconditional flow model!\n")
+        theta, probs = handle_unconditional_flow()
     else:
-        print("No ML model found, assuming nested sampling posterior!\n")
+        print("Running with KDE on nested sampling posterior!\n")
         theta, probs = handle_nested_sampling_posterior()
 
     # For each sample, compute the raw weight, likelihood, prior, and prob.
