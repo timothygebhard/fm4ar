@@ -15,7 +15,7 @@ example from https://github.com/bayesiains/nsf.
 """
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, Type
 
 import torch
 
@@ -379,3 +379,42 @@ def create_transform(
     )
 
     return transform
+
+
+def create_unconditional_nsf(
+    num_transforms: int = 24,
+    num_input_channels: int = 16,
+    num_hidden_channels: int = 512,
+    num_blocks: int = 4,
+    num_bins: int = 16,
+    tail_bound: float = 5.0,
+    activation: Type[torch.nn.Module] = torch.nn.ELU,
+) -> nf.NormalizingFlow:
+    """
+    Create the unconditional neural spline flow model. Useful, e.g., to
+    fit samples from a posterior so that one can  evaluate the logprob
+    and use it for importance sampling.
+    """
+
+    # Construct series of transforms
+    flows = []
+    for _ in range(num_transforms):
+        flows += [
+            nf.flows.CoupledRationalQuadraticSpline(
+                num_input_channels=num_input_channels,
+                num_blocks=num_blocks,
+                num_hidden_channels=num_hidden_channels,
+                num_bins=num_bins,
+                tail_bound=tail_bound,
+                activation=activation,
+            ),
+            nf.flows.LULinearPermute(num_input_channels),
+        ]
+
+    # Set base distribution
+    q0 = nf.distributions.DiagGaussian(num_input_channels, trainable=False)
+
+    # Construct flow model
+    model = nf.NormalizingFlow(q0=q0, flows=flows)
+
+    return model
