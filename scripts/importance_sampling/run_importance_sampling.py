@@ -45,6 +45,12 @@ def get_cli_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--bid",
+        type=int,
+        default=25,
+        help="Bid for the HTCondor job.",
+    )
+    parser.add_argument(
         "--checkpoint-file",
         type=str,
         default="model__best.pt",
@@ -77,6 +83,12 @@ def get_cli_arguments() -> argparse.Namespace:
         type=int,
         default=10_000,
         help="Number of samples to draw from proposal distribution.",
+    )
+    parser.add_argument(
+        "--num-cpus",
+        type=int,
+        default=96,
+        help="Number of CPUs to request for the HTCondor job.",
     )
     parser.add_argument(
         "--random-seed",
@@ -379,13 +391,13 @@ if __name__ == "__main__":
 
         # Create a submission file for the importance sampling job
         condor_settings = CondorSettings(
-            num_cpus=96,
-            memory_cpus=100_000,
+            num_cpus=args.num_cpus,
+            memory_cpus=args.num_cpus * 1000,
             num_gpus=num_gpus,
             memory_gpus=35_000,
             arguments=arguments,
             log_file_name="importance_sampling.$(Process)",
-            bid=25,
+            bid=args.bid,
             queue=args.n_jobs,
         )
         file_path = create_submission_file(
