@@ -394,7 +394,7 @@ if __name__ == "__main__":
             num_cpus=args.num_cpus,
             memory_cpus=args.num_cpus * 1000,
             num_gpus=num_gpus,
-            memory_gpus=35_000,
+            memory_gpus=15_000,
             arguments=arguments,
             log_file_name="importance_sampling.$(Process)",
             bid=args.bid,
