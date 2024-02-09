@@ -78,6 +78,74 @@ class CondorSettings(BaseModel):
     )
 
 
+class DAGManFile:
+    """
+    Wrapper to create a DAGMan file.
+    """
+
+    def __init__(self) -> None:
+        self.jobs: dict[str, dict] = {}
+
+    def add_job(
+        self,
+        name: str,
+        file_path: Path,
+        bid: int = 15,
+        depends_on: list[str] | None = None,
+    ) -> None:
+        """
+        Add job to the DAGMan file.
+
+        Args:
+            name: Name of the job (must be unique).
+            file_path: Path to the submission file.
+            bid: Bid to use for the job (default: 15).
+            depends_on: Names of the parent jobs (i.e., jobs that need
+                to finish before the current job can be launched).
+        """
+
+        # Make sure the job does not exist already
+        if name in self.jobs:
+            raise ValueError(f"Job {name} already exists!")
+
+        # Add the job to the DAGman file
+        self.jobs[name] = {
+            "file_path": file_path,
+            "bid": bid,
+            "depends_on": [] if depends_on is None else depends_on,
+        }
+
+    def save(self, file_path: Path) -> None:
+        """
+        Save the DAGMan file to disk.
+        """
+
+        # Collect lines. First, define the jobs:
+        lines = []
+        for name, job in self.jobs.items():
+            lines.append(f"JOB {name} {job['file_path']}\n")
+        lines.append("\n")
+
+        # Then add the dependencies:
+        for name, job in self.jobs.items():
+            for parent in job["depends_on"]:
+                if parent not in self.jobs:
+                    raise ValueError(f"Parent '{parent}' does not exist!")
+                lines.append(f"PARENT {parent} CHILD {name}\n")
+        lines.append("\n")
+
+        # Finally, add the bids (which we need to convert to priorities):
+        for name, job in self.jobs.items():
+            priority = job["bid"] - 1000
+            lines.append(f"PRIORITY {name} {priority}\n")
+
+        # Write the DAGman file (we do this at the end to make sure that we
+        # don't write the file if there is an error)
+        with open(file_path, "w") as f:
+            for line in lines:
+                f.write(line)
+
+
 def check_if_on_login_node(start_submission: bool) -> None:
     """
     Check if this script is running on the login node of the cluster,
@@ -136,6 +204,26 @@ def condor_submit_bid(
     """
 
     cmd = ["condor_submit_bid", str(bid), str(file_path)]
+    process = run(cmd, capture_output=True, check=False)
+
+    if verbose:
+        print(process.stdout.decode("utf-8"))
+        print(process.stderr.decode("utf-8"))
+
+
+def condor_submit_dag(
+    file_path: Path,
+    verbose: bool = True,
+) -> None:  # pragma: no cover
+    """
+    Submit a DAGMan file to HTCondor.
+
+    Args:
+        file_path: Path to the DAGMan file.
+        verbose: If True, print the output of `condor_submit_dag`.
+    """
+
+    cmd = ["condor_submit_dag", str(file_path)]
     process = run(cmd, capture_output=True, check=False)
 
     if verbose:
