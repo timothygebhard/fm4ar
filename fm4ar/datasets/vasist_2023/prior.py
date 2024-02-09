@@ -2,7 +2,7 @@
 Define methods to draw a sample from the prior.
 
 This implementation is based on the code from Vasist et al. (2023):
-https://gitlab.uliege.be/francois.rozet/sbi-ear
+https://github.com/MalAstronomy/sbi-ear
 """
 
 import numpy as np
@@ -67,11 +67,11 @@ SIGMA = 1.25754e-17 * 1e16
 
 class Prior:
     """
-    Box uniform prior over atmospheric parameters; see Table 1 in
-    Vasist et al. (2023).
+    Box uniform prior over atmospheric parameters.
+    See Table 1 in Vasist et al. (2023).
     """
 
-    def __init__(self, random_seed: int) -> None:
+    def __init__(self, random_seed: int = 42) -> None:
         """
         Initialize class instance.
         """
@@ -80,9 +80,27 @@ class Prior:
         self.random_seed = random_seed
         self.rng = np.random.default_rng(self.random_seed)
 
+        # Store prior bounds as arrays
+        self.lower = np.array(LOWER)
+        self.upper = np.array(UPPER)
+
+        # Store names and labels as arrays
+        self.names = np.array(NAMES)
+        self.labels = np.array(LABELS)
+
     def sample(self) -> np.ndarray:
         """
         Draw a sample from the prior.
         """
 
-        return self.rng.uniform(LOWER, UPPER)
+        return self.rng.uniform(self.lower, self.upper)
+
+    def evaluate(self, theta: np.ndarray) -> float:
+        """
+        Compute the prior probability of a given sample.
+        """
+
+        if np.all((theta >= self.lower) & (theta <= self.upper)):
+            return float(1.0 / np.prod(self.upper - self.lower))
+        else:
+            return 0.0
