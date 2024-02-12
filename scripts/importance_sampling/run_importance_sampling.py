@@ -8,32 +8,25 @@ import sys
 import time
 from pathlib import Path
 
-import h5py
 import numpy as np
 import torch
 from p_tqdm import p_map
-from scipy.stats import gaussian_kde
-from tqdm import tqdm
 
-from fm4ar.datasets.scaling import get_theta_scaler
-from fm4ar.datasets.vasist_2023.prior import (
-    LOWER,
-    UPPER,
-    NAMES,
-    SIGMA,
-    THETA_0,
+from fm4ar.datasets.vasist_2023.prior import Prior, SIGMA
+from fm4ar.datasets.vasist_2023.simulator import Simulator
+from fm4ar.importance_sampling.proposals import draw_proposal_samples
+from fm4ar.importance_sampling.utils import (
+    compute_effective_sample_size,
+    compute_is_weights,
+    construct_context,
+    get_target_spectrum,
 )
-from fm4ar.datasets.vasist_2023.simulation import Simulator
-from fm4ar.models.build_model import build_model
-from fm4ar.models.continuous.flow_matching import FlowMatching
-from fm4ar.nested_sampling.config import load_config as load_ns_config
-from fm4ar.nested_sampling.posteriors import load_posterior
-from fm4ar.nn.flows import create_unconditional_nsf
-from fm4ar.utils.config import load_config as load_ml_config
+from fm4ar.utils.hdf import load_merged_hdf_files, save_to_hdf
 from fm4ar.utils.htcondor import (
     CondorSettings,
+    DAGManFile,
     create_submission_file,
-    condor_submit_bid,
+    condor_submit_dag,
 )
 from fm4ar.utils.multiproc import get_number_of_available_cores
 
@@ -66,6 +59,12 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Path to the experiment directory.",
     )
     parser.add_argument(
+        "--job",
+        type=int,
+        default=0,
+        help="Job number for parallel processing; must be in [0, n_jobs).",
+    )
+    parser.add_argument(
         "--model-type",
         type=str,
         choices=["ml", "nested_sampling", "unconditional_flow"],
@@ -73,10 +72,22 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Type of model to assume for importance sampling.",
     )
     parser.add_argument(
-        "--n-jobs",
+        "--n-sampling-jobs",
         type=int,
         default=1,
-        help="Number of parallel jobs to start on the cluster.",
+        help=(
+            "Number of parallel jobs to use for drawing proposal samples. "
+            "These are jobs that will require a GPU for ML models."
+        ),
+    )
+    parser.add_argument(
+        "--n-simulation-jobs",
+        type=int,
+        default=1,
+        help=(
+            "Number of parallel jobs to use for simulating spectra. "
+            "These jobs only require CPUs (the more, the better)."
+        ),
     )
     parser.add_argument(
         "--n-samples",
@@ -87,7 +98,7 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--num-cpus",
         type=int,
-        default=96,
+        default=16,
         help="Number of CPUs to request for the HTCondor job.",
     )
     parser.add_argument(
@@ -115,6 +126,28 @@ def get_cli_arguments() -> argparse.Namespace:
         help="If True, create a submission file and launch a job.",
     )
     parser.add_argument(
+        "--stage",
+        type=str,
+        choices=[
+            "draw_proposal_samples",
+            "merge_proposal_samples",
+            "simulate_spectra",
+            "merge_simulation_results",
+        ],
+        default=None,
+        help="Stage of the importance sampling workflow that should be run.",
+    )
+    parser.add_argument(
+        "--target-spectrum",
+        type=str,
+        default="benchmark",
+        help=(
+            "Target spectrum. If 'benchmark', use the benchmark spectrum "
+            "from Vasist et al. (2023). If a number N is given, use the N-th "
+            "spectrum from the evaluation set."
+        )
+    )
+    parser.add_argument(
         "--tolerance",
         type=float,
         default=1.0e-4,
@@ -125,67 +158,20 @@ def get_cli_arguments() -> argparse.Namespace:
     return args
 
 
-def get_parameter_mask() -> np.ndarray:
-    """
-    Determine mask that indicates which parameters are free, and which
-    parameters are fixed to theta_0.
-    """
-
-    # In case of an ML model, the config.yaml should contain a "parameters"
-    # key with a list of the indices of the free parameters. If there is no
-    # explicit "parameters" key, we assume that all parameters are free.
-    if args.model_type == "ml":
-        ml_config = load_ml_config(args.experiment_dir)
-        parameters = ml_config["data"].get("parameters")
-        if parameters is None:
-            parameter_mask = np.ones(len(NAMES), dtype=bool)
-        else:
-            parameter_mask = np.array(
-                [i in parameters for i in range(len(NAMES))]
-            )
-
-    # TODO: We still need to define a config file for the unconditional flow
-    elif args.model_type == "unconditional_flow":
-        parameter_mask = np.ones(len(NAMES), dtype=bool)
-
-    # For nested sampling posteriors, the config.yaml (which has a different
-    # structure!) explicitly lists all parameters, and we need to select the
-    # ones with `action="infer"` (i.e., the free parameters)
-    else:
-        ns_config = load_ns_config(args.experiment_dir)
-        parameter_mask = np.array(
-            [ns_config.parameters[name].action == "infer" for name in NAMES]
-        )
-
-    return parameter_mask
-
-
 def process_theta_i(theta_i: np.ndarray) -> tuple[np.ndarray, float, float]:
     """
     Returns the (raw) weight, likelihood, prior, and model probability.
     """
 
-    # NOTE: We do not pass the `simulator`, `x_0`, `context`, ... as arguments
-    # to this function because it seems like in that case, the multiprocessing
+    # NOTE: We do not pass the `simulator`, `context`, ... as arguments to
+    # this function because it seems like in that case, the multiprocessing
     # parallelization does not work properly (there is only ever one process
     # at a time doing work). This function can therefore only be called when
     # the outer scope provides these variables!
 
-    # Compute the prior: Since we are using a box-uniform prior, we only need
-    # to check if the parameters are within the bounds
-    prior = float(
-        np.prod(
-            np.array(
-                [
-                    float(LOWER[i] <= theta_i[i] <= UPPER[i])
-                    for i in range(len(theta_i))
-                ]
-            )
-        )
-    )
-
+    # Evaluate the prior at theta_i
     # If the prior is 0, we can skip the rest (because the weight will be 0)
-    if prior == 0:
+    if (prior_value := prior.evaluate(theta_i)) == 0:
         return np.full(n_bins, np.nan), 0.0, 0.0
 
     # Simulate the spectrum that belongs to theta_i
@@ -201,161 +187,171 @@ def process_theta_i(theta_i: np.ndarray) -> tuple[np.ndarray, float, float]:
         np.exp(float(-0.5 * np.sum(((x_i - x_0) / SIGMA) ** 2)))
     )
 
-    return x_i, likelihood, prior
+    return x_i, likelihood, prior_value
 
 
-def handle_unconditional_flow() -> tuple[np.ndarray, np.ndarray]:
-    """
-    Load a trained unconditional flow model and draw samples from it.
-    """
+def prepare_and_launch_dagman_file(
+    args: argparse.Namespace,
+    output_dir: Path,
+) -> None:
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Initialize a new DAGMan file
+    dag = DAGManFile()
 
-    # Create scaler
-    # TODO: Probably this should not be hardcoded!
-    config = dict(data=dict(name="vasist-2023", theta_scaler="standardizer"))
-    scaler = get_theta_scaler(config=config)
+    # Collect arguments that will be shared between all stages
+    shared_arguments = [
+        Path(__file__).resolve().as_posix(),
+        f"--experiment-dir {args.experiment_dir}",
+        f"--model-type {args.model_type}",
+        f"--random-seed {args.random_seed}",
+        f"--random-seed-offset {args.random_seed_offset}",
+    ]
 
-    # Load the unconditional flow model
-    print("Loading unconditional flow model...", end=" ")
-    model = create_unconditional_nsf()
-    model.to(device)
-    print("Done!")
+    # -------------------------------------------------------------------------
+    # Stage 1: Draw samples from the proposal distribution
+    # -------------------------------------------------------------------------
 
-    # Load the checkpoint
-    print("Loading checkpoint...", end=" ")
-    file_path = Path(args.experiment_dir / "model__best.pt")
-    state_dict = torch.load(file_path, map_location=torch.device(device))
-    model.load_state_dict(state_dict)
-    print("Done!")
+    # We only need to request a GPU if we are using ML-based model
+    num_gpus = 1 if args.model_type in ["ml", "unconditional_flow"] else 0
 
-    # Draw samples from the unconditional flow model
-    print("Drawing samples from unconditional flow...", end=" ", flush=True)
-    model.eval()
-    with torch.no_grad():
-        samples, logprob = model.sample(num_samples=args.n_samples)
-    samples = scaler.inverse(samples.cpu()).numpy()
-    probs = torch.exp(logprob).cpu().numpy()
-    theta = np.array(args.n_samples * [THETA_0])
-    theta[:, parameter_mask] = samples
-    print("Done!\n")
+    # Add extra arguments needed for this stage
+    arguments = [
+        *shared_arguments,
+        f"--n-samples {args.n_samples}",
+        f"--resolution {args.resolution}",
+        "--stage draw_proposal_samples",
+    ]
 
-    return theta, probs
-
-
-def handle_nested_sampling_posterior() -> tuple[np.ndarray, np.ndarray]:
-    """
-    Load posterior samples from nested sampling, apply a KDE, and draw
-    samples with corresponding probabilities from the KDE.
-
-    Note: This function accesses values from an outer scope! (This is
-    ugly, but in case of the `simulator`, there seems to be no other
-    way that works with multiprocessing?)
-    """
-
-    # Load the nested sampling posterior
-    print("Loading nested sampling posterior...", end=" ")
-    ns_samples, ns_weights = load_posterior(experiment_dir=args.experiment_dir)
-    print("Done!\n")
-
-    # Fit the posterior with a Gaussian KDE
-    print("Fitting nested sampling posterior with KDE...", end=" ")
-    kde = gaussian_kde(
-        dataset=ns_samples.T,
-        weights=ns_weights,
-        bw_method=0.1,
+    # Create submission file
+    condor_settings = CondorSettings(
+        num_cpus=args.num_cpus,
+        memory_cpus=args.num_cpus * 1000,
+        num_gpus=num_gpus,
+        memory_gpus=15_000,
+        arguments=arguments,
+        log_file_name="draw_proposal_samples.$(Process)",
+        queue=args.n_jobs,
     )
-    print("Done!")
-
-    # Draw samples from the model posterior ("proposal distribution") and
-    # compute probabilities under the model (i.e., the KDE)
-    # TODO: Maybe this should also be done in a chunked fashion?
-    print("Drawing samples from KDE...", end=" ", flush=True)
-    kde_samples = kde.resample(size=args.n_samples).T
-    probs = kde.pdf(kde_samples.T)
-    theta = np.array(args.n_samples * [THETA_0])
-    theta[:, parameter_mask] = kde_samples
-    print("Done!\n")
-
-    return theta, probs
-
-
-def handle_trained_ml_model() -> tuple[np.ndarray, np.ndarray]:
-    """
-    Load a trained ML model and draw samples from it.
-
-    Note: This function accesses values from an outer scope! (This is
-    ugly, but in case of the `simulator`, there seems to be no other
-    way that works with multiprocessing?)
-    """
-
-    # Construct uncertainties
-    noise_level = SIGMA * np.ones_like(x_0)
-
-    # Construct context
-    context = (
-        torch.stack(
-            [
-                torch.from_numpy(x_0),
-                torch.from_numpy(wlen),
-                torch.from_numpy(noise_level),
-            ],
-            dim=1,
-        )
-        .float()
-        .unsqueeze(0)  # Add batch dimension
+    file_path = create_submission_file(
+        condor_settings=condor_settings,
+        experiment_dir=output_dir,
+        file_name="draw_proposal_samples.sub",
     )
 
-    # Load the trained model
-    print("Loading trained model...", end=" ")
-    file_path = args.experiment_dir / args.checkpoint_file
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = build_model(file_path=file_path, device=device)
-    model.model.eval()
-    print("Done!")
+    # Add the job to the DAGMan file
+    dag.add_job(
+        name="draw_proposal_samples",
+        file_path=file_path,
+    )
 
-    # Load experiment config and construct a standardizer for the data
-    print("Loading standardizer...", end=" ")
-    config = load_ml_config(args.experiment_dir)
-    theta_scaler = get_theta_scaler(config=config)
-    print("Done!\n")
+    # -------------------------------------------------------------------------
+    # Stage 2: Merge the samples from the proposal distribution
+    # -------------------------------------------------------------------------
 
-    # Define additional keywords for the model
-    if isinstance(model, FlowMatching):
-        model_kwargs = dict(tolerance=args.tolerance)
-    else:
-        model_kwargs = dict()
+    # Add extra arguments needed for this stage
+    arguments = [
+        *shared_arguments,
+        "--stage merge_proposal_samples",
+    ]
 
-    # Draw samples from the model posterior ("proposal distribution").
-    # We do this in a chunked fashion to avoid running out of GPU memory.
-    print("Drawing samples from the model posterior:", flush=True)
-    theta_chunks = []
-    probs_chunks = []
-    chunk_sizes = np.diff(np.r_[0 : args.n_samples : 1000, args.n_samples])
-    for chunk_size in tqdm(chunk_sizes, ncols=80):
-        with torch.no_grad():
-            theta_chunk, log_probs_chunk = model.sample_and_log_prob_batch(
-                context=context.repeat(chunk_size, 1, 1).to(device),
-                **model_kwargs,
-            )
-        theta_chunk = theta_scaler.inverse(theta_chunk.cpu())
-        probs_chunk = torch.exp(log_probs_chunk.cpu())
-        theta_chunks.append(theta_chunk.cpu())
-        probs_chunks.append(probs_chunk.cpu())
-    print(flush=True)
+    # Create submission file
+    condor_settings = CondorSettings(
+        num_cpus=2,
+        memory_cpus=args.num_cpus * 1000,
+        arguments=arguments,
+        log_file_name="merge_proposal_samples.$(Process)",
+    )
+    file_path = create_submission_file(
+        condor_settings=condor_settings,
+        experiment_dir=output_dir,
+        file_name="merge_proposal_samples.sub",
+    )
 
-    # Use the parameter mask to combine the sampled theta values with theta_0
-    theta_raw = torch.cat(theta_chunks, dim=0).numpy()
-    theta = np.repeat(THETA_0[np.newaxis, :], args.n_samples, axis=0)
-    theta[:, parameter_mask] = theta_raw
+    # Add the job to the DAGMan file
+    dag.add_job(
+        name="merge_proposal_samples",
+        file_path=file_path,
+        depends_on=["draw_proposal_samples"],
+    )
 
-    # Combine the probability chunks into a single numpy array
-    probs = torch.cat(probs_chunks, dim=0).numpy().flatten()
+    # -------------------------------------------------------------------------
+    # Stage 3: Simulate spectra for the proposal samples
+    # -------------------------------------------------------------------------
 
-    return theta, probs
+    # Add extra arguments needed for this stage
+    arguments = [
+        *shared_arguments,
+        f"--resolution {args.resolution}",
+        "--stage simulate_spectra",
+    ]
+
+    # Create submission file
+    condor_settings = CondorSettings(
+        num_cpus=args.num_cpus,
+        memory_cpus=args.num_cpus * 1000,
+        arguments=arguments,
+        log_file_name="simulate_spectra.$(Process)",
+    )
+    file_path = create_submission_file(
+        condor_settings=condor_settings,
+        experiment_dir=output_dir,
+        file_name="simulate_spectra.sub",
+    )
+
+    # Add the job to the DAGMan file
+    dag.add_job(
+        name="simulate_spectra",
+        file_path=file_path,
+        depends_on=["merge_proposal_samples"],
+    )
+
+    # -------------------------------------------------------------------------
+    # Stage 4: Merge the results from all jobs and compute the weights
+    # -------------------------------------------------------------------------
+
+    # Add extra arguments needed for this stage
+    arguments = [
+        *shared_arguments,
+        "--stage merge_simulation_results",
+    ]
+
+    # Create submission file
+    condor_settings = CondorSettings(
+        num_cpus=2,
+        memory_cpus=args.num_cpus * 1000,
+        arguments=arguments,
+        log_file_name="merge_simulation_results.$(Process)",
+    )
+    file_path = create_submission_file(
+        condor_settings=condor_settings,
+        experiment_dir=output_dir,
+        file_name="merge_simulation_results.sub",
+    )
+
+    # Add the job to the DAGMan file
+    dag.add_job(
+        name="simulate_spectra",
+        file_path=file_path,
+        depends_on=["simulate_spectra"],
+    )
+
+    # -------------------------------------------------------------------------
+    # Submit the DAGMan file to HTCondor
+    # -------------------------------------------------------------------------
+
+    # Save the DAGMan file
+    file_path = output_dir / "importance_sampling.dag"
+    dag.save(file_path=file_path)
+
+    # Submit the DAGMan file to HTCondor
+    condor_submit_dag(file_path=file_path, verbose=True)
 
 
 if __name__ == "__main__":
+
+    # -------------------------------------------------------------------------
+    # Preliminaries
+    # -------------------------------------------------------------------------
 
     script_start = time.time()
     print("\nRUN IMPORTANCE SAMPLING\n")
@@ -363,147 +359,174 @@ if __name__ == "__main__":
     # Get the command line arguments
     args = get_cli_arguments()
 
-    # -------------------------------------------------------------------------
-    # Either prepare a submission file and launch a job...
-    # -------------------------------------------------------------------------
-
-    if args.start_submission:
-
-        # We only need to request a GPU if we are using ML-based model
-        num_gpus = 1 if args.model_type in ["ml", "unconditional_flow"] else 0
-
-        # If we are running multiple jobs, the random seed is determined by
-        # the process number on HTCondor. This seems like the simplest way to
-        # parallelize importance sampling over multiple jobs.
-        random_seed = "$(Process)" if args.n_jobs > 1 else args.random_seed
-
-        # Collect arguments that we need to pass to the actual job (we can
-        # drop the `start_submission` and the `n_jobs` arguments here)
-        arguments = [
-            Path(__file__).resolve().as_posix(),
-            f"--experiment-dir {args.experiment_dir}",
-            f"--model-type {args.model_type}",
-            f"--n-samples {args.n_samples}",
-            f"--random-seed {random_seed}",
-            f"--random-seed-offset {args.random_seed_offset}",
-            f"--resolution {args.resolution}",
-        ]
-
-        # Create a submission file for the importance sampling job
-        condor_settings = CondorSettings(
-            num_cpus=args.num_cpus,
-            memory_cpus=args.num_cpus * 1000,
-            num_gpus=num_gpus,
-            memory_gpus=15_000,
-            arguments=arguments,
-            log_file_name="importance_sampling.$(Process)",
-            bid=args.bid,
-            queue=args.n_jobs,
-        )
-        file_path = create_submission_file(
-            condor_settings=condor_settings,
-            experiment_dir=args.experiment_dir,
-            file_name="importance_sampling.sub",
-        )
-
-        # Submit the job to HTCondor
-        condor_submit_bid(file_path=file_path, bid=condor_settings.bid)
-
-        # Exit early
-        sys.exit(0)
-
-    # -------------------------------------------------------------------------
-    # ...or actually run the importance sampling
-    # -------------------------------------------------------------------------
+    # Define and prepare ouput directory
+    dir_name = (
+        "benchmark" if args.target_spectrum == "benchmark"
+        else f"{int(args.target_spectrum):04d}"
+    )
+    output_dir = args.experiment_dir / "importance_sampling" / dir_name
+    output_dir.mkdir(exists_ok=True)
 
     # Set the random seed (both for numpy and torch)
     effective_random_seed = args.random_seed + args.random_seed_offset
     np.random.seed(effective_random_seed)
     torch.manual_seed(effective_random_seed)
 
-    # Set up simulator and compute target spectrum
-    print("Simulating target spectrum...", end=" ")
-    simulator = Simulator(R=args.resolution)
-    if (result := simulator(THETA_0)) is None:
-        raise RuntimeError("Simulation of target spectrum failed!")
-    else:
-        wlen, x_0 = result
-    n_bins = len(wlen)
-    print("Done!\n")
+    # -------------------------------------------------------------------------
+    # If --start-submission: Create DAG file, launch job, and exit
+    # -------------------------------------------------------------------------
 
-    # Get the mask that indicates which parameters are free.
-    # All other parameters are fixed to theta_0 (required for simulation).
-    parameter_mask = get_parameter_mask()
+    if args.start_submission:
+        prepare_and_launch_dagman_file(args=args, output_dir=output_dir)
+        sys.exit(0)
 
-    # Handle the different model types
-    if args.model_type == "ml":
-        print("Running for ML model (FMPE / NPE)!\n")
-        theta, probs = handle_trained_ml_model()
-    elif args.model_type == "unconditional_flow":
-        print("Running for unconditional flow model!\n")
-        theta, probs = handle_unconditional_flow()
-    else:
-        print("Running with KDE on nested sampling posterior!\n")
-        theta, probs = handle_nested_sampling_posterior()
+    # -------------------------------------------------------------------------
+    # Otherwise, prepare to run one (or multiple) workflow stages
+    # -------------------------------------------------------------------------
 
-    # For each sample, compute the raw weight, likelihood, prior, and prob.
-    print("Computing weights for importance sampling:", flush=True)
-    num_cpus = get_number_of_available_cores()
-    results = p_map(process_theta_i, theta, num_cpus=num_cpus, ncols=80)
-    print()
+    if args.stage == "draw_proposal_samples" or args.stage is None:
 
-    # Unpack the results from the parallel map
-    x, likelihoods, priors = zip(*results, strict=True)
-    x = np.array(x)
-    likelihoods = np.array(likelihoods).flatten()
-    priors = np.array(priors).flatten()
+        print("Draw samples from proposal distribution", flush=True)
+        print(80 * "-" + "\n", flush=True)
 
-    # Drop everything that has a prior of 0 (i.e., is outside the bounds), or
-    # where the simulation failed (i.e., the spectrum contains NaNs)
-    mask = np.logical_and(priors > 0, ~np.isnan(x).any(axis=1))
-    theta = theta[mask]
-    probs = probs[mask]
-    x = x[mask]
-    likelihoods = likelihoods[mask]
-    priors = priors[mask]
-    n = len(theta)
-    print(f"Dropped {np.sum(~mask):,} samples (prior=0 or NaN in spectrum)!")
-    print(f"Remaining samples: {n:,} ({100 * n / args.n_samples:.2f}%)\n")
+        # Get the wavelengths and the flux of the target spectrum
+        simulator = Simulator(noisy=False, R=args.resolution)
+        wlen, x_0 = get_target_spectrum(
+            args=args,
+            output_dir=output_dir,
+            simulator=simulator,
+        )
 
-    # Compute the importance sampling weights (raw and normalized)
-    raw_is_weights = likelihoods * priors / probs
-    is_weights = raw_is_weights * len(raw_is_weights) / np.sum(raw_is_weights)
-    print("Min weight:", np.min(is_weights))
-    print("Max weight:", np.max(is_weights))
-    print()
+        # Construct context (only relevant for ML-based models)
+        context = construct_context(x_0=x_0, wlen=wlen, SIGMA=SIGMA)
 
-    # Compute the effective sample size and sample efficiency
-    n_eff = np.sum(is_weights) ** 2 / np.sum(is_weights ** 2)
-    sample_efficiency = float(n_eff / len(is_weights))
-    print(f"Effective sample size: {n_eff:.2f}")
-    print(f"Sample efficiency:     {100 * sample_efficiency:.2f}%\n")
+        # Draw samples from proposal distribution and save them
+        theta, probs = draw_proposal_samples(args=args, context=context)
+        save_to_hdf(
+            file_path=output_dir / f"proposal-samples-{args.job:04d}.hdf",
+            theta=theta,
+            probs=probs,
+        )
 
-    # Create a directory for the results
-    output_dir = args.experiment_dir / "importance_sampling"
-    output_dir.mkdir(exist_ok=True)
+    elif args.stage == "merge_proposal_samples" or args.stage is None:
 
-    # Save the results
-    print("Saving results...", end=" ")
-    single = np.float32
-    double = np.float64
-    file_name = f"random_seed-{effective_random_seed:03d}.hdf"
-    file_path = output_dir / file_name
-    with h5py.File(file_path, "w") as f:
-        f.create_dataset(name="parameter_mask", data=parameter_mask)
-        f.create_dataset(name="theta_0", data=THETA_0, dtype=single)
-        f.create_dataset(name="x_0", data=x_0, dtype=single)
-        f.create_dataset(name="theta", data=theta, dtype=single)
-        f.create_dataset(name="probs", data=probs, dtype=double)
-        f.create_dataset(name="x", data=x, dtype=single)
-        f.create_dataset(name="likelihoods", data=likelihoods, dtype=double)
-        f.create_dataset(name="raw_weights", data=raw_is_weights, dtype=double)
-        f.create_dataset(name="priors", data=priors, dtype=double)
-        f.create_dataset(name="weights", data=is_weights, dtype=double)
-    print("Done!")
+        print("Merge samples from proposal distribution", flush=True)
+        print(80 * "-" + "\n", flush=True)
+
+        # Merge the results from all jobs and save them into a single HDF file
+        merged = load_merged_hdf_files(
+            target_dir=output_dir,
+            name_pattern="proposal-samples-*.hdf",
+            keys=["theta", "probs"],
+        )
+        save_to_hdf(
+            file_path=output_dir / "proposal-samples.hdf",
+            theta=merged["theta"].astype(np.float32),
+            probs=merged["probs"].astype(np.float32),
+        )
+
+        # TOOD: Delete the individual files
+
+    elif args.stage == "simulate_spectra" or args.stage is None:
+
+        print("Simulate spectra for theta_i", flush=True)
+        print(80 * "-" + "\n", flush=True)
+
+        # Load the theta samples and probabilities
+        proposal_samples = load_merged_hdf_files(
+            target_dir=output_dir,
+            name_pattern="proposal-samples.hdf",
+            keys=["theta", "probs"],
+        )
+
+        # Select the samples that belong to the current job
+        theta = proposal_samples["theta"][args.job::args.n_jobs]
+        probs = proposal_samples["probs"][args.job::args.n_jobs]
+
+        # Set up prior and simulator
+        prior = Prior(random_seed=effective_random_seed)
+        simulator = Simulator(noisy=False, R=args.resolution)
+
+        # Get the wavelengths and the flux of the target spectrum
+        wlen, x_0 = get_target_spectrum(args=args, output_dir=output_dir)
+        n_bins = len(wlen)
+
+        # Compute spectra, likelihoods and prior values (in parallel)
+        print("Simulating spectra (in parallel):", flush=True)
+        num_cpus = get_number_of_available_cores()
+        results = p_map(process_theta_i, theta, num_cpus=num_cpus, ncols=80)
+        print()
+
+        # Unpack the results from the parallel map
+        x, likelihoods, prior_values = zip(*results, strict=True)
+        x = np.array(x)
+        likelihoods = np.array(likelihoods).flatten()
+        prior_values = np.array(prior_values).flatten()
+
+        # Drop everything that has a prior of 0 (i.e., is outside the bounds),
+        # or where the simulation failed (i.e., the spectrum contains NaNs)
+        mask = np.logical_and(prior_values > 0, ~np.isnan(x).any(axis=1))
+        theta = theta[mask]
+        probs = probs[mask]
+        x = x[mask]
+        likelihoods = likelihoods[mask]
+        prior_values = prior_values[mask]
+        n = len(theta)
+        print(f"Dropped {np.sum(~mask):,} invalid samples!")
+        print(f"Remaining samples: {n:,} ({100 * n / args.n_samples:.2f}%)\n")
+
+        # Save the results for the current job
+        file_name = f"simulations-{args.job:04d}.hdf"
+        save_to_hdf(
+            file_path=output_dir / file_name,
+            theta=theta.astype(np.float32),
+            probs=probs.astype(np.float64),
+            x=x.astype(np.float32),
+            likelihoods=likelihoods.astype(np.float64),
+            prior_values=prior_values.astype(np.float32),
+        )
+
+    elif args.stage == "merge_simulation_results" or args.stage is None:
+
+        print("Merge simulation results and compute weights", flush=True)
+        print(80 * "-" + "\n", flush=True)
+
+        # Merge the results from all jobs and load them
+        merged = load_merged_hdf_files(
+            target_dir=output_dir,
+            name_pattern="simulations-*.hdf",
+            keys=["theta", "probs", "x", "likelihoods", "prior_values"],
+        )
+
+        # Compute the importance sampling weights
+        raw_weights, weights = compute_is_weights(
+            likelihoods=merged["likelihoods"],
+            prior_values=merged["prior_values"],
+            probs=merged["probs"],
+        )
+        merged["raw_weights"] = raw_weights.astype(np.float64)
+        merged["weights"] = weights.astype(np.float64)
+
+        # Compute the effective sample size and sample efficiency
+        n_eff, sample_efficiency = compute_effective_sample_size(weights)
+        print(f"Effective sample size: {n_eff:.2f}")
+        print(f"Sample efficiency:     {100 * sample_efficiency:.2f}%\n")
+
+        # Load the target spectrum and add it to the merged results
+        wlen, x_0 = get_target_spectrum(args=args, output_dir=output_dir)
+        merged["wlen"] = wlen.astype(np.float32)
+        merged["x_0"] = x_0.astype(np.float32)
+
+        # Save the final results
+        print("Saving results...", end=" ")
+        save_to_hdf(
+            file_path=output_dir / "importance_sampling_results.hdf",
+            **merged,
+        )
+        print("Done!")
+
+    # -------------------------------------------------------------------------
+    # Postliminaries
+    # -------------------------------------------------------------------------
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds.\n")
