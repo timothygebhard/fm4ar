@@ -111,12 +111,12 @@ testpaths = [
 ]
 
 [tool.ruff]
-select = [
+lint.select = [
     "E",  # pycodestyle rules
     "F",  # Pyflakes rules
     "B",  # flake8-bugbear rules
 ]
-ignore = [
+lint.ignore = [
     "B019",  # "Use of functools.lru_cache can lead to memory leaks"
     "B028",  # "No explicit `stacklevel` keyword argument found"
 ]
