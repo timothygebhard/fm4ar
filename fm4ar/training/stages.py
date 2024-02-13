@@ -42,8 +42,6 @@ def initialize_stage(
         batch_size=stage_config["batch_size"],
         num_workers=num_workers,
         drop_last=stage_config.get("drop_last", True),
-        train_collate_fn=stage_config.get("train_collate_fn", None),
-        test_collate_fn=stage_config.get("test_collate_fn", None),
     )
 
     # Create a new optimizer and scheduler
