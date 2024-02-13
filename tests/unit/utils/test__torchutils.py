@@ -15,7 +15,6 @@ from fm4ar.utils.torchutils import (
     get_optimizer_from_kwargs,
     get_weights_from_pt_file,
     load_and_or_freeze_model_weights,
-    validate_dims,
 )
 
 
@@ -171,19 +170,3 @@ def test__load_and_or_freeze_model_weights(tmp_path: Path) -> None:
     # Check that the weights have been loaded and frozen
     assert torch.equal(model.layer.weight, torch.eye(10))
     assert not model.layer.weight.requires_grad
-
-
-def test__validate_dims() -> None:
-    """
-    Test `fm4ar.utils.torchutils.validate_dims()`.
-    """
-
-    # Case 1: Correct dimensions
-    x = torch.randn(10, 5)
-    validate_dims(x=x, ndim=2)
-
-    # Case 2: Incorrect dimensions
-    x = torch.randn(10, 5)
-    with pytest.raises(ValueError) as value_error:
-        validate_dims(x=x, ndim=3)
-    assert "Expected `x` to have 3 dimensions but found 2!" in str(value_error)
