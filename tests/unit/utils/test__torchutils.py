@@ -3,11 +3,12 @@ Unit tests for `fm4ar.utils.torchutils`.
 """
 
 from pathlib import Path
-from typing import Callable, Type
+from typing import Type
 
 import pytest
 import torch.nn
 
+from fm4ar.nn.modules import Sine
 from fm4ar.utils.torchutils import (
     get_activation_from_string,
     get_number_of_model_parameters,
@@ -21,16 +22,20 @@ from fm4ar.utils.torchutils import (
 @pytest.mark.parametrize(
     "activation_name, expected_activation",
     [
-        ("elu", torch.nn.functional.elu),
-        ("relu", torch.nn.functional.relu),
-        ("leaky_relu", torch.nn.functional.leaky_relu),
-        ("gelu", torch.nn.functional.gelu),
+        ("elu", torch.nn.ELU),
+        ("gelu", torch.nn.GELU),
+        ("leaky_relu", torch.nn.LeakyReLU),
+        ("relu", torch.nn.ReLU),
+        ("sigmoid", torch.nn.Sigmoid),
+        ("sine", Sine),
+        ("swish", torch.nn.SiLU),
+        ("tanh", torch.nn.Tanh),
         ("invalid", None),
     ]
 )
 def test__get_activation_from_string(
     activation_name: str,
-    expected_activation: Callable[[torch.Tensor], torch.Tensor],
+    expected_activation: Type[torch.nn.Module],
 ) -> None:
     """
     Test `fm4ar.utils.torchutils.get_activation_from_string()`.
@@ -43,7 +48,7 @@ def test__get_activation_from_string(
 
     else:
         activation = get_activation_from_string(activation_name)
-        assert activation is expected_activation
+        assert isinstance(activation, expected_activation)
 
 
 def test__get_number_of_model_parameters() -> None:
