@@ -365,56 +365,9 @@ def build_train_and_test_loaders(
     return train_loader, test_loader
 
 
-def validate_dims(x: torch.Tensor, ndim: int) -> None:
-    """
-    Validate that `x` has the correct number of dimensions.
-
-    Raises:
-        ValueError: If `x.ndim != ndim`.
-
-    Args:
-        x: A tensor.
-        ndim: The expected number of dimensions.
-    """
-
-    # Use f-string hack to get the name of x
-    name = f'{x=}'.split('=')[0].strip()
-
-    if x.ndim != ndim:
-        raise ValueError(
-            f"Expected `{name}` to have {ndim} dimensions but found {x.ndim}!"
-        )
-
-
-def validate_shape(x: torch.Tensor, shape: tuple[int | None, ...]) -> None:
-    """
-    Validate that `x` has the correct shape.
-
-    Args:
-        x: A tensor.
-        shape: The expected shape. `None` means that the dimension can
-            have any size.
-    """
-
-    # Use f-string hack to get the name of x
-    name = f'{x=}'.split('=')[0].strip()
-
-    # Check if the number of dimensions is correct
-    if len(x.shape) != len(shape):
-        raise ValueError(
-            f"Expected `{name}` to have shape {shape} but found {x.shape}!"
-        )
-
-    # Check if the size of each dimension is correct
-    for expected, actual in zip(shape, x.shape, strict=True):
-        if expected is not None and expected != actual:
-            raise ValueError(
-                f"Expected `{name}` to have shape {shape} but found {x.shape}!"
-            )
-
-
 def get_weights_from_pt_file(
     file_path: Path,
+    state_dict_key: str,
     prefix: str,
     drop_prefix: bool = True,
 ) -> OrderedDict[str, torch.Tensor]:
@@ -423,6 +376,8 @@ def get_weights_from_pt_file(
 
     Args:
         file_path: Path to the *.pt file.
+        state_dict_key: Key of the state dict in the *.pt file that
+            contains the weights. Usually, this is "model_state_dict".
         prefix: Prefix that the weights must start with. Usually, this
             is the name of a model component, e.g., `vectorfield_net`.
         drop_prefix: Whether to drop the prefix from the keys of the
@@ -436,12 +391,15 @@ def get_weights_from_pt_file(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(file_path, map_location=device)
 
+    # Select the state dict that contains the weights
+    state_dict = checkpoint[state_dict_key]
+
     # Get the weights that start with `prefix`
     weights = OrderedDict(
         (
             key if not drop_prefix else key.removeprefix(prefix + '.'),
             value
-        ) for key, value in checkpoint.items() if key.startswith(prefix)
+        ) for key, value in state_dict.items() if key.startswith(prefix)
     )
 
     return weights
@@ -460,6 +418,9 @@ def load_and_or_freeze_model_weights(
         freeze_weights: Whether to freeze all weights of the model.
         load_weights: A dictionary with the following keys:
             - `file_path`: Path to the checkpoint file (`*.pt`).
+            - `state_dict_key`: Key of the state dict in the checkpoint
+                file that contains the weights. Usually, this is
+                "model_state_dict".
             - `prefix`: Prefix that the weights must start with.
                 Usually, this is the name of a model component, e.g.,
                 "vectorfield_net" or "context_embedding_net".
@@ -472,6 +433,7 @@ def load_and_or_freeze_model_weights(
     if load_weights is not None and load_weights:
         state_dict = get_weights_from_pt_file(
             file_path=Path(load_weights["file_path"]),
+            state_dict_key=load_weights["state_dict_key"],
             prefix=load_weights["prefix"],
             drop_prefix=bool(load_weights.get("drop_prefix", True)),
         )

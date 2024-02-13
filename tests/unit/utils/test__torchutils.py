@@ -135,7 +135,12 @@ def test__get_weights_from_checkpoint(tmp_path: Path) -> None:
     torch.save({"model_state_dict": model.state_dict()}, tmp_path / "model.pt")
 
     # Load state dict from checkpoint
-    state_dict = get_weights_from_pt_file(tmp_path / "model.pt", "layer_1")
+    state_dict = get_weights_from_pt_file(
+        file_path=tmp_path / "model.pt",
+        state_dict_key="model_state_dict",
+        prefix="layer_1",
+        drop_prefix=False,
+    )
     assert state_dict.keys() == {"layer_1.weight", "layer_1.bias"}
     assert torch.equal(state_dict["layer_1.weight"], model.layer_1.weight)
     assert torch.equal(state_dict["layer_1.bias"], model.layer_1.bias)
@@ -163,7 +168,9 @@ def test__load_and_or_freeze_model_weights(tmp_path: Path) -> None:
         freeze_weights=True,
         load_weights={
             "file_path": str(tmp_path / "model.pt"),
+            "state_dict_key": "model_state_dict",
             "prefix": "layer",
+            "drop_prefix": False,
         }
     )
 
