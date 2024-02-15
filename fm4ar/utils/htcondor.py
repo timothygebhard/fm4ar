@@ -80,6 +80,10 @@ class CondorSettings(BaseModel):
 class DAGManFile:
     """
     Wrapper to create a DAGMan file.
+
+    Note: This is pretty basic and does currently not implement more
+    advanced  features likes topological sorting or cycle detection.
+    It is assumed that the user knows what they are doing.
     """
 
     def __init__(self) -> None:
@@ -105,7 +109,7 @@ class DAGManFile:
 
         # Make sure the job does not exist already
         if name in self.jobs:
-            raise ValueError(f"Job {name} already exists!")
+            raise ValueError(f"Job '{name}' already exists!")
 
         # Add the job to the DAGman file
         self.jobs[name] = {
@@ -113,6 +117,20 @@ class DAGManFile:
             "bid": bid,
             "depends_on": [] if depends_on is None else depends_on,
         }
+
+    def remove_job(self, name: str) -> None:
+        """
+        Remove a job from the DAGMan file.
+        Note: This leaves any dependencies untouched.
+
+        Args:
+            name: Name of the job to remove.
+        """
+
+        if name not in self.jobs:
+            raise ValueError(f"Job '{name}' does not exist!")
+
+        del self.jobs[name]
 
     def save(self, file_path: Path) -> None:
         """
