@@ -11,7 +11,7 @@ import torch.nn
 from fm4ar.nn.modules import Sine
 from fm4ar.utils.torchutils import (
     get_activation_from_string,
-    get_number_of_model_parameters,
+    get_number_of_parameters,
     get_optimizer_from_kwargs,
     get_weights_from_pt_file,
     load_and_or_freeze_model_weights,

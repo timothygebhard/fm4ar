@@ -96,12 +96,12 @@ def get_mlp(
     return nn.Sequential(*layers)
 
 
-def get_number_of_model_parameters(
+def get_number_of_parameters(
     model: nn.Module,
     requires_grad_flags: tuple[bool, ...] = (True, False),
 ) -> int:
     """
-    Count the number of parameters of the `model`.
+    Count the number of parameters of the given `model`.
 
     Args:
         model: Model for which to count the number of parameters.
