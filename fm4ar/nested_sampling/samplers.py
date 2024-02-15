@@ -46,7 +46,7 @@ class Sampler(ABC):
         # Save the parameters to a JSON file
         # This is only really required for the MultiNest sampler, but we
         # do it for all samplers for consistency.
-        with open(run_dir / 'params.json', 'w') as json_file:
+        with open(run_dir / "params.json", "w") as json_file:
             json.dump(inferred_parameters, json_file, indent=2)
 
     @abstractmethod
@@ -93,7 +93,6 @@ class Sampler(ABC):
 
 
 class NautilusSampler(Sampler):
-
     def __init__(
         self,
         run_dir: Path,
@@ -184,7 +183,6 @@ class NautilusSampler(Sampler):
 
 
 class DynestySampler(Sampler):
-
     def __init__(
         self,
         run_dir: Path,
@@ -281,7 +279,7 @@ class DynestySampler(Sampler):
 
     def save_results(self) -> None:
         file_path = self.run_dir / "posterior.pickle"
-        with open(file_path, 'wb') as handle:
+        with open(file_path, "wb") as handle:
             dill.dump(obj=self.sampler.results, file=handle)
 
     @property
@@ -294,7 +292,6 @@ class DynestySampler(Sampler):
 
 
 class MultiNestSampler(Sampler):
-
     def __init__(
         self,
         run_dir: Path,

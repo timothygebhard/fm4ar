@@ -60,7 +60,7 @@ def test__get_datasets_dir(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FM4AR_DATASETS_DIR", raising=False)
     with pytest.raises(ValueError) as value_error:
         get_datasets_dir()
-    assert '$FM4AR_DATASETS_DIR is not set' in str(value_error)
+    assert "$FM4AR_DATASETS_DIR is not set" in str(value_error)
 
 
 def test__get_experiments_dir(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,7 +77,7 @@ def test__get_experiments_dir(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FM4AR_EXPERIMENTS_DIR", raising=False)
     with pytest.raises(ValueError) as value_error:
         get_experiments_dir()
-    assert '$FM4AR_EXPERIMENTS_DIR is not set' in str(value_error)
+    assert "$FM4AR_EXPERIMENTS_DIR is not set" in str(value_error)
 
 
 def test__get_root_dir() -> None:

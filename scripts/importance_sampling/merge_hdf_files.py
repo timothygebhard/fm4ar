@@ -60,7 +60,7 @@ if __name__ == "__main__":
     print("Done!\n")
 
     # Compute the effective sample size and sample efficiency
-    n_eff = np.sum(weights) ** 2 / np.sum(weights ** 2)
+    n_eff = np.sum(weights) ** 2 / np.sum(weights**2)
     sample_efficiency = float(n_eff / len(weights))
     print(f"Effective sample size: {n_eff:.2f}")
     print(f"Sample efficiency:     {100 * sample_efficiency:.2f}%\n")

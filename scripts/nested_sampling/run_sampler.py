@@ -125,9 +125,10 @@ if __name__ == "__main__":
             retry_on_exit_code=42,
             log_file_name="log.$$([NumJobStarts])",
             extra_kwargs=(
-                {} if config.sampler.which != "multinest"
+                {}
+                if config.sampler.which != "multinest"
                 else {"transfer_executable": "False"}
-            )
+            ),
         )
         file_path = create_submission_file(
             condor_settings=condor_settings,

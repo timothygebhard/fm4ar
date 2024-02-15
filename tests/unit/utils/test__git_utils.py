@@ -41,11 +41,11 @@ def test__document_git_status(tmp_path: Path) -> None:
     # directory and get a file with the correct name if the repo is dirty
     document_git_status(target_dir=tmp_path, verbose=False)
 
-    hash_file_path = tmp_path / 'git-hash.txt'
+    hash_file_path = tmp_path / "git-hash.txt"
     assert hash_file_path.exists()
     assert hash_file_path.is_file()
 
-    diff_file_path = tmp_path / 'git-diff.txt'
+    diff_file_path = tmp_path / "git-diff.txt"
     if is_dirty():
         assert diff_file_path.exists()
         assert diff_file_path.is_file()

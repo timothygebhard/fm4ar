@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
         # Read in the original file
         print("Reading original file...", end=" ")
-        with (h5py.File(original_dir / file_name, "r") as f):
+        with h5py.File(original_dir / file_name, "r") as f:
 
             # Wavelengths (everything up to 8 micron, downsampled by factor 4)
             # TODO: What is a good choice here?

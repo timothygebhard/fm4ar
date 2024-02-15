@@ -35,7 +35,9 @@ def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
 
     # multinest stores the posterior in a .dat file
     elif sampler == "multinest":
+
         from pymultinest.analyse import Analyzer
+
         n_params = sum(p.action == "infer" for p in config.parameters.values())
         outputfiles_basename = (experiment_dir / "run").as_posix()
         analyzer = Analyzer(

@@ -99,7 +99,8 @@ if __name__ == "__main__":
             buffer_size = 4096
             n = len(src["flux"])
             idx = (
-                np.r_[0 : n : buffer_size, n] if n > buffer_size
+                np.r_[0:n:buffer_size, n]
+                if n > buffer_size
                 else np.array([0, n])
             )
             limits = list(zip(idx[:-1], idx[1:], strict=True))
@@ -110,7 +111,7 @@ if __name__ == "__main__":
                 # Define criteria for spectra to keep
                 mean = np.mean(src["flux"][a:b], axis=1)
                 # mask = (1e-5 <= mean) & (mean <= 1e5)
-                mask = (1e-5 <= mean)
+                mask = 1e-5 <= mean
 
                 # Select spectra that meet the criteria
                 flux = np.array(src["flux"][a:b])[mask]
@@ -140,8 +141,8 @@ if __name__ == "__main__":
             before = src["theta"].shape[0]
             after = dst["theta"].shape[0]
             dropped = before - after
-            print(f'Before:  {before:,}')
-            print(f'After:   {after:,}')
-            print(f'Dropped: {dropped:,} ({100 * dropped / before:.1f}%)')
+            print(f"Before:  {before:,}")
+            print(f"After:   {after:,}")
+            print(f"Dropped: {dropped:,} ({100 * dropped / before:.1f}%)")
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")

@@ -30,7 +30,7 @@ from fm4ar.utils.torchutils import (
         ("swish", torch.nn.SiLU),
         ("tanh", torch.nn.Tanh),
         ("invalid", None),
-    ]
+    ],
 )
 def test__get_activation_from_string(
     activation_name: str,
@@ -64,9 +64,9 @@ def test__get_number_of_model_parameters() -> None:
         layer_2,
     )
 
-    n_trainable = get_number_of_model_parameters(model, (True, ))
-    n_fixed = get_number_of_model_parameters(model, (False, ))
-    n_total = get_number_of_model_parameters(model, (True, False))
+    n_trainable = get_number_of_parameters(model, (True,))
+    n_fixed = get_number_of_parameters(model, (False,))
+    n_total = get_number_of_parameters(model, (True, False))
     assert n_trainable == 6
     assert n_fixed == 55
     assert n_total == 61
@@ -82,7 +82,7 @@ def test__get_number_of_model_parameters() -> None:
         ("rmsprop", torch.optim.RMSprop),
         ("sgd", torch.optim.SGD),
         ("invalid", None),
-    ]
+    ],
 )
 def test__get_optimizer_from_kwargs(
     optimizer_type: str,
@@ -171,7 +171,7 @@ def test__load_and_or_freeze_model_weights(tmp_path: Path) -> None:
             "state_dict_key": "model_state_dict",
             "prefix": "layer",
             "drop_prefix": False,
-        }
+        },
     )
 
     # Check that the weights have been loaded and frozen
