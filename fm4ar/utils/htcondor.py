@@ -5,7 +5,6 @@ Methods for dealing with the HTCondor cluster system.
 import socket
 import sys
 from pathlib import Path
-from shutil import copyfile
 from subprocess import run
 
 from pydantic import BaseModel, Field
@@ -74,7 +73,7 @@ class CondorSettings(BaseModel):
         description=(
             "Extra key/value pairs to add to the submission file. "
             "Example: transfer_executable = False."
-        )
+        ),
     )
 
 
@@ -157,35 +156,6 @@ def check_if_on_login_node(start_submission: bool) -> None:
         sys.exit(1)
 
 
-def copy_logfiles(log_dir: Path, label: str) -> None:
-    """
-    Copy the log files to a new file with the epoch number appended.
-
-    Args:
-        log_dir: Path to the directory containing the log files.
-        label: Label to add to the file name, e.g., the epoch number,
-            or the number of the HTCondor job.
-    """
-
-    # Loop over all log files in the directory
-    # Their names should follow the pattern `info.<Process>.{log,err,out}`.
-    # Backup files are named `info.<Process>.<label>.{log,err,out}`.
-    for src in log_dir.glob("info.*"):
-
-        # Skip files that already have been copied before
-        parts = src.name.split(".")
-        if len(parts) > 3:
-            continue
-
-        # Copy the file to a new file with the epoch number appended
-        name = ".".join(parts[:-1]) + f".{label}." + parts[-1]
-        dst = log_dir / name
-        try:
-            copyfile(src, dst)
-        except Exception as e:  # pragma: no cover
-            print(f"Failed to copy file {src} to {dst}: {e}")
-
-
 def condor_submit_bid(
     file_path: Path,
     bid: int = 15,
@@ -262,16 +232,16 @@ def create_submission_file(
     lines = []
 
     # Executable and environment variables
-    lines.append(f'executable = {condor_settings.executable}\n')
+    lines.append(f"executable = {condor_settings.executable}\n")
     lines.append(f"getenv = {condor_settings.getenv}\n\n")
 
     # CPUs and memory requirements
-    lines.append(f'request_cpus = {condor_settings.num_cpus}\n')
-    lines.append(f'request_memory = {condor_settings.memory_cpus}\n')
+    lines.append(f"request_cpus = {condor_settings.num_cpus}\n")
+    lines.append(f"request_memory = {condor_settings.memory_cpus}\n")
 
     # Set GPU requirements (only add this section if GPUs are requested)
     if condor_settings.num_gpus > 0:
-        lines.append(f'request_gpus = {condor_settings.num_gpus}\n')
+        lines.append(f"request_gpus = {condor_settings.num_gpus}\n")
         lines.append(
             f"requirements = TARGET.CUDAGlobalMemoryMb "
             f"> {condor_settings.memory_gpus}\n\n"
