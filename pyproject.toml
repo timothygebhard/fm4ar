@@ -109,6 +109,10 @@ filterwarnings = [
 testpaths = [
     "tests",
 ]
+markers = [  # deselect tests with -m "not <marker>"
+    "integration_test: integration tests (which are usually slow)",
+    "slow: unit tests that are slow",
+]
 
 [tool.ruff]
 lint.select = [
