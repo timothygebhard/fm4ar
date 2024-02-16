@@ -11,7 +11,7 @@ import torch
 
 from fm4ar.training.preparation import prepare_new
 from fm4ar.utils.config import load_config
-from fm4ar.utils.torchutils import get_number_of_model_parameters
+from fm4ar.utils.torchutils import get_number_of_parameters
 
 
 if __name__ == "__main__":
@@ -55,8 +55,8 @@ if __name__ == "__main__":
         ("total", pm.model),
         ("context embedding net", pm.model.context_embedding_net),
     ):
-        n_trainable = get_number_of_model_parameters(model, (True,))
-        n_fixed = get_number_of_model_parameters(model, (False,))
+        n_trainable = get_number_of_parameters(model, (True,))
+        n_fixed = get_number_of_parameters(model, (False,))
         n_total = n_trainable + n_fixed
         print(f"Number of {name} parameters:", flush=True)
         print(f"n_trainable: {n_trainable:,}", flush=True)
