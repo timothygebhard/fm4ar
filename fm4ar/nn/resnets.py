@@ -30,9 +30,14 @@ class DenseResidualNet(nn.Module):
     which are interleaved with linear resizing layers.
     """
 
+    # This class can be used as a block inside an embedding network. For this
+    # reason, we need the following flag so that `create_embedding_net_block`
+    # knows it needs to pass the input shape to the constructor.
+    requires_input_shape = True
+
     def __init__(
         self,
-        input_dim: int,
+        input_shape: tuple[int, ...],
         output_dim: int,
         hidden_dims: tuple[int, ...],
         activation: str = "elu",
@@ -45,7 +50,10 @@ class DenseResidualNet(nn.Module):
         Instantiate a DenseResidualNet module.
 
         Args:
-            input_dim: Dimensionality of the network input.
+            input_shape: Shape of the input tensor. Note: This must be
+                a tuple of length 1: multi-dimensional inputs are not
+                supported. We use `input_shape` instead of `input_dim`
+                for compatibility.
             output_dim: Dimensionality of the network output.
             hidden_dims: Dimensionalities of the hidden layers.
             activation: Activation function used in the residual blocks.
@@ -61,7 +69,14 @@ class DenseResidualNet(nn.Module):
 
         super().__init__()
 
-        self.input_dim = input_dim
+        # Check if the input shape is valid
+        if len(input_shape) != 1:
+            raise ValueError(
+                "DenseResidualNet only supports 1D inputs! "
+                f"Got input shape: {input_shape}"
+            )
+
+        self.input_dim = input_shape[0]
         self.output_dim = output_dim
         self.hidden_dims = hidden_dims
         self.num_res_blocks = len(self.hidden_dims)
