@@ -47,10 +47,7 @@ def validate_shape(
     name = f"{x=}".split("=")[0].strip()
 
     # Check if the number of dimensions is correct
-    if len(x.shape) != len(shape):
-        raise ValueError(
-            f"Expected `{name}` to have shape {shape} but found {x.shape}!"
-        )
+    validate_dims(x=x, ndim=len(shape))
 
     # Check if the size of each dimension is correct
     for expected, actual in zip(shape, x.shape, strict=True):
