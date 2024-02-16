@@ -4,17 +4,84 @@ Utility functions for PyTorch.
 
 from collections import OrderedDict
 from collections.abc import Sequence
+from functools import partial
 from math import prod
 from pathlib import Path
 from typing import Any, Callable, Iterable, Literal, Type
 
-import numpy as np
 import torch
 import torch.nn as nn
+from pydantic import BaseModel
 from torch.optim import lr_scheduler as lrs
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
 from fm4ar.nn.modules import Sine
+
+
+def build_train_and_test_loaders(
+    dataset: Dataset,
+    train_fraction: float,
+    batch_size: int,
+    num_workers: int,
+    drop_last: bool = True,
+    random_seed: int = 42,
+) -> tuple[DataLoader, DataLoader]:
+    """
+    Build train and test `DataLoaders` for the given `dataset`.
+
+    Args:
+        dataset: Full dataset to be split into train and test sets.
+        train_fraction: Fraction of the dataset to be used for the
+            train set. Must be in [0, 1].
+        batch_size: Batch size for the train and test loaders.
+        num_workers: Number of workers for the train and test loaders.
+        drop_last: Whether to drop the last batch if it is smaller than
+            `batch_size`. This is only used for the train loader.
+        random_seed: Random seed for reproducibility.
+
+    Returns:
+        A 2-tuple: `(train_loader, test_loader)`.
+    """
+
+    # Split the dataset into train and test sets
+    train_dataset, test_dataset = split_dataset_into_train_and_test(
+        dataset=dataset,
+        train_fraction=train_fraction,
+        random_seed=random_seed,
+    )
+
+    # Define the worker init function: This will set the random seed for the
+    # workers. See documentation of `manual_seed_without_return` for details.
+    worker_init_fn = partial(
+        manual_seed_without_return,
+        random_seed=random_seed,
+    )
+
+    # Build the train loader
+    torch.manual_seed(random_seed)
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=drop_last,
+        pin_memory=True,
+        num_workers=num_workers,
+        worker_init_fn=worker_init_fn,
+    )
+
+    # Build the test loader
+    torch.manual_seed(random_seed + 1)
+    test_loader = DataLoader(
+        dataset=test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
+        pin_memory=True,
+        num_workers=num_workers,
+        worker_init_fn=worker_init_fn,
+    )
+
+    return train_loader, test_loader
 
 
 def check_for_nans(x: torch.Tensor, label: str = "tensor") -> None:
@@ -53,6 +120,17 @@ def get_activation_from_string(name: str) -> torch.nn.Module:
             return torch.nn.Tanh()
         case _:
             raise ValueError("Invalid activation function!")
+
+
+def get_lr(optimizer: torch.optim.Optimizer) -> list[float]:
+    """
+    Returns a list with the learning rates of the optimizer.
+    """
+
+    return [
+        float(param_group["lr"])
+        for param_group in optimizer.state_dict()["param_groups"]
+    ]
 
 
 def get_mlp(
@@ -139,8 +217,8 @@ def get_optimizer_from_kwargs(
 
     # Get optimizer type. We use `pop` to remove the key from the dictionary,
     # so that we can pass the remaining kwargs to the optimizer constructor.
-    optimizer_type = optimizer_kwargs.pop("type", None)
-    if optimizer_type is None:
+    optimizer_type = str(optimizer_kwargs.pop("type", ""))
+    if optimizer_type == "":
         raise KeyError("Optimizer type needs to be specified!")
 
     # Get optimizer from optimizer type
@@ -182,8 +260,8 @@ def get_scheduler_from_kwargs(
 
     # Get scheduler type. We use `pop` to remove the key from the dictionary,
     # so that we can pass the remaining kwargs to the scheduler constructor.
-    scheduler_type = scheduler_kwargs.pop("type")
-    if scheduler_type is None:
+    scheduler_type = str(scheduler_kwargs.pop("type", ""))
+    if scheduler_type == "":
         raise KeyError("Scheduler type needs to be specified!")
 
     # Map strings to scheduler classes
@@ -203,11 +281,121 @@ def get_scheduler_from_kwargs(
         raise ValueError(f"Invalid scheduler type: `{scheduler_type}`") from e
 
 
+def get_weights_from_pt_file(
+    file_path: Path,
+    state_dict_key: str,
+    prefix: str,
+    drop_prefix: bool = True,
+) -> OrderedDict[str, torch.Tensor]:
+    """
+    Load the weights that starts with `prefix` from a *.pt file.
+
+    Args:
+        file_path: Path to the *.pt file.
+        state_dict_key: Key of the state dict in the *.pt file that
+            contains the weights. Usually, this is "model_state_dict".
+        prefix: Prefix that the weights must start with. Usually, this
+            is the name of a model component, e.g., `vectorfield_net`.
+        drop_prefix: Whether to drop the prefix from the keys of the
+            returned dictionary.
+
+    Returns:
+        An OrderecDict with the weights that can be loaded into a model.
+    """
+
+    # Load the full checkpoint
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint = torch.load(file_path, map_location=device)
+
+    # Select the state dict that contains the weights
+    state_dict = checkpoint[state_dict_key]
+
+    # Get the weights that start with `prefix`
+    weights = OrderedDict(
+        (key if not drop_prefix else key.removeprefix(prefix + "."), value)
+        for key, value in state_dict.items()
+        if key.startswith(prefix)
+    )
+
+    return weights
+
+
+def load_and_or_freeze_model_weights(
+    model: torch.nn.Module,
+    freeze_weights: bool = False,
+    load_weights: dict | None = None,
+) -> None:
+    """
+    Load and / or freeze weights of the given model, if requested.
+
+    Args:
+        model: The model to be modified.
+        freeze_weights: Whether to freeze all weights of the model.
+        load_weights: A dictionary with the following keys:
+            - `file_path`: Path to the checkpoint file (`*.pt`).
+            - `state_dict_key`: Key of the state dict in the checkpoint
+                file that contains the weights. Usually, this is
+                "model_state_dict".
+            - `prefix`: Prefix that the weights must start with.
+                Usually, this is the name of a model component, e.g.,
+                "vectorfield_net" or "context_embedding_net".
+            - `drop_prefix`: Whether to drop the prefix from the keys.
+                Default is `True`.
+            If `None` or `{}` is passed, no weights are loaded.
+    """
+
+    # Load weights, if requested
+    if load_weights is not None and load_weights:
+
+        # Validator for the `load_weights` dictionary
+        # Seems cleaner than a lot of `if` statements and ValueErrors?
+        class LoadWeightsConfig(BaseModel):
+            file_path: Path
+            state_dict_key: str
+            prefix: str
+            drop_prefix: bool = True
+
+        # Validate the `load_weights` dictionary
+        load_weights_config = LoadWeightsConfig(**load_weights)
+
+        # Load model weights from a file, if requested
+        state_dict = get_weights_from_pt_file(
+            file_path=load_weights_config.file_path,
+            state_dict_key=load_weights_config.state_dict_key,
+            prefix=load_weights_config.prefix,
+            drop_prefix=load_weights_config.drop_prefix,
+        )
+        model.load_state_dict(state_dict)
+
+    # Freeze weights, if requested
+    if freeze_weights:
+        for param in model.parameters():
+            param.requires_grad = False
+
+
+def manual_seed_without_return(
+    worker_id: int,  # Note: The argument order matters here!
+    random_seed: int,
+) -> None:
+    """
+    Minimal wrapper around `torch.manual_seed()` that returns None.
+
+    This is used as the `worker_init_fn` for the `DataLoader` to set the
+    random seed for the workers. A simpler solution could have been to
+    use `lambda worker_id: torch.manual_seed(worker_id + random_seed)`,
+    but the `worker_init_fn` is supposed to return None, hence this
+    workaround.
+    """
+
+    torch.manual_seed(random_seed + worker_id)
+    return None
+
+
 def perform_scheduler_step(
     scheduler: lrs.LRScheduler | lrs.ReduceLROnPlateau,
     loss: float | None = None,
     end_of: Literal["epoch", "batch"] = "epoch",
-    on_lower: Callable[[], None] | None = None,
+    on_lower: Callable[[], Any] | None = None,
 ) -> None:
     """
     Wrapper for `scheduler.step()`. If scheduler is `ReduceLROnPlateau`,
@@ -261,22 +449,11 @@ def perform_scheduler_step(
         raise ValueError("Invalid value for `end_of`!")
 
 
-def get_lr(optimizer: torch.optim.Optimizer) -> list[float]:
-    """
-    Returns a list with the learning rates of the optimizer.
-    """
-
-    return [
-        float(param_group["lr"])
-        for param_group in optimizer.state_dict()["param_groups"]
-    ]
-
-
 def split_dataset_into_train_and_test(
     dataset: Dataset,
     train_fraction: float,
     random_seed: int = 42,
-) -> tuple[Dataset, Dataset]:
+) -> tuple[Subset, Subset]:
     """
     Split the given `dataset` into a train set and a test set.
 
@@ -290,7 +467,8 @@ def split_dataset_into_train_and_test(
         random_seed: Random seed for reproducibility.
 
     Returns:
-        A 2-tuple: `(train_dataset, test_dataset)`.
+        A 2-tuple `(train_dataset, test_dataset)`, which are disjoint
+        subsets of the original `dataset`.
     """
 
     generator = torch.Generator().manual_seed(random_seed)
@@ -309,137 +487,3 @@ def split_dataset_into_train_and_test(
     )
 
     return train_dataset, test_dataset
-
-
-def build_train_and_test_loaders(
-    dataset: Dataset,
-    train_fraction: float,
-    batch_size: int,
-    num_workers: int,
-    drop_last: bool = True,
-    random_seed: int = 42,
-) -> tuple[DataLoader, DataLoader]:
-    """
-    Build train and test `DataLoaders` for the given `dataset`.
-
-    Args:
-        dataset: Full dataset to be split into train and test sets.
-        train_fraction: Fraction of the dataset to be used for the
-            train set. Must be in [0, 1].
-        batch_size: Batch size for the train and test loaders.
-        num_workers: Number of workers for the train and test loaders.
-        drop_last: Whether to drop the last batch if it is smaller than
-            `batch_size`. This is only used for the train loader.
-        random_seed: Random seed for reproducibility.
-
-    Returns:
-        A 2-tuple: `(train_loader, test_loader)`.
-    """
-
-    # Split the dataset into train and test sets
-    train_dataset, test_dataset = split_dataset_into_train_and_test(
-        dataset=dataset,
-        train_fraction=train_fraction,
-        random_seed=random_seed,
-    )
-
-    # Build the corresponding DataLoaders
-    train_loader = DataLoader(
-        dataset=train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        drop_last=drop_last,
-        pin_memory=True,
-        num_workers=num_workers,
-        worker_init_fn=lambda _: np.random.seed(random_seed),
-    )
-    test_loader = DataLoader(
-        dataset=test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        pin_memory=True,
-        num_workers=num_workers,
-        worker_init_fn=lambda _: np.random.seed(random_seed),
-    )
-
-    return train_loader, test_loader
-
-
-def get_weights_from_pt_file(
-    file_path: Path,
-    state_dict_key: str,
-    prefix: str,
-    drop_prefix: bool = True,
-) -> OrderedDict[str, torch.Tensor]:
-    """
-    Load the weights that starts with `prefix` from a *.pt file.
-
-    Args:
-        file_path: Path to the *.pt file.
-        state_dict_key: Key of the state dict in the *.pt file that
-            contains the weights. Usually, this is "model_state_dict".
-        prefix: Prefix that the weights must start with. Usually, this
-            is the name of a model component, e.g., `vectorfield_net`.
-        drop_prefix: Whether to drop the prefix from the keys of the
-            returned dictionary.
-
-    Returns:
-        An OrderecDict with the weights that can be loaded into a model.
-    """
-
-    # Load the full checkpoint
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint = torch.load(file_path, map_location=device)
-
-    # Select the state dict that contains the weights
-    state_dict = checkpoint[state_dict_key]
-
-    # Get the weights that start with `prefix`
-    weights = OrderedDict(
-        (
-            key if not drop_prefix else key.removeprefix(prefix + '.'),
-            value
-        ) for key, value in state_dict.items() if key.startswith(prefix)
-    )
-
-    return weights
-
-
-def load_and_or_freeze_model_weights(
-    model: torch.nn.Module,
-    freeze_weights: bool = False,
-    load_weights: dict[str, str] | None = None,
-) -> None:
-    """
-    Load and / or freeze weights of the given model, if requested.
-
-    Args:
-        model: The model to be modified.
-        freeze_weights: Whether to freeze all weights of the model.
-        load_weights: A dictionary with the following keys:
-            - `file_path`: Path to the checkpoint file (`*.pt`).
-            - `state_dict_key`: Key of the state dict in the checkpoint
-                file that contains the weights. Usually, this is
-                "model_state_dict".
-            - `prefix`: Prefix that the weights must start with.
-                Usually, this is the name of a model component, e.g.,
-                "vectorfield_net" or "context_embedding_net".
-            - `drop_prefix`: Whether to drop the prefix from the keys.
-                Default is `True`.
-            If `None` or `{}` is passed, no weights are loaded.
-    """
-
-    # Load model weights from a file, if requested
-    if load_weights is not None and load_weights:
-        state_dict = get_weights_from_pt_file(
-            file_path=Path(load_weights["file_path"]),
-            state_dict_key=load_weights["state_dict_key"],
-            prefix=load_weights["prefix"],
-            drop_prefix=bool(load_weights.get("drop_prefix", True)),
-        )
-        model.load_state_dict(state_dict)
-
-    # Freeze weights, if requested
-    if freeze_weights:
-        for param in model.parameters():
-            param.requires_grad = False
