@@ -2,8 +2,8 @@
 Argument parser for training scripts.
 """
 
-import argparse
-from pathlib import Path
+import argparse  # pragma: no cover
+from pathlib import Path  # pragma: no cover
 
 
 def get_cli_arguments() -> argparse.Namespace:  # pragma: no cover
