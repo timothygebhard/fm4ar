@@ -2,10 +2,9 @@
 Methods to handle simulating data with petitRADTRANS.
 
 This implementation is based on the code from Vasist et al. (2023):
-https://gitlab.uliege.be/francois.rozet/sbi-ear
+https://github.com/MalAstronomy/sbi-ear
 """
 
-from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -27,22 +26,42 @@ class Simulator:
     Convenience wrapper around `compute_emission_spectrum()` that
     handles loading (and caching) the pRT object (`atmosphere`).
 
-    Arguments:
-        noisy: Whether noise is added to spectra (default: False).
-        kwargs: Simulator settings and constants (e.g. planet distance,
-            pressures, ...).
+    Note: We have removed the `noisy` option that was present in the
+    original implementation, because we never add noise during data
+    generation --- if we want to add noise, we do it during training
+    or at inference time. For the record, the original noise model was:
+
+    ```
+    self.sigma = 1.25754e-17 * self.scale
+    if self.noisy:
+        spectrum += self.sigma * np.random.standard_normal(spectrum.shape)
+    ```
+
+    According to Vasist et al. (2023), this implies an SNR of 10 (?).
     """
 
     def __init__(
         self,
         R: int = 1000,
-        noisy: bool = False,
         time_limit: int = 30,
         **kwargs: Any,
     ) -> None:
+        """
+        Initialise a new `Simulator` object.
+
+        Arguments:
+            R: Spectral resolution R = λ/Δλ of the generated spectra.
+            time_limit: Maximum time (in seconds) to spend generating a
+                single spectrum. If the computation takes longer than this,
+                the simulator will return `None`.
+            kwargs: Simulator settings and constants (e.g. planet distance,
+                pressures, ...).
+        """
+
         super().__init__()
 
-        self.time_limit = time_limit
+        # The time limit really does not work unless it is an integer
+        self.time_limit = int(time_limit)
 
         # Constants
         default = {
@@ -100,10 +119,6 @@ class Simulator:
             np.logspace(-6, 3, self.n_atmospheric_layers)
         )
 
-        # Noise
-        self.noisy = noisy
-        self.sigma = 1.25754e-17 * self.scale
-
     def __call__(
         self,
         theta: np.ndarray,
@@ -111,17 +126,14 @@ class Simulator:
 
         try:
             with timelimit(self.time_limit):
-                wavelengths, spectrum = compute_emission_spectrum(
+                wlen, flux = compute_emission_spectrum(
                     self.atmosphere, theta, **self.constants
                 )
-                spectrum = self.process(spectrum)
+                flux = self.process(flux)
         except TimeoutException:
             return None
 
-        if self.noisy:
-            spectrum += self.sigma * np.random.standard_normal(spectrum.shape)
-
-        return wavelengths, spectrum
+        return wlen, flux
 
     def process(self, x: np.ndarray) -> np.ndarray:
         """
@@ -171,12 +183,9 @@ def compute_emission_spectrum(
         for k, v in kwargs.items()
     }
 
-    wavelengths, spectrum = models.emission_model_diseq(
-        atmosphere, parameters, AMR=True
-    )
+    wlen, flux = models.emission_model_diseq(atmosphere, parameters, AMR=True)
 
-    return wavelengths, spectrum
-
+    return wlen, flux
 
 
 # We removed the `pt_profile()` function because it was not used anywhere in

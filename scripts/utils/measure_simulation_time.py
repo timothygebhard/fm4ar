@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     # Initialize the simulator and initialize it
     print("Initializing simulator...", end=" ", flush=True)
-    simulator = Simulator(noisy=False, R=1000)
+    simulator = Simulator(R=1000)
     simulator(theta=THETA_0)
     print("Done!\n")
 
