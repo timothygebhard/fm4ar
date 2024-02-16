@@ -1,10 +1,13 @@
 # Submission files for HTCondor
 *.sub
+*.dag
 
-# Folders with datasets or results
+# Folders with datasets or results (except template config files)
 datasets/**
-experiments/**
 scripts/nested_sampling/*/results/**
+experiments/**
+!experiments/*-template/
+!experiments/*-template/config.yaml
 
 # jupyter notebooks
 jupyter/
