@@ -7,7 +7,6 @@ import torch
 
 
 class Mean(torch.nn.Module):
-
     def __init__(self, dim: int = 1) -> None:
         super().__init__()
         self.dim = dim
@@ -17,7 +16,6 @@ class Mean(torch.nn.Module):
 
 
 class Rescale(torch.nn.Module):
-
     def __init__(
         self,
         lambda_min: float = 0.95,
@@ -32,7 +30,6 @@ class Rescale(torch.nn.Module):
 
 
 class Sine(torch.nn.Module):
-
     def __init__(self, w0: float = 1.0) -> None:
         super().__init__()
         self.w0 = w0
@@ -41,11 +38,10 @@ class Sine(torch.nn.Module):
         return torch.sin(self.w0 * tensor)
 
     def __repr__(self) -> str:
-        return f'Sine(w0={self.w0})'
+        return f"Sine(w0={self.w0})"
 
 
 class Tile(torch.nn.Module):
-
     def __init__(self, shape: tuple[int, ...]) -> None:
         super().__init__()
         self.shape = shape
@@ -55,7 +51,6 @@ class Tile(torch.nn.Module):
 
 
 class Unsqueeze(torch.nn.Module):
-
     def __init__(self, dim: int) -> None:
         super().__init__()
         self.dim = dim

@@ -22,7 +22,7 @@ def validate_dims(
     """
 
     # Use f-string hack to get the name of x
-    name = f'{x=}'.split('=')[0].strip()
+    name = f"{x=}".split("=")[0].strip()
 
     if x.ndim != ndim:
         raise ValueError(
@@ -44,7 +44,7 @@ def validate_shape(
     """
 
     # Use f-string hack to get the name of x
-    name = f'{x=}'.split('=')[0].strip()
+    name = f"{x=}".split("=")[0].strip()
 
     # Check if the number of dimensions is correct
     if len(x.shape) != len(shape):

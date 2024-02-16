@@ -30,6 +30,7 @@ from fm4ar.utils.torchutils import get_activation_from_string
 # Unified interface
 # -----------------------------------------------------------------------------
 
+
 class FlowWrapper(torch.nn.Module):
     """
     This is a thin wrapper around the different flow implementations
@@ -114,6 +115,7 @@ class FlowWrapper(torch.nn.Module):
 # normflows
 # -----------------------------------------------------------------------------
 
+
 def create_normflows_flow(
     theta_dim: int,
     context_dim: int | None,
@@ -169,6 +171,7 @@ def create_normflows_flow(
 # -----------------------------------------------------------------------------
 # glasflow
 # -----------------------------------------------------------------------------
+
 
 def create_glasflow_flow(
     theta_dim: int,
