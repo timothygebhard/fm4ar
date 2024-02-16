@@ -178,30 +178,10 @@ def compute_emission_spectrum(
     return wavelengths, spectrum
 
 
-@partial(np.vectorize, signature="(m),(n)->(n)")
-def pt_profile(theta: np.ndarray, pressures: np.ndarray) -> np.ndarray:
-    """
-    Returns the pressure-temperature profile.
 
-    Note: This function is not actually used in the simulator; it is
-    just a copy of some of the code that the simulator uses internally
-    and that we need if we want to plot a PT profile.
-    """
-
-    CO, FeH, *_, T_int, T3, T2, T1, alpha, log_delta = theta
-    T3 = ((3 / 4 * T_int**4 * (0.1 + 2 / 3)) ** (1 / 4)) * (1 - T3)
-    T2 = T3 * (1 - T2)
-    T1 = T2 * (1 - T1)
-    delta = (1e6 * 10 ** (-3 + 5 * log_delta)) ** (-alpha)
-
-    return np.array(
-        models.PT_ret_model(
-            np.array([T1, T2, T3]),
-            delta,
-            alpha,
-            T_int,
-            pressures,
-            FeH,
-            CO,
-        )
-    )
+# We removed the `pt_profile()` function because it was not used anywhere in
+# the Simulator, and using it manually was tricky because of unit conventions
+# and the adaptive mesh refinement (AMR) used by the `emission_model_diseq()`.
+# If we really want the PT profile for a given `theta`, it seems that safest
+# way is to run the simulator again and look at `simulator.atmosphere.press`
+# and `simulator.atmosphere.temp`, respectively.
