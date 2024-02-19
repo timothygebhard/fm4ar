@@ -48,7 +48,7 @@ if __name__ == "__main__":
         job_arguments = [
             Path(__file__).resolve().as_posix(),
             f"--experiment-dir {args.experiment_dir}",
-            f"--checkpoint-name {args.checkpoint_name}"
+            f"--checkpoint-name {args.checkpoint_name}",
         ]
 
         # Combine condor settings from config file with job arguments and the
@@ -86,7 +86,7 @@ if __name__ == "__main__":
         checkpoint_file_path = args.experiment_dir / args.checkpoint_name
         if checkpoint_file_path.exists():
             print("Checkpoint found, resuming training!", flush=True)
-            pm, dataset = prepare_resume(
+            model, dataset = prepare_resume(
                 experiment_dir=args.experiment_dir,
                 checkpoint_name=args.checkpoint_name,
                 config=config,
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         # If no checkpoint file exists, we need to start from scratch
         else:
             print("No checkpoint found, starting new training!", flush=True)
-            pm, dataset = prepare_new(
+            model, dataset = prepare_new(
                 experiment_dir=args.experiment_dir,
                 config=config,
             )
@@ -105,7 +105,7 @@ if __name__ == "__main__":
         # Train model (either to completion, or until a time limit is reached,
         # or until the early stopping criterion is met)
         with threadpool_limits(limits=1, user_api="blas"):
-            complete = train_stages(pm=pm, dataset=dataset)
+            complete = train_stages(model=model, dataset=dataset)
 
         # If the training is complete, we can end the job. Otherwise, we exit
         # with code 42 (see CondorSettings above), which will cause the job to
