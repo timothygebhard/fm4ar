@@ -5,6 +5,7 @@ Utility functions for PyTorch.
 from collections import OrderedDict
 from collections.abc import Sequence
 from functools import partial
+from importlib import import_module
 from math import prod
 from pathlib import Path
 from typing import Any, Callable, Iterable, Literal, Type
@@ -96,30 +97,26 @@ def check_for_nans(x: torch.Tensor, label: str = "tensor") -> None:
         raise ValueError(f"Inf values detected in {label}, aborting!")
 
 
-def get_activation_from_string(name: str) -> torch.nn.Module:
+def get_activation_from_name(name: str) -> torch.nn.Module:
     """
     Build and return an activation function with the given name.
     """
 
-    match name.lower():
-        case "elu":
-            return torch.nn.ELU()
-        case "gelu":
-            return torch.nn.GELU()
-        case "leaky_relu":
-            return torch.nn.LeakyReLU()
-        case "relu":
-            return torch.nn.ReLU()
-        case "sigmoid":
-            return torch.nn.Sigmoid()
-        case "sine":
-            return Sine()
-        case "swish":
-            return torch.nn.SiLU()
-        case "tanh":
-            return torch.nn.Tanh()
-        case _:
-            raise ValueError("Invalid activation function!")
+    ActivationFunction: Type[torch.nn.Module]
+
+    # Custom activation functions need special treatment
+    if name == "Sine":
+        ActivationFunction = Sine
+
+    # All other activation functions are built from `torch.nn`
+    else:
+        try:
+            ActivationFunction = getattr(import_module("torch.nn"), name)
+        except AttributeError as e:
+            raise ValueError(f"Invalid activation function: `{name}`") from e
+
+    # Instantiate the activation function and return it
+    return ActivationFunction()
 
 
 def get_lr(optimizer: torch.optim.Optimizer) -> list[float]:
@@ -165,7 +162,7 @@ def get_mlp(
     for i in range(len(dims) - 1):
         layers.append(nn.Linear(dims[i], dims[i + 1]))
         if i < len(dims) - 2:
-            layers.append(get_activation_from_string(activation))
+            layers.append(get_activation_from_name(activation))
             if batch_norm:
                 layers.append(torch.nn.BatchNorm1d(dims[i + 1]))
             if dropout > 0.0:
@@ -197,88 +194,81 @@ def get_number_of_parameters(
     return num_params
 
 
-def get_optimizer_from_kwargs(
+def get_optimizer_from_config(
     model_parameters: Iterable,
-    **optimizer_kwargs: Any,
+    optimizer_config: dict,
 ) -> torch.optim.Optimizer:
     """
     Builds and returns an optimizer for `model_parameters`, based on
-    the `optimizer_kwargs`.
+    the given `optimizer_config`.
+
+    This should support all optimizers from `torch.optim`.
+    Note: Some optimizers, such as LBFGS, can be specicied like this
+    but will not work for training as they require the `closure` to be
+    defined (see the PyTorch documentation for details).
 
     Args:
         model_parameters: Model parameters to optimize.
-        **optimizer_kwargs: Keyword arguments for the optimizer, such
-            as the learning rate or momentum. Must also contain the key
-            `type`, which specifies the optimizer type.
+        optimizer_config: Configuration for the optimizer. Must contain
+        the keys `type` (e.g., "Adam") and `kwargs` (e.g, with `lr`).
 
     Returns:
         Optimizer for the model parameters.
     """
 
-    # Get optimizer type. We use `pop` to remove the key from the dictionary,
-    # so that we can pass the remaining kwargs to the optimizer constructor.
-    optimizer_type = str(optimizer_kwargs.pop("type", ""))
-    if optimizer_type == "":
-        raise KeyError("Optimizer type needs to be specified!")
+    # Get optimizer type and additional keyword arguments from config
+    optimizer_type = optimizer_config["type"]
+    optimizer_kwargs = optimizer_config.get("kwargs", {})
 
-    # Get optimizer from optimizer type
-    # noinspection PyUnresolvedReferences
-    match optimizer_type.lower():
-        case "adagrad":
-            return torch.optim.Adagrad(model_parameters, **optimizer_kwargs)
-        case "adam":
-            return torch.optim.Adam(model_parameters, **optimizer_kwargs)
-        case "adamw":
-            return torch.optim.AdamW(model_parameters, **optimizer_kwargs)
-        case "lbfgs":
-            return torch.optim.LBFGS(model_parameters, **optimizer_kwargs)
-        case "rmsprop":
-            return torch.optim.RMSprop(model_parameters, **optimizer_kwargs)
-        case "sgd":
-            return torch.optim.SGD(model_parameters, **optimizer_kwargs)
-        case _:
-            raise ValueError(f"Invalid optimizer type: `{optimizer_type}`")
+    # Get optimizer class based on the type
+    try:
+        OptimizerClass: Type[torch.optim.Optimizer]
+        OptimizerClass = getattr(
+            import_module("torch.optim"),
+            optimizer_type,
+        )
+    except AttributeError as e:
+        raise ValueError(f"Invalid optimizer type: `{optimizer_type}`") from e
+
+    # Instantiate optimizer from optimizer type and keyword arguments
+    return OptimizerClass(model_parameters, **optimizer_kwargs)
 
 
-def get_scheduler_from_kwargs(
+def get_scheduler_from_config(
     optimizer: torch.optim.Optimizer,
-    **scheduler_kwargs: Any,
+    scheduler_config: dict,
 ) -> lrs.LRScheduler | lrs.ReduceLROnPlateau:
     """
     Builds and returns a learning rate scheduler for `optimizer`, based
-    on the `scheduler_kwargs`.
+    on the given `scheduler_config`.
+
+    This should support all schedulers from `torch.optim.lr_scheduler`.
 
     Args:
         optimizer: Optimizer for which the scheduler is used.
-        **scheduler_kwargs: Keyword arguments for the scheduler, such
-            at the patience or factor. Must also contain the key `type`,
-            which specifies the scheduler type.
+        scheduler_config: Configuration for the scheduler. Must contain
+            the key `type` (e.g., "ReduceLROnPlateau") and `kwargs`.
 
     Returns:
         Learning rate scheduler for the optimizer.
     """
 
-    # Get scheduler type. We use `pop` to remove the key from the dictionary,
-    # so that we can pass the remaining kwargs to the scheduler constructor.
-    scheduler_type = str(scheduler_kwargs.pop("type", ""))
-    if scheduler_type == "":
-        raise KeyError("Scheduler type needs to be specified!")
+    # Get scheduler type and additional keyword arguments
+    scheduler_type = scheduler_config["type"]
+    scheduler_kwargs = scheduler_config.get("kwargs", {})
 
-    # Map strings to scheduler classes
-    mapping: dict[str, Type[lrs.LRScheduler | lrs.ReduceLROnPlateau]] = {
-        "step": lrs.StepLR,
-        "cosine": lrs.CosineAnnealingLR,
-        "cosine_warm_restarts": lrs.CosineAnnealingWarmRestarts,
-        "cyclic": lrs.CyclicLR,
-        "onecycle": lrs.OneCycleLR,
-        "reduce_on_plateau": lrs.ReduceLROnPlateau,
-    }
-
-    # Get scheduler from scheduler type
+    # Get scheduler class based on the type
     try:
-        return mapping[scheduler_type.lower()](optimizer, **scheduler_kwargs)
-    except KeyError as e:
+        SchedulerClass: Type[lrs.LRScheduler | lrs.ReduceLROnPlateau]
+        SchedulerClass = getattr(
+            import_module("torch.optim.lr_scheduler"),
+            scheduler_type,
+        )
+    except AttributeError as e:
         raise ValueError(f"Invalid scheduler type: `{scheduler_type}`") from e
+
+    # Instantiate scheduler from scheduler type and keyword arguments
+    return SchedulerClass(optimizer, **scheduler_kwargs)
 
 
 def get_weights_from_pt_file(
