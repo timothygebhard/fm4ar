@@ -2,7 +2,7 @@
 Methods for flow matching posterior estimation (FMPE) models.
 """
 
-from functools import lru_cache
+# from functools import lru_cache
 from typing import Any
 
 import torch
@@ -12,7 +12,7 @@ from torchdiffeq import odeint
 from fm4ar.models.base import Base
 from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.nn.vectorfield_nets import create_vectorfield_net
-from fm4ar.utils.misc import freeze_args
+# from fm4ar.utils.misc import freeze_args
 from fm4ar.utils.shapes import validate_dims
 
 
@@ -451,8 +451,8 @@ class FMPENetwork(nn.Module):
         self.context_with_glu = context_with_glu
         self.t_theta_with_glu = t_theta_with_glu
 
-    @freeze_args
-    @lru_cache(maxsize=1)
+    # @freeze_args
+    # @lru_cache(maxsize=1)
     def get_context_embedding(
         self,
         context: dict[str, torch.Tensor],
@@ -470,7 +470,7 @@ class FMPENetwork(nn.Module):
         self,
         t: torch.Tensor,
         theta: torch.Tensor,  # note: this is theta _at time t_
-        context: torch.Tensor | None,
+        context: dict[str, torch.Tensor],
     ) -> torch.Tensor:
         """
         Forward pass through the continuous flow model, that is, compute
