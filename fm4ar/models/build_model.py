@@ -8,8 +8,8 @@ from typing import Any
 
 import torch
 
-from fm4ar.models.continuous.flow_matching import FlowMatching
-from fm4ar.models.discrete.normalizing_flow import NormalizingFlow
+from fm4ar.models.fmpe import FMPEModel
+from fm4ar.models.npe import NPEModel
 
 
 def build_model(
@@ -17,7 +17,7 @@ def build_model(
     file_path: Path | None = None,
     config: dict | None = None,
     **kwargs: Any,
-) -> FlowMatching | NormalizingFlow:
+) -> FMPEModel | NPEModel:
     """
     Build a model from a checkpoint file or from a `config` dictionary.
 
@@ -42,15 +42,15 @@ def build_model(
 
     # Select the model class
     match model_type:
-        case "flow_matching" | "fm":
-            return FlowMatching(
+        case "flow_matching" | "fm" | "fmpe":
+            return FMPEModel(
                 experiment_dir=experiment_dir,
                 file_path=file_path,
                 config=config,
                 **kwargs,
             )
         case "neural_posterior_estimation" | "npe":
-            return NormalizingFlow(
+            return NPEModel(
                 experiment_dir=experiment_dir,
                 file_path=file_path,
                 config=config,
