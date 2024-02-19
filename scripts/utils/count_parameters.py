@@ -44,19 +44,19 @@ if __name__ == "__main__":
         del config["local"]["wandb"]
 
     # Load data and build model (needed to infer theta_dim and context_dim)
-    pm, dataset = prepare_new(
+    model, dataset = prepare_new(
         experiment_dir=args.experiment_dir,
         config=config,
     )
     print("\n")
 
-    model: torch.nn.Module
-    for name, model in (  # type: ignore
-        ("total", pm.model),
-        ("context embedding net", pm.model.context_embedding_net),
+    network: torch.nn.Module
+    for name, network in (
+        ("total", model.network),
+        ("context embedding net", model.network.context_embedding_net),
     ):
-        n_trainable = get_number_of_parameters(model, (True,))
-        n_fixed = get_number_of_parameters(model, (False,))
+        n_trainable = get_number_of_parameters(network, (True,))
+        n_fixed = get_number_of_parameters(network, (False,))
         n_total = n_trainable + n_fixed
         print(f"Number of {name} parameters:", flush=True)
         print(f"n_trainable: {n_trainable:,}", flush=True)
