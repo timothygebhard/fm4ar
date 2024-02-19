@@ -14,7 +14,6 @@ The glasflow-based NSF implementation is mostly based on the uci.py
 example from https://github.com/bayesiains/nsf.
 """
 
-from copy import deepcopy
 from typing import Any, Type
 
 import torch
@@ -23,11 +22,14 @@ from glasflow.nflows import distributions, flows, transforms, utils
 from glasflow.nflows.nn import nets as nflows_nets
 import normflows as nf
 
-from fm4ar.utils.torchutils import get_activation_from_string
+from fm4ar.utils.torchutils import (
+    get_activation_from_name,
+    load_and_or_freeze_model_weights,
+)
 
 
 # -----------------------------------------------------------------------------
-# Unified interface
+# Unified interface for both
 # -----------------------------------------------------------------------------
 
 
@@ -49,6 +51,17 @@ class FlowWrapper(torch.nn.Module):
         num_samples: int,
         context: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        """
+        Sample from the flow model.
+
+        Args:
+            num_samples: Number of samples to draw.
+            context: Context tensor (if applicable). This needs to be
+                 a tensor, NOT a dict.
+
+        Returns:
+            Samples from the flow model.
+        """
 
         if isinstance(self.flow, nf.ConditionalNormalizingFlow):
             samples, _ = self.flow.sample(
@@ -63,7 +76,7 @@ class FlowWrapper(torch.nn.Module):
                 context=context,
             )
             samples = samples.squeeze(1)
-        else:
+        else:  # pragma: no cover
             raise ValueError(f"Unknown flow type: {type(self.flow)}")
 
         return torch.Tensor(samples)
@@ -73,6 +86,17 @@ class FlowWrapper(torch.nn.Module):
         theta: torch.Tensor,
         context: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        """
+        Compute the log probability of the given samples.
+
+        Args:
+            theta: Samples for which to compute the log probability.
+            context: Context tensor (if applicable). This needs to be
+                a tensor, NOT a dict.
+
+        Returns:
+            Log probabilities of the `theta`.
+        """
 
         if isinstance(self.flow, nf.ConditionalNormalizingFlow):
             log_prob = self.flow.log_prob(x=theta, context=context)
@@ -80,7 +104,7 @@ class FlowWrapper(torch.nn.Module):
             log_prob = self.flow.log_prob(x=theta)
         elif isinstance(self.flow, flows.Flow):
             log_prob = self.flow.log_prob(inputs=theta, context=context)
-        else:
+        else:  # pragma: no cover
             raise ValueError(f"Unknown flow type: {type(self.flow)}")
 
         return torch.Tensor(log_prob)
@@ -90,6 +114,17 @@ class FlowWrapper(torch.nn.Module):
         num_samples: int,
         context: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Sample from the model and compute the log probability.
+
+        Args:
+            num_samples: Number of samples to draw.
+            context: Context tensor (if applicable). This needs to be
+                a tensor, NOT a dict.
+
+        Returns:
+            A 2-tuple with the samples and the log probabilities.
+        """
 
         if isinstance(self.flow, nf.ConditionalNormalizingFlow):
             samples, log_prob = self.flow.sample(
@@ -105,10 +140,65 @@ class FlowWrapper(torch.nn.Module):
             )
             samples = samples.squeeze(1)
             log_prob = log_prob.squeeze(1)
-        else:
+        else:  # pragma: no cover
             raise ValueError(f"Unknown flow type: {type(self.flow)}")
 
         return torch.Tensor(samples), torch.Tensor(log_prob)
+
+
+def create_flow_wrapper(
+    dim_theta: int,
+    dim_context: int,
+    flow_wrapper_config: dict[str, Any],
+) -> FlowWrapper:
+    """
+    Create a normalizing flow model based on the given configuration,
+    which is wrapped in a thin compatibility layer (FlowWrapper).
+
+    This is the analogon of `create_vectorfield_net()` for FMPE.
+
+    Args:
+        dim_theta: Dimensionality of `theta`.
+        dim_context: Dimensionality of the `context`.
+        flow_wrapper_config: Configuration for the discrete
+            flow wrapper (i.e., the "discrete_flow_wrapper_config"
+            section inside the "model" part of the experiment config).
+
+    Returns:
+        FlowWrapper: A thin wrapper around the flow model.
+    """
+
+    # Define some shortcuts
+    flow_library = flow_wrapper_config["flow_library"]
+    flow_kwargs = flow_wrapper_config["kwargs"]
+    freeze_weights = flow_wrapper_config.get("freeze_weights", False)
+    load_weights = flow_wrapper_config.get("load_weights", {})
+
+    # Construct the flow model based on the specified library
+    match flow_library:
+        case "glasflow":
+            flow_wrapper = create_glasflow_flow(
+                dim_theta=dim_theta,
+                dim_context=dim_context,
+                flow_kwargs=flow_kwargs,
+            )
+        case "normflows":
+            flow_wrapper = create_normflows_flow(
+                dim_theta=dim_theta,
+                dim_context=dim_context,
+                flow_kwargs=flow_kwargs,
+            )
+        case _:  # pragma: no cover
+            raise ValueError(f"Unknown flow library: {flow_library}")
+
+    # Load pre-trained weights or freeze the weights of the flow
+    load_and_or_freeze_model_weights(
+        model=flow_wrapper.flow,
+        freeze_weights=freeze_weights,
+        load_weights=load_weights,
+    )
+
+    return flow_wrapper
 
 
 # -----------------------------------------------------------------------------
@@ -117,27 +207,29 @@ class FlowWrapper(torch.nn.Module):
 
 
 def create_normflows_flow(
-    theta_dim: int,
-    context_dim: int | None,
-    posterior_kwargs: dict[str, Any],
+    dim_theta: int,
+    dim_context: int | None,
+    flow_kwargs: dict[str, Any],
 ) -> FlowWrapper:
     """
     Create a normflows-based normalizing flow.
     """
 
-    # Make a deep copy of the posterior kwargs to avoid side effects
-    posterior_kwargs = deepcopy(posterior_kwargs)
-
     # Define shortcuts
-    num_flow_steps = posterior_kwargs["num_flow_steps"]
-    base_transform_type = posterior_kwargs["base_transform_type"]
-    base_transform_kwargs = posterior_kwargs["base_transform_kwargs"]
+    num_flow_steps = flow_kwargs["num_flow_steps"]
+    base_transform_type = flow_kwargs["base_transform_type"]
+    base_transform_kwargs = flow_kwargs["base_transform_kwargs"]
+
+    # We need to copy the base_transform_kwargs because we will modify the
+    # activation function and we don't want to change the original config
+    # as this will cause issues when resuming from a checkpoint.
+    base_transform_kwargs = base_transform_kwargs.copy()
 
     # Update the activation function: the config uses a string, but normflows
     # expects a class like torch.nn.ReLU (*not* an instance!)
-    base_transform_kwargs["activation"] = get_activation_from_string(
+    base_transform_kwargs["activation"] = get_activation_from_name(
         base_transform_kwargs["activation"]
-    ).__class__
+        ).__class__
 
     # Set base transform
     if base_transform_type == "rq-coupling":
@@ -152,15 +244,15 @@ def create_normflows_flow(
     for _ in range(num_flow_steps):
         flows += [
             BaseTransform(
-                num_input_channels=theta_dim,
-                num_context_channels=context_dim,
+                num_input_channels=dim_theta,
+                num_context_channels=dim_context,
                 **base_transform_kwargs,
             )
         ]
-        flows += [nf.flows.LULinearPermute(theta_dim)]
+        flows += [nf.flows.LULinearPermute(dim_theta)]
 
     # Set base distribution
-    q0 = nf.distributions.DiagGaussian(theta_dim, trainable=False)
+    q0 = nf.distributions.DiagGaussian(dim_theta, trainable=False)
 
     # Construct flow model
     flow = nf.ConditionalNormalizingFlow(q0=q0, flows=flows)
@@ -174,29 +266,26 @@ def create_normflows_flow(
 
 
 def create_glasflow_flow(
-    theta_dim: int,
-    context_dim: int | None,
-    posterior_kwargs: dict[str, Any],
+    dim_theta: int,
+    dim_context: int | None,
+    flow_kwargs: dict[str, Any],
 ) -> FlowWrapper:
     """
     Create a glasflow-based normalizing flow.
     """
 
-    # Make a deep copy of the posterior kwargs to avoid side effects
-    posterior_kwargs = deepcopy(posterior_kwargs)
-
     # Define series of transforms
     transform = create_transform(
-        theta_dim=theta_dim,
-        context_dim=context_dim,
-        **posterior_kwargs,
+        theta_dim=dim_theta,
+        context_dim=dim_context,
+        **flow_kwargs,
     )
 
     # Define base distribution
-    distribution = distributions.StandardNormal((theta_dim,))
+    distribution = distributions.StandardNormal((dim_theta,))
 
     # We set the embedding net to the identity, because we handle the context
-    # embedding separately in the `DiscreteFlowModel` wrapper.
+    # embedding separately in the `NPENetwork` wrapper.
     flow = flows.Flow(
         transform=transform,
         distribution=distribution,
@@ -210,10 +299,11 @@ def create_linear_transform(param_dim: int) -> transforms.CompositeTransform:
     """
     Create the composite linear transform PLU.
 
-    :param param_dim: int
-        dimension of the parameter space
-    :return: nde.Transform
-        the linear transform PLU
+    Args:
+        param_dim: Dimension of the parameter space.
+
+    Returns:
+        The linear transform PLU.
     """
 
     return transforms.CompositeTransform(
@@ -230,7 +320,7 @@ def create_base_transform(
     context_dim: int | None = None,
     hidden_dim: int = 512,
     num_transform_blocks: int = 2,
-    activation: str = "relu",
+    activation: str = "ReLU",
     dropout_probability: float = 0.0,
     batch_norm: bool = False,
     num_bins: int = 8,
@@ -278,7 +368,7 @@ def create_base_transform(
         The NSF transform.
     """
 
-    activation_fn = get_activation_from_string(activation)
+    activation_fn = get_activation_from_name(activation)
 
     if base_transform_type == "rq-coupling":
         if theta_dim == 1:
@@ -394,9 +484,10 @@ def create_unconditional_nsf(
     activation: Type[torch.nn.Module] = torch.nn.ELU,
 ) -> nf.NormalizingFlow:
     """
-    Create the unconditional neural spline flow model. Useful, e.g., to
-    fit samples from a posterior so that one can  evaluate the logprob
-    and use it for importance sampling.
+    Create an unconditional neural spline flow model (with normflows).
+
+    This is useful, e.g., to fit samples from a posterior so that one
+    can evaluate the logprob and use it for importance sampling.
     """
 
     # Construct series of transforms
