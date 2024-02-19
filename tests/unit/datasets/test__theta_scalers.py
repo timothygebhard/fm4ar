@@ -11,7 +11,7 @@ from fm4ar.datasets.theta_scalers import (
     IdentityScaler,
     MeanStdScaler,
     MinMaxScaler,
-    get_theta_scaler
+    get_theta_scaler,
 )
 from fm4ar.datasets.vasist_2023.prior import THETA_0
 

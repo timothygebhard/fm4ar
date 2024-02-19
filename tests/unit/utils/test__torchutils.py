@@ -305,15 +305,17 @@ def test__get_scheduler_from_kwargs(
     if scheduler_config["type"] == "invalid":
         with pytest.raises(ValueError) as value_error:
             get_scheduler_from_config(
-                optimizer=optimizer, scheduler_config=scheduler_config
-                )
+                optimizer=optimizer,
+                scheduler_config=scheduler_config,
+            )
         assert "Invalid scheduler type" in str(value_error)
 
     # Case 2: Valid scheduler type
     else:
         scheduler = get_scheduler_from_config(
-            optimizer=optimizer, scheduler_config=scheduler_config
-            )
+            optimizer=optimizer,
+            scheduler_config=scheduler_config,
+        )
         assert isinstance(scheduler, expected_class)
 
 

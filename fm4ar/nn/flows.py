@@ -229,7 +229,7 @@ def create_normflows_flow(
     # expects a class like torch.nn.ReLU (*not* an instance!)
     base_transform_kwargs["activation"] = get_activation_from_name(
         base_transform_kwargs["activation"]
-        ).__class__
+    ).__class__
 
     # Set base transform
     if base_transform_type == "rq-coupling":

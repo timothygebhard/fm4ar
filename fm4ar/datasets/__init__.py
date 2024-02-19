@@ -68,8 +68,7 @@ def load_dataset(config: dict) -> SpectraDataset:
             "The number of samples does not match between `theta` and `flux`!"
         )
     if (  # pragma: no cover
-        wlen.shape[0] != 1
-        and wlen.shape[0] != flux.shape[0]
+        wlen.shape[0] != 1 and wlen.shape[0] != flux.shape[0]
     ):
         raise ValueError(
             "The number of samples does not match between `wlen` and `flux`! "
