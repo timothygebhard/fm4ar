@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from glasflow.nflows.nn.nets.resnet import ResidualBlock
 
-from fm4ar.utils.torchutils import get_activation_from_string
+from fm4ar.utils.torchutils import get_activation_from_name
 
 
 class InitialLayerForZeroInputs(nn.Module):
@@ -40,7 +40,7 @@ class DenseResidualNet(nn.Module):
         input_shape: tuple[int, ...],
         output_dim: int,
         hidden_dims: tuple[int, ...],
-        activation: str = "elu",
+        activation: str = "ELU",
         final_activation: str | None = None,
         dropout: float = 0.0,
         batch_norm: bool = True,
@@ -102,7 +102,7 @@ class DenseResidualNet(nn.Module):
                 ResidualBlock(
                     features=self.hidden_dims[n],
                     context_features=context_features,
-                    activation=get_activation_from_string(activation),
+                    activation=get_activation_from_name(activation),
                     dropout_probability=dropout,
                     use_batch_norm=batch_norm,
                 )
@@ -131,9 +131,7 @@ class DenseResidualNet(nn.Module):
         # The default usecase for this is to use a sigmoid activation function
         # in case the target parameters have been scaled to the range [0, 1]
         if final_activation is not None:
-            self.final_activation = get_activation_from_string(
-                final_activation
-            )
+            self.final_activation = get_activation_from_name(final_activation)
         else:
             self.final_activation = nn.Identity()
 
