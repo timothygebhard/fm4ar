@@ -99,7 +99,7 @@ def train_epoch(
         theta, context = move_batch_to_device(batch, model.device)
 
         # Reset gradients
-        model.optimizer.zero_grad()
+        model.optimizer.zero_grad(set_to_none=True)
 
         # No automatic mixed precision
         if not use_amp:
