@@ -68,18 +68,19 @@ class NoiseGenerator:
 
         # If complexity is 0, return a error bar that is 1 everywhere
         if self.complexity == 0:
-            error_bars = np.ones_like(wlen)
+            error_bars = np.ones_like(wlen, dtype=np.float32)
 
         # If complexity is 1, return a constant random error bar
         elif self.complexity == 1:
-            error_bars = self.rng.uniform(0, 1) * np.ones_like(wlen)
+            factor = self.rng.uniform(0, 1)
+            error_bars = factor * np.ones_like(wlen, dtype=np.float32)
 
         # For complexity > 1, generate a random function and interpolate it
         else:
             coeff = self.rng.uniform(0, 1, self.complexity)
             grid = np.linspace(wlen.min(), wlen.max(), len(coeff))
             f = PchipInterpolator(grid, coeff)
-            error_bars = f(wlen)
+            error_bars = f(wlen).astype(np.float32)
 
         # Transform the error bars; make sure they are non-negative
         error_bars = np.clip(self.transform(wlen, error_bars), 0, None)
@@ -105,7 +106,7 @@ class NoiseGenerator:
         # Using multivariate_normal() is quite slow, because it assumes a full
         # covariance matrix, but since the bins are independent, we can sample
         # each bin independently, which is much faster (3 orders of magnitude).
-        return self.rng.normal(loc=0, scale=error_bars)
+        return self.rng.normal(loc=0, scale=error_bars).astype(np.float32)
 
 
 def get_noise_transform_from_string(string: str) -> Callable:
