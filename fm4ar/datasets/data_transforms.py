@@ -108,14 +108,12 @@ class AddNoise(DataTransform):
         #   Example: Rescale the noise to a certain target SNR?
 
         # Sample the error bars; store them in the input dictionary
-        x["error_bars"] = self.noise_generator.sample_error_bars(
-            wlen=x["wlen"],
-        )
+        error_bars = self.noise_generator.sample_error_bars(wlen=x["wlen"])
+        x["error_bars"] = error_bars
 
         # Draw a noise realization and add it to the flux
-        x["flux"] += self.noise_generator.sample_noise(
-            error_bars=x["error_bars"],
-        )
+        noise = self.noise_generator.sample_noise(error_bars=x["error_bars"])
+        x["flux"] += noise
 
         return x
 
