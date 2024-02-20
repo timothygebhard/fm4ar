@@ -4,7 +4,6 @@ Defines a dense residual network module.
 
 import torch
 import torch.nn as nn
-from glasflow.nflows.nn.nets.resnet import ResidualBlock
 
 from fm4ar.utils.torchutils import get_activation_from_name
 
@@ -22,6 +21,81 @@ class InitialLayerForZeroInputs(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.zeros(x.shape[0], self.output_dim, device=x.device)
+
+
+class ResidualBlock(nn.Module):
+    """
+    A general-purpose residual block.
+    Originally based on `glasflow.nflows.nn.nets.resnets.ResidualBlock`.
+    """
+
+    def __init__(
+        self,
+        n_features: int,
+        n_context_features: int | None,
+        activation: nn.Module,
+        dropout_probability: float = 0.0,
+        use_batch_norm: bool = False,
+        use_layer_norm: bool = False,
+    ):
+
+        super().__init__()
+
+        self.activation = activation
+
+        self.dropout = nn.Dropout(p=dropout_probability)
+
+        if use_batch_norm and use_layer_norm:
+            raise ValueError(
+                "Cannot use both batch normalization and layer normalization!"
+            )
+
+        self.use_batch_norm = use_batch_norm
+        if use_batch_norm:
+            self.batch_norm_1 = nn.BatchNorm1d(n_features, eps=1e-3)
+            self.batch_norm_2 = nn.BatchNorm1d(n_features, eps=1e-3)
+
+        self.use_layer_norm = use_layer_norm
+        if use_layer_norm:
+            self.layer_norm_1 = nn.LayerNorm(n_features)
+            self.layer_norm_2 = nn.LayerNorm(n_features)
+
+        if n_context_features is not None:
+            self.context_layer = nn.Linear(n_context_features, n_features)
+
+        self.linear_layer_1 = nn.Linear(n_features, n_features)
+        self.linear_layer_2 = nn.Linear(n_features, n_features)
+
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        context: torch.Tensor | None = None
+    ) -> torch.Tensor:
+
+        temps = inputs
+
+        if self.use_batch_norm:
+            temps = self.batch_norm_1(temps)
+        if self.use_layer_norm:
+            temps = self.layer_norm_1(temps)
+        temps = self.activation(temps)
+        temps = self.linear_layer_1(temps)
+
+        if self.use_batch_norm:
+            temps = self.batch_norm_2(temps)
+        if self.use_layer_norm:
+            temps = self.layer_norm_2(temps)
+        temps = self.activation(temps)
+        temps = self.dropout(temps)
+        temps = self.linear_layer_2(temps)
+
+        if context is not None:
+            temps = torch.nn.functional.glu(
+                torch.cat((temps, self.context_layer(context)), dim=1),
+                dim=1,
+            )
+
+        return inputs + temps
 
 
 class DenseResidualNet(nn.Module):
@@ -43,7 +117,8 @@ class DenseResidualNet(nn.Module):
         activation: str = "ELU",
         final_activation: str | None = None,
         dropout: float = 0.0,
-        batch_norm: bool = True,
+        use_batch_norm: bool = False,
+        use_layer_norm: bool = False,
         context_features: int | None = None,
     ) -> None:
         """
@@ -61,7 +136,8 @@ class DenseResidualNet(nn.Module):
                 layer. If None, no activation is used (default).
             dropout: Dropout probability for residual blocks used for
                 regularization.
-            batch_norm: Whether to use batch normalization.
+            use_batch_norm: Whether to use batch normalization.
+            use_layer_norm: Whether to use layer normalization.
             context_features: Number of additional context features,
                 which are provided to the residual blocks via gated
                 linear units. If None, no additional context expected.
@@ -100,11 +176,12 @@ class DenseResidualNet(nn.Module):
         self.residual_blocks = nn.ModuleList(
             [
                 ResidualBlock(
-                    features=self.hidden_dims[n],
-                    context_features=context_features,
+                    n_features=self.hidden_dims[n],
+                    n_context_features=context_features,
                     activation=get_activation_from_name(activation),
                     dropout_probability=dropout,
-                    use_batch_norm=batch_norm,
+                    use_batch_norm=use_batch_norm,
+                    use_layer_norm=use_layer_norm,
                 )
                 for n in range(self.num_res_blocks)
             ]
