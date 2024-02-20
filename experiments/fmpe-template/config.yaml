@@ -36,7 +36,7 @@ model:
         activation: "ELU"
         output_dim: 4096
         dropout: 0.0
-        batch_norm: False
+        use_batch_norm: False
 
   # Embedding network for (t, theta)
   t_theta_embedding_net:
@@ -50,7 +50,7 @@ model:
         activation: "GELU"
         output_dim: 32
         dropout: 0.0
-        batch_norm: False
+        use_batch_norm: False
 
   # Vector field network
   vectorfield_net:
@@ -59,7 +59,7 @@ model:
       hidden_dims: [64, 32, 16]
       activation: "GELU"
       dropout: 0.3
-      batch_norm: True
+      use_batch_norm: True
 
 # -----------------------------------------------------------------------------
 # TRAINING
