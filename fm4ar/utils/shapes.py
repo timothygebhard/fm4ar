@@ -21,10 +21,8 @@ def validate_dims(
         ndim: The expected number of dimensions.
     """
 
-    # Use f-string hack to get the name of x
-    name = f"{x=}".split("=")[0].strip()
-
     if x.ndim != ndim:
+        name = f"{x=}".split("=")[0].strip()
         raise ValueError(
             f"Expected `{name}` to have {ndim} dimensions but found {x.ndim}!"
         )
@@ -43,15 +41,13 @@ def validate_shape(
             have any size.
     """
 
-    # Use f-string hack to get the name of x
-    name = f"{x=}".split("=")[0].strip()
-
     # Check if the number of dimensions is correct
     validate_dims(x=x, ndim=len(shape))
 
     # Check if the size of each dimension is correct
     for expected, actual in zip(shape, x.shape, strict=True):
         if expected is not None and expected != actual:
+            name = f"{x=}".split("=")[0].strip()
             raise ValueError(
                 f"Expected `{name}` to have shape {shape} but found {x.shape}!"
             )
