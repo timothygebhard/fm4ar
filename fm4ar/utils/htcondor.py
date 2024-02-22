@@ -329,9 +329,9 @@ def get_cuda_capability(gpu_type: Literal["A100", "H100"] | None) -> float:
     """
 
     match gpu_type:
-        case "A100":
-            return 9.0
         case "H100":
+            return 9.0
+        case "A100":
             return 8.0
         case None:
             return 1.0
