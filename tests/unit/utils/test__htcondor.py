@@ -43,7 +43,11 @@ def test__create_submission_file(tmp_path: Path) -> None:
 
     # Case 2: Arguments as string
     file_path = create_submission_file(
-        condor_settings=CondorSettings(arguments="arguments as string"),
+        condor_settings=CondorSettings(
+            arguments="arguments as string",
+            num_gpus=1,
+            gpu_type="A100",
+        ),
         experiment_dir=tmp_path,
         file_name="run.sub",
     )

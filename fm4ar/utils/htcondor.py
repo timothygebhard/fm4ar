@@ -6,6 +6,7 @@ import socket
 import sys
 from pathlib import Path
 from subprocess import run
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -22,6 +23,10 @@ class CondorSettings(BaseModel):
     getenv: bool = Field(
         default=True,
         description="Whether the environment variables should be copied.",
+    )
+    gpu_type: Literal["A100", "H100"] | None = Field(
+        default=None,  # don't request a specific GPU type
+        description="Type of GPU to request for the job.",
     )
     num_cpus: int = Field(
         default=1,
@@ -259,11 +264,20 @@ def create_submission_file(
 
     # Set GPU requirements (only add this section if GPUs are requested)
     if condor_settings.num_gpus > 0:
+
+        # Request the desired number of GPUs
         lines.append(f"request_gpus = {condor_settings.num_gpus}\n")
-        lines.append(
-            f"requirements = TARGET.CUDAGlobalMemoryMb "
-            f"> {condor_settings.memory_gpus}\n\n"
-        )
+
+        # Construct other requirements: GPU memory and / or type
+        requirements = []
+        if (memory_gpus := condor_settings.memory_gpus) > 0:
+            requirements.append(f"TARGET.CUDAGlobalMemoryMb > {memory_gpus}")
+        if (gpu_type := condor_settings.gpu_type) is not None:
+            cuda_capability = get_cuda_capability(gpu_type)
+            requirements.append(f"TARGET.CUDACapability == {cuda_capability}")
+
+        # Add the requirements to the submission file
+        lines.append(f"requirements = ({' && '.join(requirements)})\n\n")
 
     # Set the arguments
     arguments = (
@@ -307,3 +321,19 @@ def create_submission_file(
             f.write(line)
 
     return file_path
+
+
+def get_cuda_capability(gpu_type: Literal["A100", "H100"] | None) -> float:
+    """
+    Get the CUDA capability of the given GPU type.
+    """
+
+    match gpu_type:
+        case "A100":
+            return 9.0
+        case "H100":
+            return 8.0
+        case None:
+            return 1.0
+        case _:
+            raise ValueError(f"Unknown GPU type: {gpu_type}")
