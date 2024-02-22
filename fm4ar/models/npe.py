@@ -2,7 +2,7 @@
 Methods for neural posterior estimation (NPE) models.
 """
 
-from functools import lru_cache
+# from functools import lru_cache
 from typing import Any
 
 import torch
@@ -11,7 +11,7 @@ from torch import nn as nn
 from fm4ar.models.base import Base
 from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.nn.flows import FlowWrapper, create_flow_wrapper
-from fm4ar.utils.misc import freeze_args
+# from fm4ar.utils.misc import freeze_args
 
 
 class NPEModel(Base):
@@ -130,8 +130,8 @@ class NPENetwork(nn.Module):
         self.context_embedding_net = context_embedding_net
         self.flow_wrapper = flow_wrapper
 
-    @freeze_args
-    @lru_cache(maxsize=1)
+    # @freeze_args
+    # @lru_cache(maxsize=1)
     def get_context_embedding(
         self,
         context: dict[str, torch.Tensor],
