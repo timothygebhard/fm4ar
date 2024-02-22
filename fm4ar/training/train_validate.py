@@ -87,7 +87,7 @@ def train_epoch(
     )
 
     # Create scaler for automatic mixed precision
-    scaler = GradScaler(enabled=use_amp)  # type: ignore
+    scaler = GradScaler(enabled=use_amp)
 
     # Iterate over the batches
     batch: dict[str, torch.Tensor]
@@ -129,14 +129,14 @@ def train_epoch(
             scaler.scale(loss).backward()  # type: ignore
 
             if gradient_clipping_config:
-                scaler.unscale_(model.optimizer)  # type: ignore
+                scaler.unscale_(model.optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     parameters=model.network.parameters(),
                     **gradient_clipping_config,
                 )
 
-            scaler.step(model.optimizer)  # type: ignore
-            scaler.update()  # type: ignore
+            scaler.step(model.optimizer)
+            scaler.update()
 
         # Take a step with the learning rate scheduler after each batch.
         # This is required, e.g., for the OneCycleLR scheduler.

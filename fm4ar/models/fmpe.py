@@ -209,7 +209,7 @@ class FMPEModel(Base):
         """
 
         theta_t = theta_and_div_t[:, :-1]  # extract theta_t
-        with torch.enable_grad():
+        with torch.enable_grad():  # type: ignore
             theta_t.requires_grad_(True)
             vf = self.evaluate_vectorfield(t, theta_t, context)
             div_vf = self.compute_divergence(vf, theta_t)
@@ -358,7 +358,7 @@ class FMPEModel(Base):
         """
 
         div: float | torch.Tensor = 0.0
-        with torch.enable_grad():
+        with torch.enable_grad():  # type: ignore
             y.requires_grad_(True)
             x.requires_grad_(True)
             for i in range(y.shape[-1]):
