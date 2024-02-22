@@ -37,7 +37,8 @@ def test__dense_residual_net() -> None:
         hidden_dims=(7, 11, 13),
         activation="ReLU",
         dropout=0.13,
-        batch_norm=True,
+        use_batch_norm=True,
+        use_layer_norm=False,
         context_features=17,
     )
     out = net(x=torch.randn(19, 3), context=torch.randn(19, 17))
@@ -50,7 +51,8 @@ def test__dense_residual_net() -> None:
         hidden_dims=(7,),
         activation="ReLU",
         dropout=0.0,
-        batch_norm=False,
+        use_batch_norm=False,
+        use_layer_norm=True,
         context_features=17,
     )
     out = net(x=torch.randn(19, 0), context=torch.randn(19, 17))
