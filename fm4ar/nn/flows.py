@@ -322,7 +322,7 @@ def create_base_transform(
     num_transform_blocks: int = 2,
     activation: str = "ReLU",
     dropout_probability: float = 0.0,
-    batch_norm: bool = False,
+    use_batch_norm: bool = False,
     num_bins: int = 8,
     tail_bound: float = 1.0,
     apply_unconditional_transform: bool = False,
@@ -354,7 +354,7 @@ def create_base_transform(
             the transform.
         activation: Activation function as a string (e.g., "relu").
         dropout_probability: Dropout probability for regularization.
-        batch_norm: Whether to use batch normalization.
+        use_batch_norm: Whether to use batch normalization.
         num_bins: Number of bins for the spline.
         tail_bound: Tail bound. This is the maximum absolute value of
             the input to the inverse CDF of the spline; values outside
@@ -388,7 +388,7 @@ def create_base_transform(
                     num_blocks=num_transform_blocks,
                     activation=activation_fn,
                     dropout_probability=dropout_probability,
-                    use_batch_norm=batch_norm,
+                    use_batch_norm=use_batch_norm,
                 )
             ),
             num_bins=num_bins,
@@ -411,7 +411,7 @@ def create_base_transform(
                 random_mask=False,
                 activation=activation_fn,
                 dropout_probability=dropout_probability,
-                use_batch_norm=batch_norm,
+                use_batch_norm=use_batch_norm,
             )
         )
 
