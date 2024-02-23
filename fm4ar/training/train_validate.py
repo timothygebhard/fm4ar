@@ -247,7 +247,7 @@ def validate_epoch(
                         for key, value in context.items()
                     },
                     **log_prob_kwargs,  # for FMPE: tolerance, method
-                ).cpu()
+                )
                 avg_logprob = float(logprob.mean().item())
 
             # Update loss for history and logging

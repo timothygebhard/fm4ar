@@ -103,7 +103,8 @@ class NPEModel(Base):
         the mean negative log probability).
         """
 
-        return torch.Tensor(-self.network(theta=theta, context=context).mean())
+        logprob = self.network(theta=theta, context=context)
+        return -logprob.mean()  # type: ignore
 
 
 class NPENetwork(nn.Module):
