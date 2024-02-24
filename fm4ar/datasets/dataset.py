@@ -83,10 +83,13 @@ class SpectraDataset(Dataset):
         theta = self.theta[idx]
 
         # Combine everything into a dict
+        # The .copy() here is important, because we will modify the arrays
+        # in the data transformations (e.g., add noise), and we don't want
+        # to modify the original dataset.
         sample = {
-            "theta": theta,
-            "wlen": wlen,
-            "flux": flux,
+            "theta": theta.copy(),
+            "wlen": wlen.copy(),
+            "flux": flux.copy(),
         }
 
         # First apply the data transforms (e.g., adding noise)
