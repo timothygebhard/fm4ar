@@ -7,6 +7,7 @@ transforms can change between different stages of training.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -20,11 +21,11 @@ class ThetaScaler(ABC):
     """
 
     @abstractmethod
-    def forward(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         raise NotImplementedError  # pragma: no cover
 
     @abstractmethod
-    def inverse(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    def inverse(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         raise NotImplementedError  # pragma: no cover
 
 
@@ -33,11 +34,11 @@ class IdentityScaler(ThetaScaler):
     Identity scaler for `theta`.
     """
 
-    def forward(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        return x
+    def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+        return dict(x)
 
-    def inverse(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        return x
+    def inverse(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+        return dict(x)
 
 
 class MeanStdScaler(ThetaScaler):
@@ -56,13 +57,15 @@ class MeanStdScaler(ThetaScaler):
         self.mean = mean
         self.std = std
 
-    def forward(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        x["theta"] = (x["theta"] - self.mean) / self.std
-        return x
+    def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+        output = dict(x)
+        output["theta"] = (x["theta"] - self.mean) / self.std
+        return output
 
-    def inverse(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        x["theta"] = x["theta"] * self.std + self.mean
-        return x
+    def inverse(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+        output = dict(x)
+        output["theta"] = x["theta"] * self.std + self.mean
+        return output
 
 
 class MinMaxScaler(ThetaScaler):
@@ -82,13 +85,15 @@ class MinMaxScaler(ThetaScaler):
         self.maximum = maximum
         self.difference = self.maximum - self.minimum
 
-    def forward(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        x["theta"] = (x["theta"] - self.minimum) / self.difference
-        return x
+    def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+        output = dict(x)
+        output["theta"] = (x["theta"] - self.minimum) / self.difference
+        return output
 
-    def inverse(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        x["theta"] = x["theta"] * self.difference + self.minimum
-        return x
+    def inverse(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+        output = dict(x)
+        output["theta"] = x["theta"] * self.difference + self.minimum
+        return output
 
 
 def get_theta_scaler(config: dict[str, Any]) -> ThetaScaler:

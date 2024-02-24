@@ -3,6 +3,7 @@ Different embedding networks and convenience functions.
 """
 
 from abc import ABC
+from collections.abc import Mapping
 from math import pi
 from typing import Any
 
@@ -24,7 +25,7 @@ class SupportsDictInput(ABC):
     # access it without instantiating the class.
     required_keys: list[str] = ["theta", "flux", "wlen"]
 
-    def forward(self, x: dict[str, torch.Tensor]) -> Any:
+    def forward(self, x: Mapping[str, torch.Tensor]) -> Any:
         """
         Forward pass through the block with a dictionary input.
         """
@@ -236,7 +237,7 @@ class Concatenate(SupportsDictInput, nn.Module):
 
         self.keys = keys
 
-    def forward(self, context: dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, context: Mapping[str, torch.Tensor]) -> torch.Tensor:
         """
         Forward pass through the `ConcatenateContext` block.
         """
@@ -323,14 +324,17 @@ class SoftClipFlux(SupportsDictInput, nn.Module):
         super().__init__()
         self.bound = bound
 
-    def forward(self, x: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    def forward(
+        self,
+        x: Mapping[str, torch.Tensor],
+    ) -> dict[str, torch.Tensor]:
         """
         Apply the soft clip transform to the flux.
         """
 
         # Create a shallow copy of the input dictionary because we do not
         # want to modify the original input in place.
-        output = x.copy()
+        output = dict(x)
 
         # Clip the flux. We do not need a deep copy here first because we
         # replace the entire "flux" key in the output dictionary.

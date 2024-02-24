@@ -10,6 +10,7 @@ entire training process, and are therefore defined in a separate module.
 """
 
 from abc import abstractmethod
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -29,7 +30,7 @@ class DataTransform:
     """
 
     @abstractmethod
-    def forward(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         """
         Apply the forward transformation to the given tensor.
         """
@@ -99,7 +100,7 @@ class AddNoise(DataTransform):
             transform=get_noise_transform_from_string(transform),
         )
 
-    def forward(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         """
         Add noise to the given flux.
         """
@@ -107,15 +108,17 @@ class AddNoise(DataTransform):
         # TODO: Maybe we want to thing about the "SNR" here, too?
         #   Example: Rescale the noise to a certain target SNR?
 
-        # Sample the error bars; store them in the input dictionary
+        output = dict(x)
+
+        # Sample the error bars; store them in the output dictionary
         error_bars = self.noise_generator.sample_error_bars(wlen=x["wlen"])
-        x["error_bars"] = error_bars
+        output["error_bars"] = error_bars
 
         # Draw a noise realization and add it to the flux
-        noise = self.noise_generator.sample_noise(error_bars=x["error_bars"])
-        x["flux"] += noise
+        noise = self.noise_generator.sample_noise(error_bars=error_bars)
+        output["flux"] += noise
 
-        return x
+        return output
 
 
 class Subsample(DataTransform):
@@ -142,7 +145,7 @@ class Subsample(DataTransform):
         self.factor = factor
         self.rng = np.random.default_rng(random_seed)
 
-    def forward(self, x: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         """
         Subsample the given flux.
         """
@@ -154,12 +157,15 @@ class Subsample(DataTransform):
             replace=False,
         )
 
+        # Create a new dictionary with the subsampled data
+        output = dict(x)
+
         # Subsample the flux and wavelength
-        x["flux"] = x["flux"][idx]
-        x["wlen"] = x["wlen"][idx]
+        output["flux"] = x["flux"][idx]
+        output["wlen"] = x["wlen"][idx]
 
         # Subsample the error bars (if available)
-        if "error_bars" in x:
-            x["error_bars"] = x["error_bars"][idx]
+        if "error_bars" in output:
+            output["error_bars"] = x["error_bars"][idx]
 
-        return x
+        return output
