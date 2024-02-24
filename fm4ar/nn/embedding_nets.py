@@ -328,6 +328,12 @@ class SoftClipFlux(SupportsDictInput, nn.Module):
         Apply the soft clip transform to the flux.
         """
 
-        x["flux"] = x["flux"] / (1 + torch.abs(x["flux"] / self.bound))
+        # Create a shallow copy of the input dictionary because we do not
+        # want to modify the original input in place.
+        output = x.copy()
 
-        return x
+        # Clip the flux. We do not need a deep copy here first because we
+        # replace the entire "flux" key in the output dictionary.
+        output["flux"] = x["flux"] / (1 + torch.abs(x["flux"] / self.bound))
+
+        return output

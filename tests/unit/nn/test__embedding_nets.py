@@ -2,11 +2,14 @@
 Tests for embedding_nets.py
 """
 
+from copy import deepcopy
+
 import pytest
 import torch
 
 from fm4ar.nn.embedding_nets import (
     PositionalEncoding,
+    SoftClipFlux,
     create_embedding_net,
 )
 
@@ -90,3 +93,24 @@ def test__positional_encoding(
         batch_size,
         1 + theta_dim + 2 * (1 + int(encode_theta) * theta_dim) * n_freqs,
     )
+
+
+def test__soft_clip_flux() -> None:
+    """
+    Test `SoftClipFlux`.
+    """
+
+    # Make sure that the original input is not modified
+    x = dict(flux=100 * torch.randn(17, 123))
+    x_orig = deepcopy(x)
+    soft_clip_flux = SoftClipFlux(bound=10.0)
+    soft_clip_flux(x)
+    assert torch.equal(x["flux"], x_orig["flux"])
+
+    # Check that the flux is clipped
+    x = dict(flux=100 * torch.randn(17, 123))
+    assert not torch.all(x["flux"] <= 10.0)
+    assert not torch.all(x["flux"] >= -10.0)
+    x_clipped = soft_clip_flux(x)
+    assert torch.all(x_clipped["flux"] <= 10.0)
+    assert torch.all(x_clipped["flux"] >= -10.0)
