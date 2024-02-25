@@ -236,6 +236,7 @@ class Concatenate(SupportsDictInput, nn.Module):
         super().__init__()
 
         self.keys = keys
+        self.required_keys = keys  # TODO: Is there a better way?
 
     def forward(self, context: Mapping[str, torch.Tensor]) -> torch.Tensor:
         """
