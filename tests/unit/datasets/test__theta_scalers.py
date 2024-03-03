@@ -3,6 +3,7 @@ Unit tests for feature_scaling submodule.
 """
 
 import numpy as np
+import torch
 import pytest
 from deepdiff import DeepDiff
 
@@ -75,3 +76,19 @@ def test__theta_scalers() -> None:
             {"method": "mean_std", "kwargs": {"dataset": "invalid"}}
         )
     assert "Unknown dataset:" in str(value_error.value)
+
+    # Test the forward_array and inverse_array methods
+    scaler = MeanStdScaler(mean=np.ones(16), std=2 * np.ones(16))
+    assert np.allclose(scaler.forward_array(THETA_0), (THETA_0 - 1) / 2)
+    assert np.allclose(
+        scaler.inverse_array(scaler.forward_array(THETA_0)),
+        THETA_0,
+    )
+
+    # Test the forward_tensor and inverse_tensor methods
+    tensor = torch.from_numpy(THETA_0)
+    assert np.allclose(scaler.forward_tensor(tensor), (tensor - 1) / 2)
+    assert np.allclose(
+        scaler.inverse_tensor(scaler.forward_tensor(tensor)),
+        tensor,
+    )

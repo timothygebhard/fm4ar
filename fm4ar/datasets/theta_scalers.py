@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
+import torch
 
 from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER
 
@@ -24,9 +25,25 @@ class ThetaScaler(ABC):
     def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         raise NotImplementedError  # pragma: no cover
 
+    def forward_array(self, x: np.ndarray) -> np.ndarray:
+        return self.forward({"theta": x})["theta"]
+
+    def forward_tensor(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.from_numpy(
+            self.forward_array(x.cpu().numpy())
+        ).type_as(x).to(x.device)
+
     @abstractmethod
     def inverse(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         raise NotImplementedError  # pragma: no cover
+
+    def inverse_array(self, x: np.ndarray) -> np.ndarray:
+        return self.inverse({"theta": x})["theta"]
+
+    def inverse_tensor(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.from_numpy(
+            self.inverse_array(x.cpu().numpy())
+        ).type_as(x).to(x.device)
 
 
 class IdentityScaler(ThetaScaler):
