@@ -7,17 +7,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fm4ar.nested_sampling.config import load_config
-
 
 def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
     """
     Load the posterior samples and weights from a directory.
     """
 
-    # Get the sampler type
-    config = load_config(experiment_dir)
-    sampler = config.sampler.which
+    # Get the sampler type from the files present in the directory
+    if (experiment_dir / "checkpoint.hdf5").exists():
+        sampler = "nautilus"
+    elif (experiment_dir / "checkpoint.save").exists():
+        sampler = "dynesty"
+    elif (experiment_dir / "run.txt").exists():
+        sampler = "multinest"
+    else:
+        raise RuntimeError("Could not determine the sampler type!")
 
     # nautilus stores the posterior in a .npz file
     if sampler == "nautilus":
@@ -38,11 +42,9 @@ def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
 
         from pymultinest.analyse import Analyzer
 
-        n_params = sum(p.action == "infer" for p in config.parameters.values())
-        outputfiles_basename = (experiment_dir / "run").as_posix()
         analyzer = Analyzer(
-            n_params=n_params,
-            outputfiles_basename=outputfiles_basename,
+            n_params=len(pd.read_json(experiment_dir / "params.json")),
+            outputfiles_basename=(experiment_dir / "run").as_posix(),
         )
         samples = np.array(analyzer.get_equal_weighted_posterior()[:, :-1])
         weights = np.ones(len(samples))

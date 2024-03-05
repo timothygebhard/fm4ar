@@ -6,17 +6,21 @@ import argparse
 import os
 import sys
 import warnings
+from functools import partial
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
-from chainconsumer import ChainConsumer
 
-from fm4ar.datasets.vasist_2023.prior import LOWER, UPPER, NAMES, LABELS
-from fm4ar.datasets.vasist_2023.simulation import Simulator
 from fm4ar.nested_sampling.config import load_config
+from fm4ar.nested_sampling.likelihood import get_likelihood_distribution
+from fm4ar.nested_sampling.priors import get_prior
 from fm4ar.nested_sampling.samplers import get_sampler
+from fm4ar.nested_sampling.simulators import get_simulator
+from fm4ar.nested_sampling.utils import (
+    create_posterior_plot,
+    get_parameter_masks,
+)
 from fm4ar.utils.git_utils import document_git_status
 from fm4ar.utils.htcondor import (
     CondorSettings,
@@ -53,32 +57,6 @@ def sync_mpi_processes(comm: Any) -> None:
         comm.Barrier()
 
 
-def create_posterior_plot(
-    points: np.ndarray,
-    weights: np.ndarray,
-    names: list[str],
-    ground_truth: np.ndarray,
-    file_path: Path,
-) -> None:
-    """
-    Create a corner plot of the posterior.
-    """
-
-    # Create the corner plot using ChainConsumer
-    c = ChainConsumer()
-    c.add_chain(
-        chain=points,
-        weights=weights,
-        parameters=names,
-        name="posterior",
-    )
-    c.configure(sigmas=[0, 1, 2, 3], summary=False)
-    _ = c.plotter.plot(truth=ground_truth.tolist())
-
-    # Save the plot
-    plt.savefig(file_path, dpi=300, bbox_inches="tight", pad_inches=0.1)
-
-
 if __name__ == "__main__":
 
     print("\nRUN NESTED SAMPLING RETRIEVAL\n", flush=True)
@@ -91,7 +69,7 @@ if __name__ == "__main__":
     check_if_on_login_node(args.start_submission)
 
     # Collect arguments for submission file
-    if config.sampler.which == "multinest":
+    if config.sampler.library == "multinest":
         executable = "/usr/mpi/current/bin/mpiexec"
         job_arguments = [
             f"-n {config.htcondor.n_cpus}",
@@ -126,7 +104,7 @@ if __name__ == "__main__":
             log_file_name="log.$$([NumJobStarts])",
             extra_kwargs=(
                 {}
-                if config.sampler.which != "multinest"
+                if config.sampler.library != "multinest"
                 else {"transfer_executable": "False"}
             ),
         )
@@ -160,7 +138,7 @@ if __name__ == "__main__":
     np.random.seed(config.sampler.random_seed)
 
     # Handle MPI communication for MultiNest
-    if config.sampler.which == "multinest":
+    if config.sampler.library == "multinest":
         from mpi4py import MPI
 
         comm = MPI.COMM_WORLD
@@ -168,76 +146,69 @@ if __name__ == "__main__":
         print(f"MPI rank: {rank}", flush=True)
         sync_mpi_processes(comm)
 
-    print("Creating simulator...", end=" ", flush=True)
-    simulator = Simulator(
-        noisy=False,
-        R=config.simulator.resolution,
-        time_limit=config.simulator.time_limit,
-    )
+    print("Creating prior distribution...", end=" ", flush=True)
+    prior = get_prior(config=config.prior)
     print("Done!", flush=True)
+
+    print("Creating simulator...", end=" ", flush=True)
+    simulator = get_simulator(config=config.simulator)
+    print("Done!", flush=True)
+
     sync_mpi_processes(comm)
 
+    # TODO: Maybe this could be extended to work also with actual observations,
+    #   that is, load the spectrum from a file and use it?
     print("Simulating ground truth spectrum...", end=" ", flush=True)
-    theta_obs = np.array([config.parameters[n].true_value for n in NAMES])
+    theta_obs = np.array([config.ground_truth[n] for n in prior.names])
     if (result := simulator(theta_obs)) is None:
         raise RuntimeError("Failed to simulate ground truth!")
     _, x_obs = result
     print("Done!", flush=True)
+
     sync_mpi_processes(comm)
 
-    # Define prior and likelihood
-    print("Setting up prior and likelihood...", end=" ", flush=True)
-
-    # Create binary masks for the different parameters actions
-    infer_mask = np.array(
-        [config.parameters[name].action == "infer" for name in NAMES]
+    print("Creating likelihood distribution...", end=" ", flush=True)
+    likelihood_distribution = get_likelihood_distribution(
+        x_obs=x_obs,
+        config=config.likelihood,
     )
-    marginalize_mask = np.array(
-        [config.parameters[name].action == "marginalize" for name in NAMES]
-    )
+    print("Done!", flush=True)
 
-    # Get a prior sample for the marginalized parameters
-    def sample_marginalized_parameters() -> np.ndarray:
-        return np.array(
-            np.random.uniform(
-                np.array(LOWER)[marginalize_mask],
-                np.array(UPPER)[marginalize_mask],
-            )
-        )
+    print("Preparing log_likelihood function...", end=" ", flush=True)
 
-    # Get the lower and upper bounds for the parameters which we want to infer
-    # and for which we need to transform the prior
-    lower = np.array(LOWER)[infer_mask]
-    upper = np.array(UPPER)[infer_mask]
-
-    # Define the prior transform function
-    def prior(u: np.ndarray) -> np.ndarray:
-        return np.array(lower + (upper - lower) * u)
+    # Create masks that indicate which parameters are being inferred, which are
+    # being marginalized over, and which are being conditioned on (= fixed)
+    (
+        infer_mask,
+        marginalize_mask,
+        condition_mask,
+        condition_values,
+    ) = get_parameter_masks(prior=prior, config=config.prior)
 
     # Define the log-likelihood function
-    # The noise level sigma is computed as `1.25754e-17 * 1e16` to match
-    # the choice from `fm4ar.datasets.vasist_2023.simulation.Simulator`.
-    # The value was original chosen to give a SNR of 10 (see paper).
-    def log_likelihood(theta: np.ndarray, sigma: float = 0.125754) -> float:
+    # This combines the construction of the theta vector for the simulation,
+    # the simulation itself, and the evaluation of the likelihood function.
+    def log_likelihood(infer_values: np.ndarray) -> float:
 
-        # Construct theta for the simulation.
-        # First, we copy the ground truth values for all parameters.
-        combined_theta = theta_obs.copy()
+        # Construct full theta for the simulation
+        # We start with the values that we are conditioning on, that is, the
+        # values that will simply be fixed to a constant value
+        theta = condition_values.copy()
 
         # Then, we overwrite the values for the parameters over which we
         # want to marginalize with a random sample from the prior
         if marginalize_mask.any():
-            combined_theta[marginalize_mask] = sample_marginalized_parameters()
+            theta[marginalize_mask] = prior.sample()[marginalize_mask]
 
         # Finally, we overwrite the values for the parameters which we want
         # to infer with the values from the current sample that is controlled
-        # by the nested sampling algorithm
-        combined_theta[infer_mask] = theta
+        # by the nested sampling algorithm. The size of this
+        theta[infer_mask] = infer_values
 
         # If anything goes wrong, return an approximation for "-inf"
         # (MultiNest can't seem to handle proper -inf values and will complain)
         try:
-            result = simulator(combined_theta)
+            result = simulator(theta)
         except Exception as e:
             print(f"{e.__class__.__name__}: {str(e)}", file=sys.stderr)
             return -1e300
@@ -252,25 +223,25 @@ if __name__ == "__main__":
             return -1e300
 
         # Otherwise, return the log-likelihood
-        # Note: The scaling (`sigma`) does matter here even if it is the
-        # same for each wavelength bin! It must match the noise level used
-        # when training an ML model to make the results comparable.
-        return float(-0.5 * np.sum(((x - x_obs) / sigma) ** 2))
+        return float(likelihood_distribution.logpdf(x))
 
     print("Done!", flush=True)
+
     sync_mpi_processes(comm)
 
     print("Creating sampler...", end=" ", flush=True)
-    sampler = get_sampler(config.sampler.which)(
+    sampler = get_sampler(config.sampler.library)(
         run_dir=args.experiment_dir,
-        prior=prior,
+        prior_transform=partial(prior.transform, mask=infer_mask),
         log_likelihood=log_likelihood,
         n_dim=sum(infer_mask),
         n_livepoints=config.sampler.n_livepoints,
-        inferred_parameters=np.array(NAMES)[infer_mask].tolist(),
+        inferred_parameters=np.array(prior.names)[infer_mask].tolist(),
         random_seed=config.sampler.random_seed,
+        **config.sampler.sampler_kwargs,
     )
     print("Done!\n", flush=True)
+
     sync_mpi_processes(comm)
 
     print("Running sampler:", flush=True)
@@ -280,6 +251,7 @@ if __name__ == "__main__":
         run_kwargs=config.sampler.run_kwargs,
     )
     sampler.cleanup()
+
     sync_mpi_processes(comm)
 
     # If the sampler finished, we can save the results
@@ -302,7 +274,7 @@ if __name__ == "__main__":
             create_posterior_plot(
                 points=np.array(sampler.points),
                 weights=np.array(sampler.weights),
-                names=np.array(LABELS)[infer_mask].tolist(),
+                names=np.array(prior.names)[infer_mask],
                 file_path=args.experiment_dir / "posterior.pdf",
                 ground_truth=theta_obs[infer_mask],
             )
