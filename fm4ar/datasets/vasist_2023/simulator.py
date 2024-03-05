@@ -15,13 +15,14 @@ import petitRADTRANS.retrieval.parameter as prm
 from joblib import Memory
 from petitRADTRANS.nat_cst import r_jup_mean
 
+from fm4ar.datasets.base_classes import BaseSimulator
 from fm4ar.utils.timeout import timelimit, TimeoutException
 
 
 MEMORY = Memory(Path.home(), mmap_mode="c", verbose=0)
 
 
-class Simulator:
+class Simulator(BaseSimulator):
     """
     Convenience wrapper around `compute_emission_spectrum()` that
     handles loading (and caching) the pRT object (`atmosphere`).

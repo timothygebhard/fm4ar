@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import tqdm
 
 from fm4ar.datasets.vasist_2023.prior import NAMES, Prior, SIGMA, THETA_0
-from fm4ar.datasets.vasist_2023.simulation import Simulator
+from fm4ar.datasets.vasist_2023.simulator import Simulator
 from fm4ar.utils.paths import get_datasets_dir
 
 

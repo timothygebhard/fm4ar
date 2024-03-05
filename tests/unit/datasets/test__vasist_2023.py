@@ -12,7 +12,7 @@ from fm4ar.datasets.vasist_2023.prior import (
     THETA_0,
     UPPER,
 )
-from fm4ar.datasets.vasist_2023.simulation import Simulator
+from fm4ar.datasets.vasist_2023.simulator import Simulator
 
 
 def test__constants() -> None:

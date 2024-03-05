@@ -9,7 +9,7 @@ from cpuinfo import get_cpu_info
 from tqdm import tqdm
 
 from fm4ar.datasets.vasist_2023.prior import Prior, THETA_0
-from fm4ar.datasets.vasist_2023.simulation import Simulator
+from fm4ar.datasets.vasist_2023.simulator import Simulator
 
 
 if __name__ == "__main__":
