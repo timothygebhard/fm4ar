@@ -83,7 +83,7 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
                     "num_transform_blocks": 2,
                     "activation": "ELU",
                     "dropout_probability": 0.1,
-                    "batch_norm": True,
+                    "use_batch_norm": True,
                     "num_bins": 10,
                 },
             },
