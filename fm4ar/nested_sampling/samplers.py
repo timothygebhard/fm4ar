@@ -292,10 +292,13 @@ class DynestySampler(Sampler):
             print("\nTimeout reached, stopping sampler!\n")
             return
         except RuntimeWarning as e:
-            if (  # fmt: off
-                "resume the run that has ended successfully." in str(e) or
-                "You are resuming a finished static run" in str(e)
-            ):  # fmt: on
+            if "resume the run that has ended successfully." in str(e):
+                self.complete = True
+                return
+            else:
+                raise e
+        except UserWarning as e:
+            if "You are resuming a finished static run" in str(e):
                 self.complete = True
                 return
             else:
