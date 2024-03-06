@@ -274,7 +274,7 @@ if __name__ == "__main__":
             create_posterior_plot(
                 points=np.array(sampler.points),
                 weights=np.array(sampler.weights),
-                names=np.array(prior.names)[infer_mask],
+                names=np.array(prior.labels)[infer_mask],
                 file_path=args.experiment_dir / "posterior.pdf",
                 ground_truth=theta_obs[infer_mask],
             )

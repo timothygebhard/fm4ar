@@ -16,8 +16,9 @@ class BasePrior(ABC):
     # Every prior must define a base distribution, e.g. `scipy.stats.uniform`
     distribution: rv_continuous | rv_discrete
 
-    # Every prior must define the names of the parameters
+    # Every prior must define the names (and labels) of the parameters
     names: tuple[str]
+    labels: tuple[str]
 
     # Every prior must also define a random state for reproducibility
     random_state: np.random.Generator
