@@ -19,6 +19,9 @@ from fm4ar.utils.timeout import TimeoutException, timelimit
 
 
 class Sampler(ABC):
+    """
+    Abstract base class for nested sampling samplers.
+    """
 
     start_time: float
     complete: bool
@@ -95,6 +98,10 @@ class Sampler(ABC):
 
 
 class NautilusSampler(Sampler):
+    """
+    Wrapper around the sampler provided by the `nautilus` package.
+    """
+
     def __init__(
         self,
         run_dir: Path,
@@ -191,6 +198,10 @@ class NautilusSampler(Sampler):
 
 
 class DynestySampler(Sampler):
+    """
+    Wrapper around the samplers provided by the `dynesty` package.
+    """
+
     def __init__(
         self,
         run_dir: Path,
@@ -215,6 +226,7 @@ class DynestySampler(Sampler):
 
         # Import this here to reduce dependencies
         import dynesty.utils
+
         if sampling_mode == "standard":
             from dynesty import NestedSampler as _DynestySampler
         elif sampling_mode == "dynamic":
@@ -280,7 +292,10 @@ class DynestySampler(Sampler):
             print("\nTimeout reached, stopping sampler!\n")
             return
         except RuntimeWarning as e:
-            if "resume the run that has ended successfully." in str(e):
+            if (  # fmt: off
+                "resume the run that has ended successfully." in str(e) or
+                "You are resuming a finished static run" in str(e)
+            ):  # fmt: on
                 self.complete = True
                 return
             else:
@@ -308,6 +323,10 @@ class DynestySampler(Sampler):
 
 
 class MultiNestSampler(Sampler):
+    """
+    Wrapper around the sampler provided by the `pymultinest` package.
+    """
+
     def __init__(
         self,
         run_dir: Path,
