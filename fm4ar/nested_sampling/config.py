@@ -50,14 +50,14 @@ class SimulatorConfig(BaseModel):
     Configuration for the simulator.
     """
 
-    dataset: Literal["vasist-2023"] = Field(
-        default="vasist-2023",
+    dataset: Literal["vasist_2023"] = Field(
+        default="vasist_2023",
         description="Name of the dataset whose simulator we use.",
     )
     kwargs: dict[str, Any] = Field(
         default={
             "R": 1000,  # spectral resolution R = λ/Δλ
-            "time_limit": 10,  # maximum time (in seconds) per simulation
+            "time_limit": 20,  # maximum time (in seconds) per simulation
         },
         description="Additional keyword arguments for the simulator.",
     )
@@ -87,8 +87,8 @@ class PriorConfig(BaseModel):
     Configuration for the prior distribution.
     """
 
-    dataset: Literal["vasist-2023"] = Field(
-        ...,
+    dataset: Literal["vasist_2023"] = Field(
+        default="vasist_2023",
         description="Name of the dataset whose prior distribution we use.",
     )
     parameters: dict[str, str] = Field(
