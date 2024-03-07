@@ -35,7 +35,7 @@ def get_cli_arguments() -> argparse.Namespace:
             "Parameters to sample from the prior. If None, all 16 parameters "
             "will be sampled (default). Parameters that are not sampled will "
             "be set to their 'default' values (from THETA_0)."
-        )
+        ),
     )
     parser.add_argument(
         "--random-seed",

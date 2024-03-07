@@ -423,7 +423,7 @@ if __name__ == "__main__":
 
     # Set up simulator and compute target spectrum
     print("Simulating target spectrum...", end=" ")
-    simulator = Simulator(noisy=False, R=args.resolution)
+    simulator = Simulator(R=args.resolution)
     if (result := simulator(THETA_0)) is None:
         raise RuntimeError("Simulation of target spectrum failed!")
     else:

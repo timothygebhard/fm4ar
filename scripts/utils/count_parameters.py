@@ -11,7 +11,7 @@ import torch
 
 from fm4ar.training.preparation import prepare_new
 from fm4ar.utils.config import load_config
-from fm4ar.utils.torchutils import get_number_of_model_parameters
+from fm4ar.utils.torchutils import get_number_of_parameters
 
 
 if __name__ == "__main__":
@@ -35,8 +35,7 @@ if __name__ == "__main__":
     # Load config and update local settings to ensure they work on macOS.
     # Also, load only the smaller test set to get the correct theta_dim.
     config = load_config(args.experiment_dir)
-    config["data"]["which"] = "train"
-    config["data"]["n_samples"] = 10
+    config["dataset"]["n_samples"] = 10
     config["local"]["wandb"] = False
     config["local"]["device"] = "cpu"
     config["local"]["n_workers"] = 0
@@ -44,19 +43,19 @@ if __name__ == "__main__":
         del config["local"]["wandb"]
 
     # Load data and build model (needed to infer theta_dim and context_dim)
-    pm, dataset = prepare_new(
+    model, dataset = prepare_new(
         experiment_dir=args.experiment_dir,
         config=config,
     )
     print("\n")
 
-    model: torch.nn.Module
-    for name, model in (  # type: ignore
-        ("total", pm.model),
-        ("context embedding net", pm.model.context_embedding_net),
+    network: torch.nn.Module
+    for name, network in (
+        ("total", model.network),
+        ("context embedding net", model.network.context_embedding_net),
     ):
-        n_trainable = get_number_of_model_parameters(model, (True,))
-        n_fixed = get_number_of_model_parameters(model, (False,))
+        n_trainable = get_number_of_parameters(network, (True,))
+        n_fixed = get_number_of_parameters(network, (False,))
         n_total = n_trainable + n_fixed
         print(f"Number of {name} parameters:", flush=True)
         print(f"n_trainable: {n_trainable:,}", flush=True)

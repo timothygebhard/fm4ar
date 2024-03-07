@@ -2,8 +2,8 @@
 Argument parser for training scripts.
 """
 
-import argparse
-from pathlib import Path
+import argparse  # pragma: no cover
+from pathlib import Path  # pragma: no cover
 
 
 def get_cli_arguments() -> argparse.Namespace:  # pragma: no cover
@@ -16,7 +16,7 @@ def get_cli_arguments() -> argparse.Namespace:  # pragma: no cover
         "--checkpoint-name",
         type=str,
         default="model__latest.pt",
-        help="Name of checkpoint file from which to resume training."
+        help="Name of checkpoint file from which to resume training.",
     )
     parser.add_argument(
         "--experiment-dir",

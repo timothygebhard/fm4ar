@@ -2,64 +2,63 @@
 Tests for embedding_nets.py
 """
 
-from pathlib import Path
+from copy import deepcopy
 
 import pytest
 import torch
 
 from fm4ar.nn.embedding_nets import (
     PositionalEncoding,
-    PrecomputedPCAEmbedding,
+    SoftClipFlux,
+    create_embedding_net,
 )
 
 
-@pytest.fixture
-def path_to_precomputed_pca_file(tmp_path: Path) -> Path:
+def test__create_embedding_net() -> None:
     """
-    Create a temporary file containing pre-computed dummy PCA weights.
-    """
-
-    data = {
-        "mean": torch.randn(42).numpy(),
-        "components": torch.randn(42, 42).numpy(),
-    }
-
-    file_path = tmp_path / "precomputed_pca.pt"
-    torch.save(data, file_path)
-
-    return file_path
-
-
-def test__precomputed_pca_embedding(
-    path_to_precomputed_pca_file: Path,
-) -> None:
-    """
-    Test `PrecomputedPCAEmbeddingz.
+    Test `create_embedding_net()`.
     """
 
-    batch_size = 17
-    n_components = 10
-    input_dim = 42
-
-    embedding_net = PrecomputedPCAEmbedding(
-        file_path=path_to_precomputed_pca_file.as_posix(),
-        n_components=n_components,
-        subtract_mean=True,
-        freeze_weights=True,
+    # Case 1: Check for supports_dict_input=True
+    block_configs = [
+        {"block_type": "PositionalEncoding", "kwargs": {"n_freqs": 3}}
+    ]
+    create_embedding_net(  # This should work
+        input_shape=(123,),
+        block_configs=block_configs,
+        supports_dict_input=False,
     )
+    with pytest.raises(ValueError) as value_error:
+        create_embedding_net(  # This should fail
+            input_shape=(123,),
+            block_configs=block_configs,
+            supports_dict_input=True,
+        )
+    assert "The first block must be a `SupportsDictInput`!" in str(value_error)
 
-    # Check that the file contents are loaded correctly
-    assert embedding_net.mean.shape == (input_dim,)
-    assert embedding_net.components.shape == (input_dim, input_dim)
-
-    # Check that the weights are frozen
-    assert not embedding_net.mean.requires_grad
-    assert not embedding_net.components.requires_grad
-
-    # Check that the embedding has the correct shape
-    x = torch.randn(batch_size, input_dim)
-    embedding = embedding_net(x)
-    assert embedding.shape == (batch_size, n_components)
+    # Case 2: Standard use case
+    block_configs = [
+        {"block_type": "SoftClipFlux", "kwargs": {"bound": 10.0}},
+        {"block_type": "Concatenate", "kwargs": {"keys": ["flux", "wlen"]}},
+        {
+            "block_type": "DenseResidualNet",
+            "kwargs": {
+                "output_dim": 5,
+                "hidden_dims": (10, 10, 10),
+            },
+        },
+    ]
+    embedding_net, output_dim = create_embedding_net(
+        input_shape=(123,),
+        block_configs=block_configs,
+        supports_dict_input=True,
+    )
+    assert isinstance(embedding_net, torch.nn.Sequential)
+    assert len(embedding_net) == 3
+    assert output_dim == 5
+    assert embedding_net[2].initial_layer.in_features == 246
+    dummy_input = {"flux": torch.randn(17, 123), "wlen": torch.randn(17, 123)}
+    assert embedding_net(dummy_input).shape == (17, 5)
 
 
 @pytest.mark.parametrize(
@@ -94,3 +93,24 @@ def test__positional_encoding(
         batch_size,
         1 + theta_dim + 2 * (1 + int(encode_theta) * theta_dim) * n_freqs,
     )
+
+
+def test__soft_clip_flux() -> None:
+    """
+    Test `SoftClipFlux`.
+    """
+
+    # Make sure that the original input is not modified
+    x = dict(flux=100 * torch.randn(17, 123))
+    x_orig = deepcopy(x)
+    soft_clip_flux = SoftClipFlux(bound=10.0)
+    soft_clip_flux(x)
+    assert torch.equal(x["flux"], x_orig["flux"])
+
+    # Check that the flux is clipped
+    x = dict(flux=100 * torch.randn(17, 123))
+    assert not torch.all(x["flux"] <= 10.0)
+    assert not torch.all(x["flux"] >= -10.0)
+    x_clipped = soft_clip_flux(x)
+    assert torch.all(x_clipped["flux"] <= 10.0)
+    assert torch.all(x_clipped["flux"] >= -10.0)

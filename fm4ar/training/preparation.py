@@ -6,60 +6,58 @@ from pathlib import Path
 
 import wandb
 
-from fm4ar.datasets import load_dataset, ArDataset
-from fm4ar.models.base import Base
+from fm4ar.datasets import load_dataset, SpectraDataset
+from fm4ar.models.fmpe import FMPEModel
+from fm4ar.models.npe import NPEModel
 from fm4ar.models.build_model import build_model
 from fm4ar.training.wandb import get_wandb_id
-from fm4ar.utils.torchutils import get_number_of_model_parameters
+from fm4ar.utils.torchutils import get_number_of_parameters
 
 
 def prepare_new(
     experiment_dir: Path,
     config: dict,
-) -> tuple[Base, ArDataset]:
+) -> tuple[FMPEModel | NPEModel, SpectraDataset]:
     """
     Prepare a new training run, that is, load the dataset and initialize
-    a new posterior model according to the settings in the `config.yaml`
-    file in the `experiment_dir`.
+    a new posterior model according to the given configuration.
 
     Args:
         experiment_dir: Path to the experiment directory.
         config: Full experiment configuration.
 
     Returns:
-        A tuple, `(pm, dataset)`, where `pm` is the posterior model
-        and `dataset` is the dataset.
+        A 2-tuple `(model, dataset)`.
     """
 
     # Load the dataset
-    name = config["data"]["name"]
-    print(f"Loading dataset '{name}'...", end=" ", flush=True)
+    print("Loading dataset...", end=" ", flush=True)
     dataset = load_dataset(config=config)
     print("Done!", flush=True)
 
     # Add the theta_dim and context_dim to the model settings
-    config["model"]["theta_dim"] = dataset.theta_dim
-    config["model"]["context_dim"] = dataset.context_dim
+    config["model"]["dim_theta"] = dataset.dim_theta
+    config["model"]["dim_context"] = dataset.dim_context
 
     # Initialize the posterior model
     print("Building model from configuration...", end=" ", flush=True)
-    pm = build_model(
+    model = build_model(
         experiment_dir=experiment_dir,
         config=config,
         device=config["local"]["device"],
     )
-    print(f"Done! (device: {pm.device})")
+    print(f"Done! (device: {model.device})")
 
     # Initialize Weights & Biases (if desired)
-    if pm.use_wandb:
+    if model.use_wandb:  # pragma: no cover
         print("\n\nInitializing Weights & Biases:", flush=True)
 
         # Add number of model parameters to the config
         augmented_config = config.copy()
         augmented_config["n_model_parameters"] = {
-            "trainable": get_number_of_model_parameters(pm.model, (True,)),
-            "fixed": get_number_of_model_parameters(pm.model, (False,)),
-            "total": get_number_of_model_parameters(pm.model),
+            "trainable": get_number_of_parameters(model.network, (True,)),
+            "fixed": get_number_of_parameters(model.network, (False,)),
+            "total": get_number_of_parameters(model.network),
         }
 
         # Add the experiment directory to the config
@@ -84,14 +82,14 @@ def prepare_new(
 
         print()
 
-    return pm, dataset
+    return model, dataset
 
 
 def prepare_resume(
     experiment_dir: Path,
     checkpoint_name: str,
     config: dict,
-) -> tuple[Base, ArDataset]:
+) -> tuple[FMPEModel | NPEModel, SpectraDataset]:
     """
     Prepare a training run by resuming from a checkpoint, that is, load
     the dataset, and instantiate the posterior model, optimizer and
@@ -110,7 +108,7 @@ def prepare_resume(
     # Instantiate the posterior model
     print("Building model from checkpoint...", end=" ", flush=True)
     file_path = experiment_dir / checkpoint_name
-    pm = build_model(
+    model = build_model(
         experiment_dir=experiment_dir,
         file_path=file_path,
         device=config["local"]["device"],
@@ -118,13 +116,12 @@ def prepare_resume(
     print("Done!")
 
     # Load the dataset (using config from checkpoint)
-    name = pm.config["data"]["name"]
-    print(f"Loading dataset '{name}'...", end=" ", flush=True)
-    dataset = load_dataset(config=pm.config)
+    print("Loading dataset...", end=" ", flush=True)
+    dataset = load_dataset(config=model.config)
     print("Done!")
 
     # Initialize Weights & Biases; this will produce some output to stderr
-    if config["local"].get("wandb", False):
+    if config["local"].get("wandb", False):  # pragma: no cover
         print("\n\nRe-initializing Weights & Biases:", flush=True)
 
         wandb_id = get_wandb_id(experiment_dir)
@@ -135,4 +132,4 @@ def prepare_resume(
             **config["local"]["wandb"],
         )
 
-    return pm, dataset
+    return model, dataset

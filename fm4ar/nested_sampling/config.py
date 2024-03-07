@@ -106,7 +106,7 @@ class HTCondorConfig(BaseModel):
     max_runtime: int = Field(
         ...,
         ge=1,
-        description="Maximum runtime per job (in seconds)"
+        description="Maximum runtime per job (in seconds)",
     )
 
 
@@ -120,7 +120,7 @@ class Config(BaseModel):
     parameters: dict[str, ParameterConfig]
     htcondor: HTCondorConfig
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def ensure_all_true_values_are_valid(self) -> "Config":
         """
         Make sure that all true values are within the prior bounds.
@@ -135,7 +135,7 @@ class Config(BaseModel):
                 )
         return self
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def ensure_all_parameters_present(self) -> "Config":
         """
         Make sure that all parameters are present in the prior.
@@ -145,7 +145,7 @@ class Config(BaseModel):
                 raise ValueError(f"Parameter '{name}' not specified.")
         return self
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def ensure_we_infer_at_least_one_parameter(self) -> "Config":
         """
         Make sure that at least one parameter is inferred.

@@ -9,12 +9,13 @@ from fm4ar.nn.flows import (
     create_base_transform,
     create_linear_transform,
     create_transform,
+    create_unconditional_nsf,
 )
 
 
 def test__create_base_transform() -> None:
     """
-    Test `fm4ar.nn.flows.create_base_transform()`.
+    Test `create_base_transform()`.
     """
 
     # Case 1: rq-coupling, param_dim=1
@@ -63,7 +64,7 @@ def test__create_base_transform() -> None:
 
 def test__create_linear_transform() -> None:
     """
-    Test `fm4ar.nn.flows.create_linear_transform()`.
+    Test `create_linear_transform()`.
     """
 
     linear_transform = create_linear_transform(param_dim=5)
@@ -76,7 +77,7 @@ def test__create_linear_transform() -> None:
 
 def test__create_transform() -> None:
     """
-    Test `fm4ar.nn.flows.create_transform()`.
+    Test `create_transform()`.
     """
 
     transform = create_transform(
@@ -91,3 +92,23 @@ def test__create_transform() -> None:
     assert len(out) == 2
     assert out[0].shape == (11, 5)
     assert out[1].shape == (11,)
+
+
+def test__create_unconditional_nsf() -> None:
+    """
+    Test `create_unconditional_nsf()`.
+    """
+
+    model = create_unconditional_nsf(
+        num_transforms=3,
+        num_input_channels=5,
+        num_hidden_channels=32,
+        num_blocks=2,
+        num_bins=4,
+        tail_bound=10.0,
+        activation=torch.nn.ELU,
+    )
+
+    out = model(torch.randn(11, 5))
+    assert isinstance(out, torch.Tensor)
+    assert out.shape == (11, 5)

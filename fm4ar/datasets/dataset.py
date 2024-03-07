@@ -2,35 +2,34 @@
 Wrapper classes for datasets.
 """
 
-from typing import Any, TYPE_CHECKING
+from functools import lru_cache
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-# Prevent circular imports
-if TYPE_CHECKING:
-    from fm4ar.datasets.scaling import Scaler
+from fm4ar.datasets.theta_scalers import ThetaScaler
+from fm4ar.datasets.data_transforms import DataTransform
 
 
-class ArDataset(Dataset):
+class SpectraDataset(Dataset):
     """
-    Base class for for all atmospheric retrieval datasets.
+    Dataset of spectra (and their corresponding simulation parameters).
     """
 
     def __init__(
         self,
-        theta: torch.Tensor,
-        flux: torch.Tensor,
-        wlen: torch.Tensor,
-        noise_levels: float | torch.Tensor,
-        theta_scaler: "Scaler",
-        noise_floor: float = 0.0,
-        names: list[str] | None = None,
-        ranges: list[tuple[float, float]] | None = None,
-        add_noise_to_flux: bool = True,
+        theta: np.ndarray,
+        flux: np.ndarray,
+        wlen: np.ndarray,
     ) -> None:
         """
         Instantiate a dataset.
+
+        We start with only the most basic information that we will
+        always need, namely the atmospheric parameters `theta` and the
+        corresponding simulated (noise-free) spectrum, given by `wlen`
+        and `flux`.
 
         Args:
             theta: Atmospheric parameters (e.g., abundances).
@@ -38,64 +37,25 @@ class ArDataset(Dataset):
             flux: Array with the fluxes of the spectra.
                 Expected shape: (n_samples, dim_x).
             wlen: Wavelengths to which the `flux` values correspond to.
-                For now, we assume the same wavelengths for all spectra.
-                Expected shape: (dim_x, ).
-            noise_levels: Noise levels. If this is a float, the same
-                noise level is used for all wavelengths. If a tensor,
-                the noise level is wavelength-dependent.
-            theta_scaler: Scaler to use for the parameters.
-            noise_floor: Noise floor, that is, the minimum noise that
-                is added to the spectra (in ppm). [This is only used
-                for the Ardevol Martinez et al. (2022) train dataset.]
-            names: Names of the parameters (in order).
-            ranges: Ranges of the parameters (in order).
-            add_noise_to_flux: If True, add noise to the flux.
+                Expected shape(s):
+                    - (1, dim_x): Same wavelength for all spectra.
+                    - (n_samples, dim_x): Different for each spectrum.
         """
 
         super().__init__()
 
-        # Store arguments
-        self.theta = theta.float()
-        self.flux = flux.float()
-        self.wlen = wlen.float()
-        self.noise_levels = noise_levels
-        self.noise_floor = noise_floor
-        self.names = names
-        self.ranges = ranges
-        self.theta_scaler = theta_scaler
-        self.add_noise_to_flux = add_noise_to_flux
+        # Store constructor arguments
+        self.theta = theta
+        self.flux = flux
+        self.wlen = wlen
 
-    @property
-    def noise_levels_as_tensor(self) -> torch.Tensor:
-        """
-        Return the noise levels as a tensor.
-        """
+        # List of transformations that will be applied in __getitem__()
+        # Each transform takes a dict (with theta, wlen, flux, and maybe more)
+        # and modifies it (e.g., re-binning, sub-sampling, adding noise, ...).
+        self.data_transforms: list[DataTransform] = []
 
-        if isinstance(self.noise_levels, float):
-            return torch.ones_like(self.wlen) * self.noise_levels
-        else:
-            return torch.Tensor(self.noise_levels)
-
-    def add_noise(self, flux: torch.Tensor) -> torch.Tensor:
-        """
-        Add noise to the given `flux` based on the `noise_levels`
-        and the `noise_floor`.
-
-        Input shape: (n_bins, )
-        Output shape: (n_bins, )
-        """
-
-        # Make sure that the noise levels are not smaller than the noise floor
-        if self.noise_floor > 0.0:
-            noise_levels = self.noise_levels_as_tensor.clone()
-            noise_levels[noise_levels < self.noise_floor] = self.noise_floor
-        else:
-            noise_levels = self.noise_levels_as_tensor
-
-        # Sample noise from a normal distribution
-        noise = noise_levels * torch.randn(flux.shape)
-
-        return flux + noise
+        # Scaling transform for the parameters `theta` (e.g., minmax scaling)
+        self.theta_scaler: ThetaScaler
 
     def __len__(self) -> int:
         """
@@ -104,61 +64,85 @@ class ArDataset(Dataset):
 
         return len(self.theta)
 
-    def __getitem__(self, idx: Any) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         """
-        Return the `idx`-th sample from the dataset, which consists of
-        the parameters `theta` and the `context`, which itself consists
-        of the flux values, wavelenghts, and uncertainties.
+        Return the `idx`-th sample from the dataset, which is returned
+        as a dictionary with the keys "theta", "wlen", and "flux".
+        Additional keys (e.g., "error_bars") may be added by the
+        transformations in `self.transforms`.
 
-        Output shape:
-            theta: (dim_theta, )
-            stacked: (n_bins, n_features = 3)
+        Note: The tensors in the returned dictionary should *NOT* have
+        a batch dimension yet, because the DataLoader will add it later.
+        In other words, the shape of the tensors should be (dim_x,) or
+        (dim_theta,) and NOT (1, dim_x) or (1, dim_theta).
         """
 
-        # Get the flux and parameters
+        # Get the wavelengths, flux and parameters
+        wlen = self.wlen[idx] if self.wlen.shape[0] > 1 else self.wlen[0]
         flux = self.flux[idx]
         theta = self.theta[idx]
 
-        # Add noise to the spectrum and standardize the parameters
-        if self.add_noise_to_flux:
-            flux = self.add_noise(flux)
+        # Combine everything into a dict
+        # The .copy() here is important, because we will modify the arrays
+        # in the data transformations (e.g., add noise), and we don't want
+        # to modify the original dataset.
+        sample = {
+            "theta": theta.copy(),
+            "wlen": wlen.copy(),
+            "flux": flux.copy(),
+        }
 
-        # Note: If we do not want to standardize the parameters, we need to
-        # create the scaler using `mode="identity"`.
-        theta = self.theta_scaler.forward(theta)
+        # First apply the data transforms (e.g., adding noise)
+        for transform in self.data_transforms:
+            sample = transform.forward(sample)
 
-        # Combine flux with wavelengths and noise levels along dim=1.
-        # For now, we call this dimension "features".
-        # Note: Ideally, we would return a dictionary here, but this makes
-        # things more complicated when constructing the embedding networks,
-        # and also when caching the contexts (dicts are not hashable).
-        context = torch.stack(
-            [
-                flux,
-                self.wlen,
-                self.noise_levels_as_tensor,
-            ],
-            dim=1,
-        )
+        # Apply the feature scaling for the parameters `theta`
+        sample = self.theta_scaler.forward(sample)
 
-        return theta.float(), context.float()
+        # Convert everything to PyTorch tensors.
+        # This step is not a transform because it is non-optional and should
+        # always be very the last step, so that all transforms can work with
+        # numpy arrays and we only convert to tensors once at the very end.
+        sample_as_tensors = {
+            key: torch.from_numpy(val).float() for key, val in sample.items()
+        }
+
+        # Note: We do NOT move the tensors to the device (GPU) here, because
+        # it might break the parallel data loading: The Dataset is consumed
+        # by multiple DataLoader workers, but GPU operations usually happen on
+        # the main thread. Also, moving the tensors to the GPU here might lead
+        # to issues with the automatic memory precision (AMP) training.
+        # Instead, we move the tensors to the device in the training loop.
+
+        return sample_as_tensors
 
     @property
-    def theta_dim(self) -> int:
+    @lru_cache(maxsize=None)
+    def dim_theta(self) -> int:
         """
-        Return the dimensionality of the parameter space.
+        Return the number of parameters in the dataset, i.e., the
+        dimensionality of `theta`.
         """
+
+        # The dimensionality of the parameters should not be modified by any
+        # of the transformations, so we do not need to apply them here.
 
         return self.theta.shape[1]
 
     @property
-    def context_dim(self) -> tuple[int, int]:
+    @lru_cache(maxsize=None)
+    def dim_context(self) -> int:
         """
-        Return the dimensionality of the context, which consists of the
-        flux values, wavelenghts, and uncertainties.
+        Return the number of wavelength bins in the spectra, i.e., the
+        dimensionality of the context (`flux` and `wlen`).
         """
 
-        n_bins = self.flux.shape[1]
-        n_features = 3  # x, wavelengths, noise_levels
+        # The dimensionality of the spectra can be modified by some of the
+        # data transformations, such as subsampling or re-binning. Therefore,
+        # we need to infer the number of bins dynamically.
 
-        return n_bins, n_features
+        # Note: Even in these cases, the number of bins must be the same for
+        # all spectra (at least within one training stage), otherwise we can't
+        # construct batches in the DataLoader.
+
+        return self.__getitem__(0)["flux"].shape[0]

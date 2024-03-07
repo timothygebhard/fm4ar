@@ -1,0 +1,107 @@
+# -----------------------------------------------------------------------------
+# DATASET AND THETA SCALER
+# -----------------------------------------------------------------------------
+
+dataset:
+  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/train/selected.hdf"
+  train_fraction: 0.95
+  n_samples: 17
+
+theta_scaler:
+  method: "MinMaxScaler"
+  kwargs:
+    dataset: "vasist-2023"
+
+# -----------------------------------------------------------------------------
+# MODEL ARCHITECTURE
+# -----------------------------------------------------------------------------
+
+model:
+
+  # General settings
+  model_type: "npe"
+
+  # Embedding network for context
+  context_embedding_net:
+    - block_type: "Concatenate"
+      kwargs:
+        keys: [ "wlen", "flux" ]
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [512, 512, 512, 512, 512, 256, 256, 128, 128]
+        activation: "ELU"
+        output_dim: 128
+        dropout: 0.0
+        use_batch_norm: False
+
+  # Discrete normalizing flow (wrapped in a compatibility layer)
+  # Note: normflows uses slightly different kwargs (see unit tests for demo)
+  flow_wrapper:
+    flow_library: "glasflow"
+    kwargs:
+      num_flow_steps: 14
+      base_transform_type: "rq-coupling"
+      base_transform_kwargs:
+        hidden_dim: 512
+        num_transform_blocks: 3
+        activation: "ELU"
+        dropout_probability: 0.1
+        use_batch_norm: False
+        num_bins: 10
+
+# -----------------------------------------------------------------------------
+# TRAINING
+# -----------------------------------------------------------------------------
+
+training:
+
+  stage_0:
+    batch_size: 1024
+    data_transforms:
+      - method: "add_noise"
+        kwargs:
+          random_seed: 42
+          complexity: 0
+          transform: "lambda wlen, error: 0.1257 * error"
+    early_stopping: 100
+    epochs: 5
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      max_norm: 1.0
+    logprob_epochs: null
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 5.0e-4
+    scheduler:
+      type: "ReduceLROnPlateau"
+      kwargs:
+        factor: 0.5
+        patience: 10
+        min_lr: 5.0e-8
+    use_amp: False  # only works on GPU
+
+# -----------------------------------------------------------------------------
+# LOCAL SETTINGS
+# -----------------------------------------------------------------------------
+
+local:
+
+  # General settings: device, runtime limits, ...
+  # Note: If training locally on a Mac, set num_workers to 0!
+  device: "cpu"
+  num_workers: 0
+  runtime_limits:
+    max_time_per_run: 36_000
+
+  # Settings for HTCondor
+  condor:
+    bid: 25
+    num_cpus: 8
+    memory_cpus: 200_000
+    num_gpus: 1
+    memory_gpus: 85_000
+
+  # Settings for Weights & Biases, remove if not used
+  # wandb:
+  #   project: "fm4ar"

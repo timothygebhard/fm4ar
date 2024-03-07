@@ -109,14 +109,18 @@ filterwarnings = [
 testpaths = [
     "tests",
 ]
+markers = [  # deselect tests with -m "not <marker>"
+    "integration_test: integration tests (which are usually slow)",
+    "slow: unit tests that are slow",
+]
 
 [tool.ruff]
-select = [
+lint.select = [
     "E",  # pycodestyle rules
     "F",  # Pyflakes rules
     "B",  # flake8-bugbear rules
 ]
-ignore = [
+lint.ignore = [
     "B019",  # "Use of functools.lru_cache can lead to memory leaks"
     "B028",  # "No explicit `stacklevel` keyword argument found"
 ]

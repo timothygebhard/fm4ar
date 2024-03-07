@@ -32,7 +32,7 @@ if __name__ == "__main__":
         "--checkpoint-file",
         type=str,
         default="model__latest.pt",
-        help="Name of checkpoint file for which to update the config."
+        help="Name of checkpoint file for which to update the config.",
     )
     args = parser.parse_args()
 

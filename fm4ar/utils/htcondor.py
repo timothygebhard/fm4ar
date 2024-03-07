@@ -5,8 +5,8 @@ Methods for dealing with the HTCondor cluster system.
 import socket
 import sys
 from pathlib import Path
-from shutil import copyfile
 from subprocess import run
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,10 @@ class CondorSettings(BaseModel):
     getenv: bool = Field(
         default=True,
         description="Whether the environment variables should be copied.",
+    )
+    gpu_type: Literal["A100", "H100"] | None = Field(
+        default=None,  # don't request a specific GPU type
+        description="Type of GPU to request for the job.",
     )
     num_cpus: int = Field(
         default=1,
@@ -74,13 +78,17 @@ class CondorSettings(BaseModel):
         description=(
             "Extra key/value pairs to add to the submission file. "
             "Example: transfer_executable = False."
-        )
+        ),
     )
 
 
 class DAGManFile:
     """
     Wrapper to create a DAGMan file.
+
+    Note: This is pretty basic and does currently not implement more
+    advanced  features likes topological sorting or cycle detection.
+    It is assumed that the user knows what they are doing.
     """
 
     def __init__(self) -> None:
@@ -106,7 +114,7 @@ class DAGManFile:
 
         # Make sure the job does not exist already
         if name in self.jobs:
-            raise ValueError(f"Job {name} already exists!")
+            raise ValueError(f"Job '{name}' already exists!")
 
         # Add the job to the DAGman file
         self.jobs[name] = {
@@ -114,6 +122,20 @@ class DAGManFile:
             "bid": bid,
             "depends_on": [] if depends_on is None else depends_on,
         }
+
+    def remove_job(self, name: str) -> None:
+        """
+        Remove a job from the DAGMan file.
+        Note: This leaves any dependencies untouched.
+
+        Args:
+            name: Name of the job to remove.
+        """
+
+        if name not in self.jobs:
+            raise ValueError(f"Job '{name}' does not exist!")
+
+        del self.jobs[name]
 
     def save(self, file_path: Path) -> None:
         """
@@ -155,35 +177,6 @@ def check_if_on_login_node(start_submission: bool) -> None:
     if "login" in socket.gethostname() and not start_submission:
         print("Did you forget to add the `--start-submission` flag again?\n")
         sys.exit(1)
-
-
-def copy_logfiles(log_dir: Path, label: str) -> None:
-    """
-    Copy the log files to a new file with the epoch number appended.
-
-    Args:
-        log_dir: Path to the directory containing the log files.
-        label: Label to add to the file name, e.g., the epoch number,
-            or the number of the HTCondor job.
-    """
-
-    # Loop over all log files in the directory
-    # Their names should follow the pattern `info.<Process>.{log,err,out}`.
-    # Backup files are named `info.<Process>.<label>.{log,err,out}`.
-    for src in log_dir.glob("info.*"):
-
-        # Skip files that already have been copied before
-        parts = src.name.split(".")
-        if len(parts) > 3:
-            continue
-
-        # Copy the file to a new file with the epoch number appended
-        name = ".".join(parts[:-1]) + f".{label}." + parts[-1]
-        dst = log_dir / name
-        try:
-            copyfile(src, dst)
-        except Exception as e:  # pragma: no cover
-            print(f"Failed to copy file {src} to {dst}: {e}")
 
 
 def condor_submit_bid(
@@ -262,20 +255,29 @@ def create_submission_file(
     lines = []
 
     # Executable and environment variables
-    lines.append(f'executable = {condor_settings.executable}\n')
+    lines.append(f"executable = {condor_settings.executable}\n")
     lines.append(f"getenv = {condor_settings.getenv}\n\n")
 
     # CPUs and memory requirements
-    lines.append(f'request_cpus = {condor_settings.num_cpus}\n')
-    lines.append(f'request_memory = {condor_settings.memory_cpus}\n')
+    lines.append(f"request_cpus = {condor_settings.num_cpus}\n")
+    lines.append(f"request_memory = {condor_settings.memory_cpus}\n")
 
     # Set GPU requirements (only add this section if GPUs are requested)
     if condor_settings.num_gpus > 0:
-        lines.append(f'request_gpus = {condor_settings.num_gpus}\n')
-        lines.append(
-            f"requirements = TARGET.CUDAGlobalMemoryMb "
-            f"> {condor_settings.memory_gpus}\n\n"
-        )
+
+        # Request the desired number of GPUs
+        lines.append(f"request_gpus = {condor_settings.num_gpus}\n")
+
+        # Construct other requirements: GPU memory and / or type
+        requirements = []
+        if (memory_gpus := condor_settings.memory_gpus) > 0:
+            requirements.append(f"TARGET.CUDAGlobalMemoryMb > {memory_gpus}")
+        if (gpu_type := condor_settings.gpu_type) is not None:
+            cuda_capability = get_cuda_capability(gpu_type)
+            requirements.append(f"TARGET.CUDACapability == {cuda_capability}")
+
+        # Add the requirements to the submission file
+        lines.append(f"requirements = ({' && '.join(requirements)})\n\n")
 
     # Set the arguments
     arguments = (
@@ -319,3 +321,19 @@ def create_submission_file(
             f.write(line)
 
     return file_path
+
+
+def get_cuda_capability(gpu_type: Literal["A100", "H100"] | None) -> float:
+    """
+    Get the CUDA capability of the given GPU type.
+    """
+
+    match gpu_type:
+        case "H100":
+            return 9.0
+        case "A100":
+            return 8.0
+        case None:
+            return 1.0
+        case _:
+            raise ValueError(f"Unknown GPU type: {gpu_type}")

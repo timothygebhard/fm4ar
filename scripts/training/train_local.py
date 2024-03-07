@@ -28,7 +28,7 @@ if __name__ == "__main__":
     checkpoint_file_path = args.experiment_dir / args.checkpoint_name
     if checkpoint_file_path.exists():
         print("Checkpoint found, resuming training run!")
-        pm, dataset = prepare_resume(
+        model, dataset = prepare_resume(
             experiment_dir=args.experiment_dir,
             checkpoint_name=args.checkpoint_name,
             config=config,
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     # If no checkpoint file exists, we need to start from scratch
     else:
         print("No checkpoint found, starting new training run!")
-        pm, dataset = prepare_new(
+        model, dataset = prepare_new(
             experiment_dir=args.experiment_dir,
             config=config,
         )
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # Train model (either to completion, or until a time limit is reached,
     # or until the early stopping criterion is met)
     with threadpool_limits(limits=1, user_api="blas"):
-        complete = train_stages(pm=pm, dataset=dataset)
+        complete = train_stages(model=model, dataset=dataset)
 
     # Print a message to indicate whether training was completed or not
     if complete:

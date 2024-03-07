@@ -16,8 +16,7 @@ def resample_spectrum(
     old_wlen: np.ndarray,
     old_flux: np.ndarray,
     old_errs: None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    ...
+) -> tuple[np.ndarray, np.ndarray]: ...
 
 
 @overload
@@ -26,8 +25,7 @@ def resample_spectrum(
     old_wlen: np.ndarray,
     old_flux: np.ndarray,
     old_errs: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    ...
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
 
 
 def resample_spectrum(
