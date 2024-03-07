@@ -40,11 +40,11 @@ ground_truth:
 #   - `marginalize`: marginalize over the parameter by setting it to random
 #       values drawn from the prior during sampling. This can be pretty slow!
 prior:
-  dataset: vasist-2023
+  dataset: vasist_2023
   random_seed: 42
   parameters:
-    C/O: infer  # condition = 0.55
-    Fe/H: infer  # condition = 0.0
+    C/O: infer
+    Fe/H: infer
     P_quench:  condition = -5.0
     log_X_Fe:  condition = -0.86
     log_X_MgSiO3:  condition = -0.65
@@ -65,15 +65,19 @@ sampler:
   library: nautilus
   n_livepoints: 400
   random_seed: 42
-  sampler_kwargs:
-    sampling_mode: default
+  # sampler_kwargs:  # only for dynesty
+  #   sampling_mode: standard
+  #   use_pool:
+  #     propose_point: True
+  #     prior_transform: False
+  #     loglikelihood: True
   run_kwargs:
     f_live: 0.01
     n_eff: 1000
 
 # The simulator to use
 simulator:
-  dataset: vasist-2023
+  dataset: vasist_2023
   kwargs:
     R: 400
     time_limit: 5
