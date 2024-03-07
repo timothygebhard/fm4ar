@@ -1,0 +1,83 @@
+
+# This is a demo config file for running a nested sampling-based
+# atmospheric retrieval.
+
+# Hardware requirements
+htcondor:
+  bid: 25
+  n_cpus: 96
+  memory: 100_000
+  max_runtime: 21_600
+
+# Likelihood (i.e., mostly the noise model)
+likelihood:
+  sigma: 0.125754
+
+# Ground truth values used for simulating the target data
+ground_truth:
+  C/O: 0.55
+  Fe/H: 0.0
+  P_quench: -5.0
+  log_X_Fe: -0.86
+  log_X_MgSiO3: -0.65
+  f_sed: 3.0
+  log_K_zz: 8.5
+  sigma_g: 2.0
+  log_g: 3.75
+  R_P: 1.0
+  T_0: 1063.6
+  T_3/T_connect: 0.26
+  T_2/T_3: 0.29
+  T_1/T_2: 0.32
+  alpha: 1.39
+  log_delta/alpha: 0.48
+
+# Prior distribution for dataset, and parameter actions
+# For each parameter, there are three possible actions using the given prior:
+#   - `condition = <value>`: fix the parameter to the given value. Note that
+#       you can specify a value that does not match the ground truth here!
+#   - `infer`: infer a posterior distribution for the parameter
+#   - `marginalize`: marginalize over the parameter by setting it to random
+#       values drawn from the prior during sampling. This can be pretty slow!
+prior:
+  dataset: vasist_2023
+  random_seed: 42
+  parameters:
+    C/O: infer
+    Fe/H: infer
+    P_quench:  condition = -5.0
+    log_X_Fe:  condition = -0.86
+    log_X_MgSiO3:  condition = -0.65
+    f_sed: condition = 3.0
+    log_K_zz: condition = 8.5
+    sigma_g: condition = 2.0
+    log_g: condition = 3.75
+    R_P: condition = 1.0
+    T_0: condition = 1063.6
+    T_3/T_connect: condition = 0.26
+    T_2/T_3: condition = 0.29
+    T_1/T_2: condition = 0.32
+    alpha: condition = 1.39
+    log_delta/alpha: condition = 0.48
+
+# The nested sampling algorithm to use
+sampler:
+  library: nautilus
+  n_livepoints: 400
+  random_seed: 42
+  # sampler_kwargs:  # only for dynesty
+  #   sampling_mode: standard
+  #   use_pool:
+  #     propose_point: True
+  #     prior_transform: False
+  #     loglikelihood: True
+  run_kwargs:
+    f_live: 0.01
+    n_eff: 1000
+
+# The simulator to use
+simulator:
+  dataset: vasist_2023
+  kwargs:
+    R: 400
+    time_limit: 5

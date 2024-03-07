@@ -21,7 +21,7 @@ description = "Flow matching for atmospheric retrievals of exoplanets."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "chainconsumer~=0.34.0",
+    "chainconsumer",
     "click",
     "coolname",
     "corner",

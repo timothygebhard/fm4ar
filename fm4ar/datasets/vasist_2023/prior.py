@@ -6,13 +6,16 @@ https://github.com/MalAstronomy/sbi-ear
 """
 
 import numpy as np
+from scipy.stats import uniform
+
+from fm4ar.datasets.base_classes import BasePrior
 
 
 # Define prior bounds
-LOWER: list[float]
-UPPER: list[float]
-NAMES: list[str]
-LABELS: list[str]
+LOWER: tuple[float]
+UPPER: tuple[float]
+NAMES: tuple[str]
+LABELS: tuple[str]
 LOWER, UPPER, NAMES, LABELS = zip(  # type: ignore
     *[
         [0.1, 1.6, "C/O", r"${\rm C/O}$"],
@@ -65,7 +68,7 @@ THETA_0 = np.array(
 SIGMA = 1.25754e-17 * 1e16
 
 
-class Prior:
+class Prior(BasePrior):
     """
     Box uniform prior over atmospheric parameters.
     See Table 1 in Vasist et al. (2023).
@@ -74,33 +77,26 @@ class Prior:
     def __init__(self, random_seed: int = 42) -> None:
         """
         Initialize class instance.
+
+        Args:
+            random_seed: Random seed to use for reproducibility.
         """
 
-        # Store random seed and initialize random number generator
-        self.random_seed = random_seed
-        self.rng = np.random.default_rng(self.random_seed)
+        super().__init__(random_seed=random_seed)
+
+        # Store names and labels for the parameters
+        self.names = NAMES
+        self.labels = np.array(LABELS)
 
         # Store prior bounds as arrays
         self.lower = np.array(LOWER)
         self.upper = np.array(UPPER)
 
-        # Store names and labels as arrays
-        self.names = np.array(NAMES)
-        self.labels = np.array(LABELS)
-
-    def sample(self) -> np.ndarray:
-        """
-        Draw a sample from the prior.
-        """
-
-        return self.rng.uniform(self.lower, self.upper)
-
-    def evaluate(self, theta: np.ndarray) -> float:
-        """
-        Compute the prior probability of a given sample.
-        """
-
-        if np.all((theta >= self.lower) & (theta <= self.upper)):
-            return float(1.0 / np.prod(self.upper - self.lower))
-        else:
-            return 0.0
+        # Construct the prior distribution.
+        # Quote from scipy docs: "In the standard form, the distribution is
+        # uniform on [0, 1]. Using the parameters loc and scale, one obtains
+        # the uniform distribution on [loc, loc + scale]."
+        self.distribution = uniform(
+            loc=self.lower,
+            scale=self.upper - self.lower,
+        )

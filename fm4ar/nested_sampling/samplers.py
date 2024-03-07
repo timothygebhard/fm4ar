@@ -2,12 +2,13 @@
 Define abstractions for the different nested sampling implementations.
 """
 
+import contextlib
 import json
 import time
 from abc import ABC, abstractmethod
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Type
+from typing import Any, Callable, Literal, Type
 
 import dill
 import multiprocess
@@ -18,6 +19,9 @@ from fm4ar.utils.timeout import TimeoutException, timelimit
 
 
 class Sampler(ABC):
+    """
+    Abstract base class for nested sampling samplers.
+    """
 
     start_time: float
     complete: bool
@@ -25,16 +29,38 @@ class Sampler(ABC):
     def __init__(
         self,
         run_dir: Path,
-        prior: Callable[[np.ndarray], np.ndarray],
+        prior_transform: Callable[[np.ndarray], np.ndarray],
         log_likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
+        **_: Any,
     ) -> None:
+        """
+        Initialize the class instance.
+
+        Args:
+            run_dir: Path to the directory where the sampler should save
+                its output.
+            prior_transform: A function that transforms a sample from
+                the `n_dim`-dimensional unit cube to the prior space.
+            log_likelihood: A function that computes the log-likelihood
+                of a given sample from the prior space.
+            n_dim: The number of dimensions of the parameter space.
+            n_livepoints: The number of live points to use in the
+                nested sampling algorithm.
+            inferred_parameters: A list of the names of the parameters
+                that are being inferred. This is only required for
+                `multinest`, but we require it for all samplers for
+                consistency.
+            random_seed: Random seed to use for reproducibility.
+            **_: Allow classes that inherit from `Sampler` to accept
+                additional keyword arguments.
+        """
 
         self.run_dir = run_dir
-        self.prior = prior
+        self.prior_transform = prior_transform
         self.log_likelihood = log_likelihood
         self.n_dim = n_dim
         self.n_livepoints = n_livepoints
@@ -59,7 +85,7 @@ class Sampler(ABC):
         """
         Run the sampler for the given `max_runtime`.
         """
-        pass
+        raise NotImplementedError  # pragma: no cover
 
     @abstractmethod
     def cleanup(self) -> None:
@@ -67,14 +93,14 @@ class Sampler(ABC):
         Any cleanup that needs to be done after the sampler has
         finished, e.g., closing open pools.
         """
-        pass
+        raise NotImplementedError  # pragma: no cover
 
     @abstractmethod
     def save_results(self) -> None:
         """
         Save the results of the sampler to the run directory.
         """
-        pass
+        raise NotImplementedError  # pragma: no cover
 
     def save_runtime(self, start_time: float) -> None:
         runtime = time.time() - start_time
@@ -83,20 +109,33 @@ class Sampler(ABC):
 
     @property
     @abstractmethod
-    def points(self) -> np.ndarray | None:
-        pass
+    def points(self) -> np.ndarray:
+        raise NotImplementedError  # pragma: no cover
 
     @property
     @abstractmethod
-    def weights(self) -> np.ndarray | None:
-        pass
+    def weights(self) -> np.ndarray:
+        raise NotImplementedError  # pragma: no cover
+
+    def get_weighted_posterior_mean(self) -> np.ndarray:
+        """
+        Get the weighted posterior mean.
+        """
+
+        return np.asarray(
+            np.average(self.points, weights=self.weights, axis=0)
+        )
 
 
 class NautilusSampler(Sampler):
+    """
+    Wrapper around the sampler provided by the `nautilus` package.
+    """
+
     def __init__(
         self,
         run_dir: Path,
-        prior: Callable[[np.ndarray], np.ndarray],
+        prior_transform: Callable[[np.ndarray], np.ndarray],
         log_likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
@@ -106,7 +145,7 @@ class NautilusSampler(Sampler):
 
         super().__init__(
             run_dir=run_dir,
-            prior=prior,
+            prior_transform=prior_transform,
             log_likelihood=log_likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
@@ -119,16 +158,22 @@ class NautilusSampler(Sampler):
         # Import this here to reduce dependencies
         from nautilus import Sampler as _NautilusSampler
 
-        # noinspection PyTypeChecker
-        # The argument of `NautilusSampler` is called `likelihood`, but at
+        # [1] The argument of `NautilusSampler` is called `likelihood`, but at
         # least according to the docstring, it does indeed expect "the natural
         # logarithm of the likelihood" as its input.
+        # [2] We need the `Pool` from `multiprocess` (instead of the default
+        # one from `multiprocessing` that we get if we pass an in to `pool`)
+        # because we need the `dill` serializer to send the `log_likelihood`
+        # to the worker processes.
+        #
+        # noinspection PyTypeChecker
+        # noinspection PyUnresolvedReferences
         self.sampler = _NautilusSampler(
-            prior=prior,
-            likelihood=log_likelihood,
+            prior=prior_transform,
+            likelihood=log_likelihood,  # see [1]
             n_dim=self.n_dim,
             n_live=self.n_livepoints,
-            pool=get_number_of_available_cores(),
+            pool=get_pool(),  # see [2]
             filepath=self.checkpoint_path,
             seed=self.random_seed,
         )
@@ -147,7 +192,7 @@ class NautilusSampler(Sampler):
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         try:
-            with timelimit(seconds=max_runtime):
+            with timelimit(max_runtime):
                 self.sampler.run(
                     verbose=verbose,
                     discard_exploration=True,
@@ -183,20 +228,44 @@ class NautilusSampler(Sampler):
 
 
 class DynestySampler(Sampler):
+    """
+    Wrapper around the samplers provided by the `dynesty` package.
+    """
+
     def __init__(
         self,
         run_dir: Path,
-        prior: Callable[[np.ndarray], np.ndarray],
+        prior_transform: Callable[[np.ndarray], np.ndarray],
         log_likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
+        sampling_mode: Literal["standard", "dynamic"] = "standard",
+        use_pool: dict[str, bool] | None = None,
     ) -> None:
+        """
+        For default parameters, see documentation of `Sampler`.
+
+        Args:
+            sampling_mode: This can be either 'standard' to use a
+                `dynesty.NestedSampler` or 'dynamic' to use a
+                `dynesty.DynamicNestedSampler`. See `dynesty` docs
+                for more details.
+            use_pool: A dictionary that specifies which parts of the
+                nested sampling algorithm should be parallelized. The
+                dict should have the following keys: 'propose_point',
+                'prior_transform', and 'loglikelihood'. The values
+                should be booleans that specify whether the respective
+                part of the algorithm should be parallelized.
+                If `use_pool` is set to `None`, the default options are
+                to use the pool for 'propose_point' and 'loglikelihood',
+                but not for 'prior_transform'. (See comments in code.)
+        """
 
         super().__init__(
             run_dir=run_dir,
-            prior=prior,
+            prior_transform=prior_transform,
             log_likelihood=log_likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
@@ -206,37 +275,63 @@ class DynestySampler(Sampler):
 
         # Import this here to reduce dependencies
         import dynesty.utils
-        from dynesty import DynamicNestedSampler as _DynamicNestedSampler
 
+        if sampling_mode == "standard":
+            from dynesty import NestedSampler as _DynestySampler
+        elif sampling_mode == "dynamic":
+            from dynesty import DynamicNestedSampler as _DynestySampler
+        else:
+            raise ValueError(
+                "`sampling_mode` must be 'standard' or 'dynamic', "
+                f"not '{sampling_mode}'!"
+            )
+
+        # Use `dill` instead of `pickle` for serialization; this seems to fix
+        # an issue with the `DynestySampler` that pops up when the sampler is
+        # resumed from a checkpoint and then tries to create a new checkpoint.
+        # Apparently, `dynesty.utils.pickle_module = dill` is not enough; that
+        # is why we also construct the `pool` manually.
         dynesty.utils.pickle_module = dill
+        self.pool = get_pool()
 
-        # We use pathos.multiprocessing instead of multiprocessing because
-        # pathos uses dill instead of pickle, which seems to fix a weird issue
-        # with the `DynestySampler` that pops up when the sampler is resumed
-        # from a checkpoint and then tries to create a new checkpoint.
-        # (Apparently, `dynesty.utils.pickle_module = dill` is not enough?)
-        import pathos.multiprocessing as multiprocessing
+        # Set up the default pool options: Depending on the exact retrieval
+        # that one is running, it can make sense to enable to disable some of
+        # these options. For example, the toy example seems to run the fastest
+        # if only the `loglikelihood` retrieval is parallelized; however, for
+        # the petitRADTRANS retrievals, we want also want to enable the option
+        # for `propose_point`. More experiments might be required to understand
+        # what are the best options here.
+        if use_pool is None:
+            self.use_pool = {
+                "propose_point": True,
+                "prior_transform": False,
+                "loglikelihood": True,
+            }
+        else:
+            self.use_pool = use_pool
 
-        self.pool_size = get_number_of_available_cores()
-        self.pool = multiprocessing.Pool(self.pool_size)
-
+        # Define the path for the checkpoint file
         self.checkpoint_path = self.run_dir / "checkpoint.save"
         self.resume = self.checkpoint_path.exists()
 
+        # Resuming from a checkpoint requires a different initialization than
+        # starting a new run...
         if self.resume:
-            self.sampler = _DynamicNestedSampler.restore(
+            self.sampler = _DynestySampler.restore(
                 fname=self.checkpoint_path.as_posix(),
                 pool=self.pool,
             )
         else:
             # noinspection PyTypeChecker
-            self.sampler = _DynamicNestedSampler(
+            self.sampler = _DynestySampler(
                 loglikelihood=self.log_likelihood,
-                prior_transform=self.prior,
+                prior_transform=self.prior_transform,
                 ndim=self.n_dim,
                 nlive=self.n_livepoints,
                 pool=self.pool,
-                queue_size=self.pool_size,
+                use_pool=self.use_pool,
+                queue_size=get_number_of_available_cores(),
+                rstate=np.random.Generator(np.random.PCG64(self.random_seed)),
             )
 
     def run(
@@ -253,7 +348,7 @@ class DynestySampler(Sampler):
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         try:
-            with timelimit(seconds=max_runtime):
+            with timelimit(max_runtime):
                 self.sampler.run_nested(
                     checkpoint_file=self.checkpoint_path.as_posix(),
                     print_progress=verbose,
@@ -265,6 +360,12 @@ class DynestySampler(Sampler):
             return
         except RuntimeWarning as e:
             if "resume the run that has ended successfully." in str(e):
+                self.complete = True
+                return
+            else:
+                raise e
+        except UserWarning as e:
+            if "You are resuming a finished static run" in str(e):
                 self.complete = True
                 return
             else:
@@ -292,10 +393,14 @@ class DynestySampler(Sampler):
 
 
 class MultiNestSampler(Sampler):
+    """
+    Wrapper around the sampler provided by the `pymultinest` package.
+    """
+
     def __init__(
         self,
         run_dir: Path,
-        prior: Callable[[np.ndarray], np.ndarray],
+        prior_transform: Callable[[np.ndarray], np.ndarray],
         log_likelihood: Callable[[np.ndarray], float],
         n_dim: int,
         n_livepoints: int,
@@ -305,13 +410,19 @@ class MultiNestSampler(Sampler):
 
         super().__init__(
             run_dir=run_dir,
-            prior=prior,
+            prior_transform=prior_transform,
             log_likelihood=log_likelihood,
             n_dim=n_dim,
             n_livepoints=n_livepoints,
             inferred_parameters=inferred_parameters,
             random_seed=random_seed,
         )
+
+        # Handle caching of points and weights that need to be loaded from
+        # the MultiNest output files (we only want to read them once)
+        self._points: np.ndarray
+        self._weights: np.ndarray
+        self._points_and_weights_loaded = False
 
         self.outputfiles_basename = (self.run_dir / "run").as_posix()
 
@@ -345,7 +456,7 @@ class MultiNestSampler(Sampler):
             target=partial(
                 _solve_pymultinest,
                 LogLikelihood=self.log_likelihood,
-                Prior=self.prior,
+                Prior=self.prior_transform,
                 n_dims=self.n_dim,
                 outputfiles_basename=self.outputfiles_basename,
                 n_live_points=self.n_livepoints,
@@ -372,24 +483,50 @@ class MultiNestSampler(Sampler):
     def save_results(self) -> None:
         pass  # all results are saved automatically
 
-    @property
-    def points(self) -> np.ndarray | None:
+    def _load_points_and_weights(self) -> None:
+        """
+        Load the points and weights from the MultiNest output files.
+        """
+
+        # Skip if we have already loaded the points and weights
+        if self._points_and_weights_loaded:
+            return
 
         # Import this here to reduce dependencies
         from pymultinest.analyse import Analyzer
 
         # Load the posterior samples from the MultiNest output files
-        analyzer = Analyzer(
-            n_params=self.n_dim,
-            outputfiles_basename=self.outputfiles_basename,
-        )
-        posterior_samples = analyzer.get_equal_weighted_posterior()[:, :-1]
+        # We locally redirect stdout to /dev/null to suppress the output
+        with contextlib.redirect_stdout(None):
+            analyzer = Analyzer(
+                n_params=self.n_dim,
+                outputfiles_basename=self.outputfiles_basename,
+            )
+            posterior_samples = analyzer.get_equal_weighted_posterior()[:, :-1]
 
-        return np.array(posterior_samples)
+        self._points = np.array(posterior_samples)
+        self._weights = np.ones(len(posterior_samples))
+        self._points_and_weights_loaded = True
 
     @property
-    def weights(self) -> None:
-        return None  # samples are already equally weighted
+    def points(self) -> np.ndarray:
+        self._load_points_and_weights()
+        return self._points
+
+    @property
+    def weights(self) -> np.ndarray:
+        self._load_points_and_weights()
+        return self._weights
+
+
+# noinspection PyUnresolvedReferences
+def get_pool() -> multiprocess.Pool:
+    """
+    Get a `multiprocess.Pool` with # processes = # available cores.
+    """
+
+    # noinspection PyUnresolvedReferences
+    return multiprocess.Pool(processes=get_number_of_available_cores())
 
 
 def get_sampler(name: str) -> Type[Sampler]:
