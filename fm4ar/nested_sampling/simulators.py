@@ -11,7 +11,7 @@ def get_simulator(config: SimulatorConfig) -> BaseSimulator:
     Load a simulator from a configuration object.
     """
 
-    if config.dataset == "vasist-2023":
+    if config.dataset == "vasist_2023":
         from fm4ar.datasets.vasist_2023.simulator import Simulator
         return Simulator(**config.kwargs)
 
