@@ -35,8 +35,29 @@ class Sampler(ABC):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
-        **_: Any,  # ignore any additional arguments
+        **_: Any,
     ) -> None:
+        """
+        Initialize the class instance.
+
+        Args:
+            run_dir: Path to the directory where the sampler should save
+                its output.
+            prior_transform: A function that transforms a sample from
+                the `n_dim`-dimensional unit cube to the prior space.
+            log_likelihood: A function that computes the log-likelihood
+                of a given sample from the prior space.
+            n_dim: The number of dimensions of the parameter space.
+            n_livepoints: The number of live points to use in the
+                nested sampling algorithm.
+            inferred_parameters: A list of the names of the parameters
+                that are being inferred. This is only required for
+                `multinest`, but we require it for all samplers for
+                consistency.
+            random_seed: Random seed to use for reproducibility.
+            **_: Allow classes that inherit from `Sampler` to accept
+                additional keyword arguments.
+        """
 
         self.run_dir = run_dir
         self.prior_transform = prior_transform
@@ -96,6 +117,15 @@ class Sampler(ABC):
     def weights(self) -> np.ndarray:
         raise NotImplementedError  # pragma: no cover
 
+    def get_weighted_posterior_mean(self) -> np.ndarray:
+        """
+        Get the weighted posterior mean.
+        """
+
+        return np.asarray(
+            np.average(self.points, weights=self.weights, axis=0)
+        )
+
 
 class NautilusSampler(Sampler):
     """
@@ -143,7 +173,7 @@ class NautilusSampler(Sampler):
             likelihood=log_likelihood,  # see [1]
             n_dim=self.n_dim,
             n_live=self.n_livepoints,
-            pool=multiprocess.Pool(get_number_of_available_cores()),  # see [2]
+            pool=get_pool(),  # see [2]
             filepath=self.checkpoint_path,
             seed=self.random_seed,
         )
@@ -211,8 +241,27 @@ class DynestySampler(Sampler):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
-        sampling_mode: Literal["standard", "dynamic"] = "dynamic",
+        sampling_mode: Literal["standard", "dynamic"] = "standard",
+        use_pool: dict[str, bool] | None = None,
     ) -> None:
+        """
+        For default parameters, see documentation of `Sampler`.
+
+        Args:
+            sampling_mode: This can be either 'standard' to use a
+                `dynesty.NestedSampler` or 'dynamic' to use a
+                `dynesty.DynamicNestedSampler`. See `dynesty` docs
+                for more details.
+            use_pool: A dictionary that specifies which parts of the
+                nested sampling algorithm should be parallelized. The
+                dict should have the following keys: 'propose_point',
+                'prior_transform', and 'loglikelihood'. The values
+                should be booleans that specify whether the respective
+                part of the algorithm should be parallelized.
+                If `use_pool` is set to `None`, the default options are
+                to use the pool for 'propose_point' and 'loglikelihood',
+                but not for 'prior_transform'. (See comments in code.)
+        """
 
         super().__init__(
             run_dir=run_dir,
@@ -243,13 +292,30 @@ class DynestySampler(Sampler):
         # Apparently, `dynesty.utils.pickle_module = dill` is not enough; that
         # is why we also construct the `pool` manually.
         dynesty.utils.pickle_module = dill
-        self.pool_size = get_number_of_available_cores()
-        # noinspection PyUnresolvedReferences
-        self.pool = multiprocess.Pool(self.pool_size)
+        self.pool = get_pool()
 
+        # Set up the default pool options: Depending on the exact retrieval
+        # that one is running, it can make sense to enable to disable some of
+        # these options. For example, the toy example seems to run the fastest
+        # if only the `loglikelihood` retrieval is parallelized; however, for
+        # the petitRADTRANS retrievals, we want also want to enable the option
+        # for `propose_point`. More experiments might be required to understand
+        # what are the best options here.
+        if use_pool is None:
+            self.use_pool = {
+                "propose_point": True,
+                "prior_transform": False,
+                "loglikelihood": True,
+            }
+        else:
+            self.use_pool = use_pool
+
+        # Define the path for the checkpoint file
         self.checkpoint_path = self.run_dir / "checkpoint.save"
         self.resume = self.checkpoint_path.exists()
 
+        # Resuming from a checkpoint requires a different initialization than
+        # starting a new run...
         if self.resume:
             self.sampler = _DynestySampler.restore(
                 fname=self.checkpoint_path.as_posix(),
@@ -263,7 +329,8 @@ class DynestySampler(Sampler):
                 ndim=self.n_dim,
                 nlive=self.n_livepoints,
                 pool=self.pool,
-                queue_size=self.pool_size,
+                use_pool=self.use_pool,
+                queue_size=get_number_of_available_cores(),
                 rstate=np.random.Generator(np.random.PCG64(self.random_seed)),
             )
 
@@ -450,6 +517,16 @@ class MultiNestSampler(Sampler):
     def weights(self) -> np.ndarray:
         self._load_points_and_weights()
         return self._weights
+
+
+# noinspection PyUnresolvedReferences
+def get_pool() -> multiprocess.Pool:
+    """
+    Get a `multiprocess.Pool` with # processes = # available cores.
+    """
+
+    # noinspection PyUnresolvedReferences
+    return multiprocess.Pool(processes=get_number_of_available_cores())
 
 
 def get_sampler(name: str) -> Type[Sampler]:
