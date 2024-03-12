@@ -1,5 +1,6 @@
 """
-Define methods for creating likelihood distributions.
+Methods for constructing likelihood distributions from configurations.
+As of now, we only support multivariate normal distributions.
 """
 
 from typing import Protocol
@@ -7,7 +8,7 @@ from typing import Protocol
 import numpy as np
 from scipy.stats import multivariate_normal
 
-from fm4ar.nested_sampling.config import LikelihoodConfig
+from fm4ar.likelihoods.config import LikelihoodConfig
 
 
 class LikelihoodDistribution(Protocol):
@@ -15,16 +16,19 @@ class LikelihoodDistribution(Protocol):
     Protocol for a distribution.
 
     This is used purely for typehinting, that is, it can be used to
-    indicate that a function returns an object that has a `logpdf`
-    method.
+    indicate that a function returns an object that has a `pdf` and
+    a `logpdf` method.
     """
 
+    def pdf(self, x: np.ndarray) -> float:
+        raise NotImplementedError  # pragma: no cover
+
     def logpdf(self, x: np.ndarray) -> float:
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
 
 def get_likelihood_distribution(
-    x_obs: np.ndarray,
+    flux_obs: np.ndarray,
     config: LikelihoodConfig,
 ) -> LikelihoodDistribution:
 
@@ -32,6 +36,6 @@ def get_likelihood_distribution(
     # TODO: We need to figure out a way to specify generic covariance matrices
     #   in the configuration file. For now, we just assume that the covariance
     #   matrix is given as `sigma * np.eye(len(x_obs))`.
-    cov = config.sigma * np.eye(len(x_obs))
+    cov = config.sigma * np.eye(len(flux_obs))
 
-    return multivariate_normal(mean=x_obs, cov=cov)  # type: ignore
+    return multivariate_normal(mean=flux_obs, cov=cov)  # type: ignore
