@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
     # Collect source HDF files
     print("Finding HDF files...", end=" ")
-    target_dir = get_datasets_dir() / "vasist-2023" / args.target_dir
+    target_dir = get_datasets_dir() / "vasist_2023" / args.target_dir
     file_list = sorted(target_dir.glob("random-seed_*.hdf"))
     print("Done!", flush=True)
     print(f"Found {len(file_list)} files.\n")

@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     # Save everything to an HDF file
     print("Saving to an HDF file...", end=" ", flush=True)
-    target_dir = get_datasets_dir() / "vasist-2023" / args.output_dir
+    target_dir = get_datasets_dir() / "vasist_2023" / args.output_dir
     target_dir.mkdir(parents=True, exist_ok=True)
     file_path = target_dir / f"random-seed_{effective_random_seed:07d}.hdf"
     with h5py.File(file_path, "w") as hdf_file:
