@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 from chainconsumer import ChainConsumer, Chain, Truth
 
-from fm4ar.datasets.base_classes import BasePrior
-from fm4ar.nested_sampling.config import PriorConfig
+from fm4ar.priors.base import BasePrior
+from fm4ar.priors.config import PriorConfig
 
 
 def get_parameter_masks(
