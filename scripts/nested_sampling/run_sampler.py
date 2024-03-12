@@ -12,21 +12,21 @@ from typing import Any
 
 import numpy as np
 
+from fm4ar.likelihoods import get_likelihood_distribution
 from fm4ar.nested_sampling.config import load_config
-from fm4ar.nested_sampling.likelihood import get_likelihood_distribution
-from fm4ar.nested_sampling.priors import get_prior
 from fm4ar.nested_sampling.samplers import get_sampler
-from fm4ar.nested_sampling.simulators import get_simulator
 from fm4ar.nested_sampling.utils import (
     create_posterior_plot,
     get_parameter_masks,
 )
+from fm4ar.priors import get_prior
+from fm4ar.simulators import get_simulator
 from fm4ar.utils.git_utils import document_git_status
 from fm4ar.utils.htcondor import (
-    CondorSettings,
+    HTCondorConfig,
     check_if_on_login_node,
-    create_submission_file,
     condor_submit_bid,
+    create_submission_file,
 )
 
 
@@ -95,10 +95,10 @@ if __name__ == "__main__":
     if args.start_submission:
 
         print("Creating submission file...", end=" ", flush=True)
-        condor_settings = CondorSettings(
+        condor_settings = HTCondorConfig(
             executable=executable,
             num_cpus=config.htcondor.n_cpus,
-            memory_cpus=config.htcondor.memory,
+            memory_cpus=config.htcondor.memory_cpus,
             arguments=job_arguments,
             retry_on_exit_code=42,
             log_file_name="log.$$([NumJobStarts])",
@@ -162,14 +162,14 @@ if __name__ == "__main__":
     theta_obs = np.array([config.ground_truth[n] for n in prior.names])
     if (result := simulator(theta_obs)) is None:
         raise RuntimeError("Failed to simulate ground truth!")
-    _, x_obs = result
+    _, flux_obs = result
     print("Done!", flush=True)
 
     sync_mpi_processes(comm)
 
     print("Creating likelihood distribution...", end=" ", flush=True)
     likelihood_distribution = get_likelihood_distribution(
-        x_obs=x_obs,
+        flux_obs=flux_obs,
         config=config.likelihood,
     )
     print("Done!", flush=True)
