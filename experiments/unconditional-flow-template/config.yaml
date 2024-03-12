@@ -1,0 +1,47 @@
+# List of HDF files to use for training
+input_files:
+  - file_path: "..."
+    file_type: "ns"
+    n_samples: 1000
+  - file_path: "..."
+    n_samples: 1000
+    file_type: "ml"
+
+# Configuration of the unconditional flow model
+model:
+  model_type: "unconditional_flow"
+  flow_wrapper:
+    flow_library: "normflows"
+    kwargs:
+      num_flow_steps: 24
+      base_transform_type: "rq-coupling"
+      base_transform_kwargs:
+        num_blocks: 4
+        num_hidden_channels: 16
+        num_bins: 16
+        tail_bound: 10
+        activation: "ELU"
+        dropout_probability: 0.1
+
+# Scaler for theta
+theta_scaler:
+  method: "MeanStdScaler"
+  kwargs:
+    dataset: "vasist_2023"
+
+# Training settings
+training:
+  batch_size: 32_768
+  epochs: 1000
+  optimizer:
+    type: "AdamW"
+    kwargs:
+      lr: 5.0e-4
+  random_seed: 42
+  scheduler:
+    type: "ReduceLROnPlateau"
+    kwargs:
+      factor: 0.5
+      patience: 10
+      min_lr: 5.0e-8
+  train_fraction: 0.95
