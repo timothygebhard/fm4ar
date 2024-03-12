@@ -6,7 +6,7 @@
 htcondor:
   bid: 25
   n_cpus: 96
-  memory: 100_000
+  memory_cpu: 100_000
   max_runtime: 21_600
 
 # Likelihood (i.e., mostly the noise model)

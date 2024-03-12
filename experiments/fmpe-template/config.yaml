@@ -109,10 +109,10 @@ local:
   # Settings for HTCondor
   condor:
     bid: 25
-    num_cpus: 8
+    n_cpus: 8
+    n_gpus: 1
     memory_cpus: 200_000
-    num_gpus: 1
-    memory_gpus: 85_000
+    gpu_type: "H100"
 
   # Settings for Weights & Biases, remove if not used
   # wandb:
