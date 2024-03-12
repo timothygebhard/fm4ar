@@ -14,7 +14,7 @@ The glasflow-based NSF implementation is mostly based on the uci.py
 example from https://github.com/bayesiains/nsf.
 """
 
-from typing import Any, Type
+from typing import Any
 
 import torch
 
@@ -139,7 +139,8 @@ class FlowWrapper(torch.nn.Module):
                 context=context,
             )
             samples = samples.squeeze(1)
-            log_prob = log_prob.squeeze(1)
+            if context is not None:
+                log_prob = log_prob.squeeze(1)
         else:  # pragma: no cover
             raise ValueError(f"Unknown flow type: {type(self.flow)}")
 
@@ -148,7 +149,7 @@ class FlowWrapper(torch.nn.Module):
 
 def create_flow_wrapper(
     dim_theta: int,
-    dim_context: int,
+    dim_context: int | None,
     flow_wrapper_config: dict[str, Any],
 ) -> FlowWrapper:
     """
@@ -201,6 +202,24 @@ def create_flow_wrapper(
     return flow_wrapper
 
 
+def create_unconditional_flow_wrapper(
+    dim_theta: int,
+    flow_wrapper_config: dict[str, Any],
+) -> FlowWrapper:
+    """
+    Thin wrapper for creating an *unconditional* normalizing flow model.
+
+    This is useful, e.g., to fit samples from a posterior so that one
+    can evaluate the logprob and use it for importance sampling.
+    """
+
+    return create_flow_wrapper(
+        dim_theta=dim_theta,
+        dim_context=None,
+        flow_wrapper_config=flow_wrapper_config,
+    )
+
+
 # -----------------------------------------------------------------------------
 # normflows
 # -----------------------------------------------------------------------------
@@ -236,7 +255,7 @@ def create_normflows_flow(
         BaseTransform = nf.flows.CoupledRationalQuadraticSpline
     elif base_transform_type == "rq-autoregressive":
         BaseTransform = nf.flows.AutoregressiveRationalQuadraticSpline
-    else:
+    else:  # pragma: no cover
         raise ValueError(f"Unknown base transform type: {base_transform_type}")
 
     # Construct flow steps
@@ -255,7 +274,10 @@ def create_normflows_flow(
     q0 = nf.distributions.DiagGaussian(dim_theta, trainable=False)
 
     # Construct flow model
-    flow = nf.ConditionalNormalizingFlow(q0=q0, flows=flows)
+    if dim_context is None:
+        flow = nf.NormalizingFlow(q0=q0, flows=flows)
+    else:
+        flow = nf.ConditionalNormalizingFlow(q0=q0, flows=flows)
 
     return FlowWrapper(flow=flow)
 
@@ -472,43 +494,3 @@ def create_transform(
     )
 
     return transform
-
-
-def create_unconditional_nsf(
-    num_transforms: int = 24,
-    num_input_channels: int = 16,
-    num_hidden_channels: int = 512,
-    num_blocks: int = 4,
-    num_bins: int = 16,
-    tail_bound: float = 5.0,
-    activation: Type[torch.nn.Module] = torch.nn.ELU,
-) -> nf.NormalizingFlow:
-    """
-    Create an unconditional neural spline flow model (with normflows).
-
-    This is useful, e.g., to fit samples from a posterior so that one
-    can evaluate the logprob and use it for importance sampling.
-    """
-
-    # Construct series of transforms
-    flows = []
-    for _ in range(num_transforms):
-        flows += [
-            nf.flows.CoupledRationalQuadraticSpline(
-                num_input_channels=num_input_channels,
-                num_blocks=num_blocks,
-                num_hidden_channels=num_hidden_channels,
-                num_bins=num_bins,
-                tail_bound=tail_bound,
-                activation=activation,
-            ),
-            nf.flows.LULinearPermute(num_input_channels),
-        ]
-
-    # Set base distribution
-    q0 = nf.distributions.DiagGaussian(num_input_channels, trainable=False)
-
-    # Construct flow model
-    model = nf.NormalizingFlow(q0=q0, flows=flows)
-
-    return model
