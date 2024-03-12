@@ -7,7 +7,7 @@ datasets/**
 scripts/nested_sampling/*/results/**
 experiments/**
 !experiments/*-template/
-!experiments/*-template/config.yaml
+!experiments/*-template/*.yaml
 
 # jupyter notebooks
 jupyter/
