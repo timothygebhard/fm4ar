@@ -148,7 +148,7 @@ def get_mean_and_std(dataset: str) -> tuple[np.ndarray, np.ndarray]:
     Get the mean and standard deviation of the target parameters.
     """
 
-    if dataset == "vasist-2023":
+    if dataset == "vasist_2023":
         a = np.array(LOWER)
         b = np.array(UPPER)
         mean = (a + b) / 2
@@ -165,7 +165,7 @@ def get_min_and_max(dataset: str) -> tuple[np.ndarray, np.ndarray]:
     Get the minimum and maximum of the target parameters.
     """
 
-    if dataset == "vasist-2023":
+    if dataset == "vasist_2023":
         minimum = np.array(LOWER)
         maximum = np.array(UPPER)
 
