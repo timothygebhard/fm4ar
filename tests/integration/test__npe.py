@@ -250,3 +250,9 @@ def test__npe_model(
     done = train_stages(model=model, dataset=dataset)
     assert done
     assert model.epoch == 5
+
+    # Finally, test warning for invalid save_model() call
+    model.experiment_dir = None
+    with pytest.warns(UserWarning) as user_warning:
+        model.save_model()
+    assert "no directory was specified" in str(user_warning.list[0].message)
