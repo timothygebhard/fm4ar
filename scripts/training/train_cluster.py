@@ -19,7 +19,7 @@ from fm4ar.training.stages import train_stages
 from fm4ar.utils.config import load_config
 from fm4ar.utils.git_utils import document_git_status
 from fm4ar.utils.htcondor import (
-    CondorSettings,
+    HTCondorConfig,
     check_if_on_login_node,
     condor_submit_bid,
     create_submission_file,
@@ -54,7 +54,7 @@ if __name__ == "__main__":
         # Combine condor settings from config file with job arguments and the
         # options that are required to automatically restart the job if the
         # runtime limit is reached but the training is not complete yet
-        condor_settings = CondorSettings(**config["local"]["condor"])
+        condor_settings = HTCondorConfig(**config["local"]["condor"])
         condor_settings.arguments = job_arguments
         condor_settings.retry_on_exit_code = 42
         condor_settings.log_file_name = "log.$$([NumJobStarts])"
