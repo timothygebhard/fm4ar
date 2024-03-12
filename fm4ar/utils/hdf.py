@@ -6,7 +6,6 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-from tqdm import tqdm
 
 
 def save_to_hdf(
@@ -54,35 +53,58 @@ def load_from_hdf(
     return data
 
 
-def load_merged_hdf_files(
+def merge_hdf_files(
     target_dir: Path,
     name_pattern: str,
-    keys: list[str],
-) -> dict[str, np.ndarray]:
+    output_file: Path,
+    keys: list[str] | None = None,
+    delete_after_merge: bool = False,
+) -> None:
     """
-    Merge the HDF files in the given directory and return the results.
+    Merge the HDF files in the given directory and save the results.
+
+    To save memory, the arrays are not loaded into memory at once, but
+    rather concatenated directly from the HDF files.
 
     Args:
         target_dir: Path to the directory containing the HDF files.
         name_pattern: Pattern for the file names (e.g., "seed-*.hdf").
-        keys: Keys of the arrays to merge.
-
-    Returns:
-        merged: Merged arrays.
+        output_file: Path to the output HDF file.
+        keys: Keys of the arrays to merge. If None, merge all keys.
+        delete_after_merge: Whether to delete the source HDF files
+            after merging. Default: False.
     """
 
     # Collect the HDF files
     file_paths = sorted(target_dir.glob(name_pattern))
 
-    # Loop over all HDF files and collect / mergge the data
-    merged: dict[str, np.ndarray] = {}
-    for file_path in tqdm(file_paths, ncols=80):
-        with h5py.File(file_path, "r") as f:
-            for key in keys:
-                value = np.array(f[key], dtype=f[key].dtype)
-                if key not in merged:
-                    merged[key] = value
-                else:
-                    merged[key] = np.concatenate([merged[key], value])
+    # Open the first HDF file to get the keys, shapes, and dtypes
+    keys_shapes_dtypes = {}
+    with h5py.File(file_paths[0], "r") as f:
+        for key in f.keys():
+            if keys is None or key in keys:
+                keys_shapes_dtypes[key] = (f[key].shape, f[key].dtype)
 
-    return merged
+    # Prepare output HDF file
+    with h5py.File(output_file, "w") as f:
+        for key, (shape, dtype) in keys_shapes_dtypes.items():
+            f.create_dataset(
+                name=key,
+                shape=(0, *shape[1:]),
+                maxshape=(None, *shape[1:]),
+                dtype=dtype,
+            )
+
+    # Loop over all HDF files and collect / merge the data
+    for file_path in file_paths:
+        with h5py.File(file_path, "r") as src:
+            with h5py.File(output_file, "a") as dst:
+                for key in dst.keys():
+                    value = np.array(src[key], dtype=src[key].dtype)
+                    dst[key].resize(dst[key].shape[0] + value.shape[0], axis=0)
+                    dst[key][-value.shape[0]:] = value
+
+    # Delete the source HDF file
+    if delete_after_merge:
+        for file_path in file_paths:
+            file_path.unlink()
