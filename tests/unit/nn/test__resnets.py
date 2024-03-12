@@ -63,6 +63,7 @@ def test__dense_residual_net() -> None:
         input_shape=(3,),
         output_dim=5,
         hidden_dims=(7,),
+        final_activation="Sigmoid",
     )
     out = net(x=torch.randn(19, 3))
     assert out.shape == (19, 5)
