@@ -63,20 +63,18 @@ def load_dataset(config: dict) -> SpectraDataset:
         wlen = wlen[None, :]
 
     # Make sure the lengths match
-    if theta.shape[0] != flux.shape[0]:  # pragma: no cover
-        raise ValueError(
+    if theta.shape[0] != flux.shape[0]:
+        raise ValueError(  # pragma: no cover
             "The number of samples does not match between `theta` and `flux`!"
         )
-    if (  # pragma: no cover
-        wlen.shape[0] != 1 and wlen.shape[0] != flux.shape[0]
-    ):
-        raise ValueError(
+    if wlen.shape[0] != 1 and wlen.shape[0] != flux.shape[0]:
+        raise ValueError(  # pragma: no cover
             "The number of samples does not match between `wlen` and `flux`! "
             "`wlen` should have either the same length as `flux` or a single "
             "wavelength for all spectra."
         )
-    if wlen.shape[1] != flux.shape[1]:  # pragma: no cover
-        raise ValueError(
+    if wlen.shape[1] != flux.shape[1]:
+        raise ValueError(  # pragma: no cover
             "The number of bins does not match between `wlen` and `flux`!"
         )
 
