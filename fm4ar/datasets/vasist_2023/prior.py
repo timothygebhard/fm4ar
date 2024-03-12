@@ -8,8 +8,7 @@ https://github.com/MalAstronomy/sbi-ear
 import numpy as np
 from scipy.stats import uniform
 
-from fm4ar.datasets.base_classes import BasePrior
-
+from fm4ar.priors.base import BasePrior
 
 # Define prior bounds
 LOWER: tuple[float]
