@@ -27,7 +27,7 @@ from fm4ar.utils.config import load_config
 from fm4ar.utils.git_utils import get_git_hash
 from fm4ar.utils.hashing import get_sha512sum
 from fm4ar.utils.htcondor import (
-    CondorSettings,
+    HTCondorConfig,
     check_if_on_login_node,
     condor_submit_bid,
     create_submission_file,
@@ -288,7 +288,7 @@ def prepare_submission_file_and_launch_job(args: argparse.Namespace) -> None:
     # Prepare the condor settings. The evaluation basically happens only on
     # the GPU, so we don't need a lot of CPUs, and just enough memory to load
     # the dataset and hold the results.
-    condor_settings = CondorSettings(
+    condor_settings = HTCondorConfig(
         num_cpus=1,
         memory_cpus=50_000,
         num_gpus=1,

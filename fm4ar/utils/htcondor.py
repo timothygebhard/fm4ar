@@ -11,7 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class CondorSettings(BaseModel):
+class HTCondorConfig(BaseModel):
     """
     Dataclass for storing the settings for an HTCondor job.
     """
@@ -28,9 +28,10 @@ class CondorSettings(BaseModel):
         default=None,  # don't request a specific GPU type
         description="Type of GPU to request for the job.",
     )
-    num_cpus: int = Field(
+    n_cpus: int = Field(
         default=1,
         ge=1,
+        alias="num_cpus",
         description="Number of CPUs to request for the job.",
     )
     memory_cpus: int = Field(
@@ -38,9 +39,10 @@ class CondorSettings(BaseModel):
         ge=1024,  # 1 GB is the minimum unit of memory on the cluster
         description="Amount of memory (in MB) to request for the job.",
     )
-    num_gpus: int = Field(
+    n_gpus: int = Field(
         default=0,
         ge=0,
+        alias="num_gpus",
         description="Number of GPUs to request for the job.",
     )
     memory_gpus: int = Field(
@@ -225,7 +227,7 @@ def condor_submit_dag(
 
 
 def create_submission_file(
-    condor_settings: CondorSettings,
+    condor_settings: HTCondorConfig,
     experiment_dir: Path,
     file_name: str = "run.sub",
 ) -> Path:
@@ -259,14 +261,14 @@ def create_submission_file(
     lines.append(f"getenv = {condor_settings.getenv}\n\n")
 
     # CPUs and memory requirements
-    lines.append(f"request_cpus = {condor_settings.num_cpus}\n")
+    lines.append(f"request_cpus = {condor_settings.n_cpus}\n")
     lines.append(f"request_memory = {condor_settings.memory_cpus}\n")
 
     # Set GPU requirements (only add this section if GPUs are requested)
-    if condor_settings.num_gpus > 0:
+    if condor_settings.n_gpus > 0:
 
         # Request the desired number of GPUs
-        lines.append(f"request_gpus = {condor_settings.num_gpus}\n")
+        lines.append(f"request_gpus = {condor_settings.n_gpus}\n")
 
         # Construct other requirements: GPU memory and / or type
         requirements = []
