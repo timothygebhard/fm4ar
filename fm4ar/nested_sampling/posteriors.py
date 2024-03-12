@@ -49,7 +49,8 @@ def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
         samples = np.array(analyzer.get_equal_weighted_posterior()[:, :-1])
         weights = np.ones(len(samples))
 
-    else:
+    # This should never happen; but the linter complains otherwise...
+    else:  # pragma: no cover
         raise ValueError(f"Unknown sampler: {sampler}")
 
     return samples, weights
