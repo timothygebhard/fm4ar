@@ -28,7 +28,7 @@ from fm4ar.utils.tracking import RuntimeLimits
 N_TOTAL = 22  # number of samples in the mock dataset
 N_LOAD = 20  # number of samples to load from the mock dataset
 BATCH_SIZE = 5  # batch size for the mock data
-DIM_THETA = 16  # required to use Vasist-2023 feature scaler
+DIM_THETA = 16  # required to use `vasist_2023` feature scaler
 N_BINS = 39  # number of bins in the mock data
 
 

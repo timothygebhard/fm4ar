@@ -40,7 +40,7 @@ def test__theta_scalers() -> None:
 
     # Test the MeanStdScaler
     scaler = get_theta_scaler(
-        {"method": "mean_std", "kwargs": {"dataset": "vasist-2023"}}
+        {"method": "mean_std", "kwargs": {"dataset": "vasist_2023"}}
     )
     assert isinstance(scaler, MeanStdScaler)
     transformed = scaler.forward(sample)
@@ -50,7 +50,7 @@ def test__theta_scalers() -> None:
 
     # Test the MinMaxScaler
     scaler = get_theta_scaler(
-        {"method": "min_max", "kwargs": {"dataset": "vasist-2023"}}
+        {"method": "min_max", "kwargs": {"dataset": "vasist_2023"}}
     )
     assert isinstance(scaler, MinMaxScaler)
     transformed = scaler.forward(sample)

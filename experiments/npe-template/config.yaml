@@ -10,7 +10,7 @@ dataset:
 theta_scaler:
   method: "MinMaxScaler"
   kwargs:
-    dataset: "vasist-2023"
+    dataset: "vasist_2023"
 
 # -----------------------------------------------------------------------------
 # MODEL ARCHITECTURE
