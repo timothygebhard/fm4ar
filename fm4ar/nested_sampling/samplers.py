@@ -5,6 +5,7 @@ Define abstractions for the different nested sampling implementations.
 import contextlib
 import json
 import time
+import warnings
 from abc import ABC, abstractmethod
 from functools import partial
 from pathlib import Path
@@ -280,7 +281,7 @@ class DynestySampler(Sampler):
             from dynesty import NestedSampler as _DynestySampler
         elif sampling_mode == "dynamic":
             from dynesty import DynamicNestedSampler as _DynestySampler
-        else:
+        else:  # pragma: no cover
             raise ValueError(
                 "`sampling_mode` must be 'standard' or 'dynamic', "
                 f"not '{sampling_mode}'!"
@@ -301,14 +302,14 @@ class DynestySampler(Sampler):
         # the petitRADTRANS retrievals, we want also want to enable the option
         # for `propose_point`. More experiments might be required to understand
         # what are the best options here.
-        if use_pool is None:
-            self.use_pool = {
+        self.use_pool = (
+            use_pool if use_pool is not None else
+            {
                 "propose_point": True,
                 "prior_transform": False,
                 "loglikelihood": True,
             }
-        else:
-            self.use_pool = use_pool
+        )
 
         # Define the path for the checkpoint file
         self.checkpoint_path = self.run_dir / "checkpoint.save"
@@ -347,6 +348,9 @@ class DynestySampler(Sampler):
         start_time = time.time()
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
+        # Treat warnings as errors to catch them via try/except
+        warnings.filterwarnings("error")
+
         try:
             with timelimit(max_runtime):
                 self.sampler.run_nested(
@@ -362,15 +366,16 @@ class DynestySampler(Sampler):
             if "resume the run that has ended successfully." in str(e):
                 self.complete = True
                 return
-            else:
+            else:  # pragma: no cover
                 raise e
         except UserWarning as e:
             if "You are resuming a finished static run" in str(e):
                 self.complete = True
                 return
-            else:
+            else:  # pragma: no cover
                 raise e
         finally:
+            warnings.resetwarnings()
             self.save_runtime(start_time)
 
         self.complete = True
@@ -541,5 +546,5 @@ def get_sampler(name: str) -> Type[Sampler]:
             return DynestySampler
         case "multinest":
             return MultiNestSampler
-        case _:
+        case _:  # pragma: no cover
             raise ValueError(f"Sampler `{name}` not supported!")
