@@ -54,6 +54,12 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Job number for parallel processing; must be in [0, n_jobs).",
     )
     parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=1,
+        help="Number of parallel jobs. Default: 1.",
+    )
+    parser.add_argument(
         "--stage",
         type=str,
         choices=[
@@ -114,6 +120,15 @@ def prepare_and_launch_dag(
             f"--experiment-dir {args.experiment_dir}",
             f"--stage {stage}",
         ]
+
+        # For the stages that require parallel processing, add the job number
+        # and the total number of parallel jobs as arguments; if we just take
+        # this from the config file, things break down in non-parallel mode
+        if stage in ("draw_proposal_samples", "simulate_spectra"):
+            condor_settings.arguments += [
+                "--job $(Process)",
+                f"--n-jobs {condor_settings.queue}",
+            ]
 
         # Create submission file
         file_path = create_submission_file(
@@ -221,7 +236,7 @@ if __name__ == "__main__":
         # Construct the slice of indices for the current job: The current
         # job will process every `n_jobs`-th sample from the proposal samples,
         # starting at an index of `job`. This is useful for parallelization.
-        idx = slice(args.job, None, config.simulate_spectra.htcondor.queue)
+        idx = slice(args.job, None, args.n_jobs)
 
         # Load the theta samples and probabilities and unpack them
         proposal_samples = load_from_hdf(

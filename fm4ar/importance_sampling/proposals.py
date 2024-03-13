@@ -39,6 +39,14 @@ def draw_proposal_samples(
     experiment_config = load_experiment_config(args.experiment_dir)
     model_type = experiment_config["model"]["model_type"]
 
+    # Determine the number of samples that the current job should draw
+    n_total_samples = config.draw_proposal_samples.n_samples
+    n_samples_for_job = len(np.arange(args.job, n_total_samples, args.n_jobs))
+
+    print(f"Total number of samples to draw:           {n_total_samples:,}")
+    print(f"Number of samples to draw for current job: {n_samples_for_job:,}")
+    print()
+
     # Draw samples either from an FMPE / NPE model...
     if model_type in ["fmpe", "npe"]:
 
@@ -63,7 +71,7 @@ def draw_proposal_samples(
         theta, probs = draw_samples_from_ml_model(
             context=context,
             experiment_dir=args.experiment_dir,
-            n_samples=config.draw_proposal_samples.n_samples,
+            n_samples=n_samples_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
             model_kwargs=config.model_kwargs,
         )
@@ -74,7 +82,7 @@ def draw_proposal_samples(
         print("Running for unconditional flow model!\n")
         theta, probs = draw_samples_from_unconditional_flow(
             experiment_dir=args.experiment_dir,
-            n_samples=config.draw_proposal_samples.n_samples,
+            n_samples=n_samples_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
         )
 
