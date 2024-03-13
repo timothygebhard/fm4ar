@@ -141,6 +141,7 @@ def prepare_and_launch_dag(
         dag.add_job(
             name=stage,
             file_path=file_path,
+            bid=condor_settings.bid,
             depends_on=depends_on,
         )
 
