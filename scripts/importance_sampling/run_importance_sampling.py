@@ -149,7 +149,7 @@ if __name__ == "__main__":
     file_index = config.target_spectrum.index
     dir_name = f"{file_stem}__{file_index}"
     output_dir = args.experiment_dir / "importance_sampling" / dir_name
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True, parents=True)
 
     # -------------------------------------------------------------------------
     # If --start-submission: Create DAG file, launch job, and exit
