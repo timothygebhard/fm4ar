@@ -171,7 +171,8 @@ if __name__ == "__main__":
 
     if args.stage == "draw_proposal_samples" or args.stage is None:
 
-        print("Draw samples from proposal distribution", flush=True)
+        print(80 * "-" + "\n", flush=True)
+        print("(1) Draw samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
 
         # Draw samples (this comes with its own progress bar)
@@ -191,7 +192,8 @@ if __name__ == "__main__":
 
     if args.stage == "merge_proposal_samples" or args.stage is None:
 
-        print("Merge samples from proposal distribution", flush=True)
+        print(80 * "-" + "\n", flush=True)
+        print("(2) Merge samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
 
         print("Merging HDF files:", flush=True)
@@ -212,7 +214,8 @@ if __name__ == "__main__":
 
     if args.stage == "simulate_spectra" or args.stage is None:
 
-        print("Simulate spectra for theta_i", flush=True)
+        print(80 * "-" + "\n", flush=True)
+        print("(3) Simulate spectra for theta_i", flush=True)
         print(80 * "-" + "\n", flush=True)
 
         # Construct the slice of indices for the current job: The current
@@ -317,7 +320,8 @@ if __name__ == "__main__":
 
     if args.stage == "merge_simulation_results" or args.stage is None:
 
-        print("Merge simulation results and compute weights", flush=True)
+        print(80 * "-" + "\n", flush=True)
+        print("(4) Merge simulation results and compute weights", flush=True)
         print(80 * "-" + "\n", flush=True)
 
         # Merge the results from all simulation jobs
@@ -336,7 +340,7 @@ if __name__ == "__main__":
         print("Loading merged results...", end=" ", flush=True)
         merged = load_from_hdf(
             file_path=output_dir / "simulations.hdf",
-            keys=["theta", "probs", "x", "likelihoods", "prior_values"],
+            keys=["theta", "probs", "flux", "likelihoods", "prior_values"],
         )
         print("Done!")
 
