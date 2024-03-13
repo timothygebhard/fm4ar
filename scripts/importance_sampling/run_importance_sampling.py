@@ -325,7 +325,7 @@ if __name__ == "__main__":
 
         # Save the results for the current job
         file_name = f"simulations-{args.job:04d}.hdf"
-        print("\nSaving results to HDF...", end=" ", flush=True)
+        print("Saving results to HDF...", end=" ", flush=True)
         save_to_hdf(
             file_path=output_dir / file_name,
             theta=theta.astype(np.float32),
