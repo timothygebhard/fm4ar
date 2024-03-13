@@ -187,8 +187,9 @@ if __name__ == "__main__":
         merge_hdf_files(
             target_dir=output_dir,
             name_pattern="proposal-samples-*.hdf",
-            output_file=output_dir / "proposal-samples.hdf",
+            output_file_path=output_dir / "proposal-samples.hdf",
             keys=["theta", "probs"],
+            singleton_keys=[],
             delete_after_merge=True,
         )
 
@@ -306,10 +307,10 @@ if __name__ == "__main__":
 
         # Merge the results from all simulation jobs
         merge_hdf_files(
-            target_dir=output_dir,
-            name_pattern="simulations-*.hdf",
-            output_file=output_dir / "simulations.hdf",
+            target_dir=output_dir, name_pattern="simulations-*.hdf",
+            output_file_path=output_dir / "simulations.hdf",
             keys=["theta", "probs", "flux", "likelihoods", "prior_values"],
+            singleton_keys=[],
             delete_after_merge=True,
         )
 
@@ -333,11 +334,16 @@ if __name__ == "__main__":
         print(f"Effective sample size: {n_eff:.2f}")
         print(f"Sample efficiency:     {100 * sample_efficiency:.2f}%\n")
 
-        # Save the final results
+        # Save the final results: full and minimized
         print("Saving results...", end=" ")
         save_to_hdf(
             file_path=output_dir / "importance_sampling_results.hdf",
             **merged,
+        )
+        save_to_hdf(
+            file_path=output_dir / "importance_sampling_results_min.hdf",
+            theta=merged["theta"],
+            weights=merged["weights"],
         )
         print("Done!")
 
