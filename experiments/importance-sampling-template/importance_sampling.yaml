@@ -5,7 +5,7 @@
 # General settings
 checkpoint_file_name: "model__best.pt"
 random_seed: 42
-kwargs_for_model: {}
+model_kwargs: {}
 
 # Define target spectrum
 target_spectrum:
