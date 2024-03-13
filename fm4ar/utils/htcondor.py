@@ -209,6 +209,7 @@ def condor_submit_bid(
 def condor_submit_dag(
     file_path: Path,
     verbose: bool = True,
+    bid: int = 25,
 ) -> None:  # pragma: no cover
     """
     Submit a DAGMan file to HTCondor.
@@ -216,9 +217,10 @@ def condor_submit_dag(
     Args:
         file_path: Path to the DAGMan file.
         verbose: If True, print the output of `condor_submit_dag`.
+        bid: Bid to use for the job (default: 25).
     """
 
-    cmd = ["condor_submit_dag", str(file_path)]
+    cmd = ["condor_submit_dag_bid", str(bid), str(file_path)]
     process = run(cmd, capture_output=True, check=False)
 
     if verbose:
