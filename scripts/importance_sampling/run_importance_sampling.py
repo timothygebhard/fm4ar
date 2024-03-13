@@ -185,7 +185,7 @@ if __name__ == "__main__":
     # Stage 2: Merge samples from the proposal distribution
     # -------------------------------------------------------------------------
 
-    elif args.stage == "merge_proposal_samples" or args.stage is None:
+    if args.stage == "merge_proposal_samples" or args.stage is None:
 
         print("Merge samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     # Stage 3: Simulate spectra corresponding to the proposal samples
     # -------------------------------------------------------------------------
 
-    elif args.stage == "simulate_spectra" or args.stage is None:
+    if args.stage == "simulate_spectra" or args.stage is None:
 
         print("Simulate spectra for theta_i", flush=True)
         print(80 * "-" + "\n", flush=True)
@@ -306,7 +306,7 @@ if __name__ == "__main__":
     # Stage 4: Merge the simulations from all jobs and compute the weights
     # -------------------------------------------------------------------------
 
-    elif args.stage == "merge_simulation_results" or args.stage is None:
+    if args.stage == "merge_simulation_results" or args.stage is None:
 
         print("Merge simulation results and compute weights", flush=True)
         print(80 * "-" + "\n", flush=True)
