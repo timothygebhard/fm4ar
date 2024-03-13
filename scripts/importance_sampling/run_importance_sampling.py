@@ -144,7 +144,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
 
     script_start = time.time()
-    print("\nRUN IMPORTANCE SAMPLING\n")
+    print("\nRUN IMPORTANCE SAMPLING\n\n")
 
     # Get the command line arguments and load the importance sampling config
     args = get_cli_arguments()
@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
     if args.stage == "draw_proposal_samples" or args.stage is None:
 
-        print(80 * "-" + "\n", flush=True)
+        print(80 * "-", flush=True)
         print("(1) Draw samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
 
@@ -192,7 +192,7 @@ if __name__ == "__main__":
 
     if args.stage == "merge_proposal_samples" or args.stage is None:
 
-        print(80 * "-" + "\n", flush=True)
+        print(80 * "-", flush=True)
         print("(2) Merge samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
 
@@ -214,7 +214,7 @@ if __name__ == "__main__":
 
     if args.stage == "simulate_spectra" or args.stage is None:
 
-        print(80 * "-" + "\n", flush=True)
+        print(80 * "-", flush=True)
         print("(3) Simulate spectra for theta_i", flush=True)
         print(80 * "-" + "\n", flush=True)
 
@@ -320,7 +320,7 @@ if __name__ == "__main__":
 
     if args.stage == "merge_simulation_results" or args.stage is None:
 
-        print(80 * "-" + "\n", flush=True)
+        print(80 * "-", flush=True)
         print("(4) Merge simulation results and compute weights", flush=True)
         print(80 * "-" + "\n", flush=True)
 
@@ -371,7 +371,7 @@ if __name__ == "__main__":
             theta=merged["theta"],
             weights=merged["weights"],
         )
-        print("Done!")
+        print("Done!\n")
 
     # -------------------------------------------------------------------------
     # Postliminaries
