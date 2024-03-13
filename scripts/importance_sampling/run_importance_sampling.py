@@ -371,10 +371,10 @@ if __name__ == "__main__":
             theta=merged["theta"],
             weights=merged["weights"],
         )
-        print("Done!\n")
+        print("Done!")
 
     # -------------------------------------------------------------------------
     # Postliminaries
     # -------------------------------------------------------------------------
 
-    print(f"\nThis took {time.time() - script_start:.2f} seconds.\n")
+    print(f"\n\nThis took {time.time() - script_start:.2f} seconds.\n")
