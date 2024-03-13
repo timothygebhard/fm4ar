@@ -174,12 +174,16 @@ if __name__ == "__main__":
         print("Draw samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
 
+        # Draw samples (this comes with its own progress bar)
         theta, probs = draw_proposal_samples(args=args, config=config)
+
+        print("\nSaving results to HDF...", end=" ", flush=True)
         save_to_hdf(
             file_path=output_dir / f"proposal-samples-{args.job:04d}.hdf",
             theta=theta,
             probs=probs,
         )
+        print("Done!\n\n")
 
     # -------------------------------------------------------------------------
     # Stage 2: Merge samples from the proposal distribution
@@ -190,6 +194,7 @@ if __name__ == "__main__":
         print("Merge samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
 
+        print("Merging HDF files:", flush=True)
         merge_hdf_files(
             target_dir=output_dir,
             name_pattern="proposal-samples-*.hdf",
@@ -197,7 +202,9 @@ if __name__ == "__main__":
             keys=["theta", "probs"],
             singleton_keys=[],
             delete_after_merge=True,
+            show_progressbar=True,
         )
+        print("\n\n")
 
     # -------------------------------------------------------------------------
     # Stage 3: Simulate spectra corresponding to the proposal samples
@@ -289,10 +296,11 @@ if __name__ == "__main__":
         prior_values = prior_values[mask]
         n = len(theta)
         print(f"Dropped {np.sum(~mask):,} invalid samples!")
-        print(f"Remaining samples: {n:,} ({100 * n / args.n_samples:.2f}%)\n")
+        print(f"Remaining samples: {n:,} ({100 * n / len(mask):.2f}%)\n")
 
         # Save the results for the current job
         file_name = f"simulations-{args.job:04d}.hdf"
+        print("\nSaving results to HDF...", end=" ", flush=True)
         save_to_hdf(
             file_path=output_dir / file_name,
             theta=theta.astype(np.float32),
@@ -301,6 +309,7 @@ if __name__ == "__main__":
             likelihoods=likelihoods.astype(np.float64),
             prior_values=prior_values.astype(np.float32),
         )
+        print("Done!\n\n")
 
     # -------------------------------------------------------------------------
     # Stage 4: Merge the simulations from all jobs and compute the weights
@@ -312,21 +321,27 @@ if __name__ == "__main__":
         print(80 * "-" + "\n", flush=True)
 
         # Merge the results from all simulation jobs
+        print("Merging HDF files:")
         merge_hdf_files(
             target_dir=output_dir, name_pattern="simulations-*.hdf",
             output_file_path=output_dir / "simulations.hdf",
             keys=["theta", "probs", "flux", "likelihoods", "prior_values"],
             singleton_keys=[],
             delete_after_merge=True,
+            show_progressbar=True,
         )
+        print()
 
         # Load the merged results
+        print("Loading merged results...", end=" ", flush=True)
         merged = load_from_hdf(
             file_path=output_dir / "simulations.hdf",
             keys=["theta", "probs", "x", "likelihoods", "prior_values"],
         )
+        print("Done!")
 
         # Compute the importance sampling weights
+        print("Computing importance sampling weights...", end=" ", flush=True)
         raw_weights, weights = compute_is_weights(
             likelihoods=merged["likelihoods"],
             prior_values=merged["prior_values"],
@@ -334,14 +349,15 @@ if __name__ == "__main__":
         )
         merged["raw_weights"] = raw_weights.astype(np.float64)
         merged["weights"] = weights.astype(np.float64)
+        print("Done!\n")
 
         # Compute the effective sample size and sample efficiency
         n_eff, sample_efficiency = compute_effective_sample_size(weights)
-        print(f"Effective sample size: {n_eff:.2f}")
-        print(f"Sample efficiency:     {100 * sample_efficiency:.2f}%\n")
+        print(f"  Effective sample size: {n_eff:.2f}")
+        print(f"  Sample efficiency:     {100 * sample_efficiency:.2f}%\n")
 
         # Save the final results: full and minimized
-        print("Saving results...", end=" ")
+        print("Saving results to HDF...", end=" ")
         save_to_hdf(
             file_path=output_dir / "importance_sampling_results.hdf",
             **merged,
