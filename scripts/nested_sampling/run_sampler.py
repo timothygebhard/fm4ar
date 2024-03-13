@@ -246,7 +246,7 @@ if __name__ == "__main__":
 
     print("Running sampler:", flush=True)
     sampler.run(
-        max_runtime=config.htcondor.max_runtime,
+        max_runtime=config.sampler.max_runtime,
         verbose=True,
         run_kwargs=config.sampler.run_kwargs,
     )

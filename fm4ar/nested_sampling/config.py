@@ -24,6 +24,14 @@ class SamplerConfig(BaseModel):
         ...,
         description="Which nested sampling implementation to use.",
     )
+    max_runtime: int = Field(
+        default=28_800,  # = 8 hours
+        ge=1,
+        description=(
+            "Maximum runtime (in seconds) for the sampler. This can be used "
+            "to limit the runtime of a job on a cluster, for example."
+        ),
+    )
     n_livepoints: int = Field(
         ...,
         ge=1,

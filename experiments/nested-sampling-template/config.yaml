@@ -7,7 +7,6 @@ htcondor:
   bid: 25
   n_cpus: 96
   memory_cpu: 100_000
-  max_runtime: 21_600
 
 # Likelihood (i.e., mostly the noise model)
 likelihood:
@@ -63,6 +62,7 @@ prior:
 # The nested sampling algorithm to use
 sampler:
   library: nautilus
+  max_runtime: 21_600
   n_livepoints: 400
   random_seed: 42
   # sampler_kwargs:  # only for dynesty
