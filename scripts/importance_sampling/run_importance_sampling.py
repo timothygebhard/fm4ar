@@ -70,6 +70,12 @@ def get_cli_arguments() -> argparse.Namespace:
         action="store_true",
         help="If True, create a submission file and launch a job.",
     )
+    parser.add_argument(
+        "--target-index",
+        type=int,
+        default=0,
+        help="Index of the target spectrum to use. Default: 0.",
+    )
     args = parser.parse_args()
 
     return args
