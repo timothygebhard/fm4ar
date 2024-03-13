@@ -3,9 +3,11 @@ Utility functions for working with HDF5 files.
 """
 
 from pathlib import Path
+from typing import Sequence
 
 import h5py
 import numpy as np
+from tqdm import tqdm
 
 
 def save_to_hdf(
@@ -56,9 +58,11 @@ def load_from_hdf(
 def merge_hdf_files(
     target_dir: Path,
     name_pattern: str,
-    output_file: Path,
+    output_file_path: Path,
     keys: list[str] | None = None,
+    singleton_keys: Sequence[str] = ("wlen", ),
     delete_after_merge: bool = False,
+    show_progressbar: bool = False,
 ) -> None:
     """
     Merge the HDF files in the given directory and save the results.
@@ -69,24 +73,40 @@ def merge_hdf_files(
     Args:
         target_dir: Path to the directory containing the HDF files.
         name_pattern: Pattern for the file names (e.g., "seed-*.hdf").
-        output_file: Path to the output HDF file.
+        output_file_path: Path to the output HDF file.
         keys: Keys of the arrays to merge. If None, merge all keys.
+        singleton_keys: These keys are the same across all files and
+            do not need to be merged, but can be copied from the first
+            file. Needs to be a subset of `keys`. Default: ("wlen", ).
         delete_after_merge: Whether to delete the source HDF files
             after merging. Default: False.
+        show_progressbar: Whether to show a progress bar for the loop
+            over the HDF files that we merge. Default: False.
     """
 
     # Collect the HDF files
     file_paths = sorted(target_dir.glob(name_pattern))
 
-    # Open the first HDF file to get the keys, shapes, and dtypes
+    # Open first HDF file to get the (non-singleton) keys, shapes, and dtypes
     keys_shapes_dtypes = {}
     with h5py.File(file_paths[0], "r") as f:
         for key in f.keys():
-            if keys is None or key in keys:
+            if (keys is None or key in keys) and (key not in singleton_keys):
                 keys_shapes_dtypes[key] = (f[key].shape, f[key].dtype)
 
-    # Prepare output HDF file
-    with h5py.File(output_file, "w") as f:
+    # Prepare output HDF file and copy singleton keys
+    with h5py.File(output_file_path, "w") as f:
+
+        # Copy singleton keys from the first HDF file
+        with h5py.File(file_paths[0], "r") as src:
+            for key in singleton_keys:
+                f.create_dataset(
+                    name=key,
+                    data=np.array(src[key], dtype=src[key].dtype),
+                    dtype=src[key].dtype,
+                )
+
+        # Initialize datasets for the other keys
         for key, (shape, dtype) in keys_shapes_dtypes.items():
             f.create_dataset(
                 name=key,
@@ -95,14 +115,24 @@ def merge_hdf_files(
                 dtype=dtype,
             )
 
+    # Prepare progress bar
+    file_paths = tqdm(
+        iterable=file_paths,
+        unit=" files",
+        ncols=80,
+        disable=not show_progressbar,
+    )
+
     # Loop over all HDF files and collect / merge the data
     for file_path in file_paths:
-        with h5py.File(file_path, "r") as src:
-            with h5py.File(output_file, "a") as dst:
-                for key in dst.keys():
-                    value = np.array(src[key], dtype=src[key].dtype)
-                    dst[key].resize(dst[key].shape[0] + value.shape[0], axis=0)
-                    dst[key][-value.shape[0]:] = value
+        with (
+            h5py.File(file_path, "r") as src,
+            h5py.File(output_file_path, "a") as dst
+        ):
+            for key in keys_shapes_dtypes.keys():
+                value = np.array(src[key], dtype=src[key].dtype)
+                dst[key].resize(dst[key].shape[0] + value.shape[0], axis=0)
+                dst[key][-value.shape[0]:] = value
 
     # Delete the source HDF file
     if delete_after_merge:

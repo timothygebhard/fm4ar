@@ -43,22 +43,23 @@ def test__merge_hdf_file(tmp_path: Path) -> None:
     file1 = tmp_path / "file1.hdf"
     file2 = tmp_path / "file2.hdf"
     save_to_hdf(file_path=file1, a1=np.array([1, 2]), a2=np.array([3., 4.]))
-    save_to_hdf(file_path=file2, a1=np.array([5, 6]), a2=np.array([7., 8.]))
+    save_to_hdf(file_path=file2, a1=np.array([5, 6]), a2=np.array([3., 4.]))
 
     # Merge HDF5 files
     output_file = tmp_path / "merged.hdf"
     merge_hdf_files(
         target_dir=tmp_path,
         name_pattern="file*.hdf",
-        output_file=output_file,
-        keys=["a1", "a2"],
+        output_file_path=output_file,
+        keys=["a1"],
+        singleton_keys=["a2"],
         delete_after_merge=True,
     )
 
     # Load merged HDF5 file
     loaded = load_from_hdf(file_path=output_file, keys=["a1", "a2"])
     assert np.array_equal(loaded["a1"], np.array([1, 2, 5, 6]))
-    assert np.array_equal(loaded["a2"], np.array([3., 4., 7., 8.]))
+    assert np.array_equal(loaded["a2"], np.array([3., 4.]))
 
     # Check if the original files were deleted
     assert not file1.exists()
