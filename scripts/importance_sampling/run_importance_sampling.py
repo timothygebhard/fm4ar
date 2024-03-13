@@ -221,7 +221,7 @@ if __name__ == "__main__":
             delete_after_merge=True,
             show_progressbar=True,
         )
-        print("\n\n")
+        print("\n")
 
     # -------------------------------------------------------------------------
     # Stage 3: Simulate spectra corresponding to the proposal samples
@@ -237,6 +237,13 @@ if __name__ == "__main__":
         # job will process every `n_jobs`-th sample from the proposal samples,
         # starting at an index of `job`. This is useful for parallelization.
         idx = slice(args.job, None, args.n_jobs)
+
+        # Print some information about the number of samples to process
+        n_total = config.draw_proposal_samples.n_samples
+        n_for_job = len(np.arange(args.job, n_total, args.n_jobs))
+        print(f"Total number of samples to process:             {n_total:,}")
+        print(f"Number of samples to process for current job:   {n_for_job:,}")
+        print()
 
         # Load the theta samples and probabilities and unpack them
         proposal_samples = load_from_hdf(
