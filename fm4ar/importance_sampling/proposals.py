@@ -73,6 +73,7 @@ def draw_proposal_samples(
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
             model_kwargs=config.model_kwargs,
+            random_seed=config.random_seed + args.job,
         )
 
     # ... or from an unconditional flow model
@@ -83,6 +84,7 @@ def draw_proposal_samples(
             experiment_dir=args.experiment_dir,
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
+            random_seed=config.random_seed + args.job,
         )
 
     else:  # pragma: no cover
@@ -98,6 +100,7 @@ def draw_samples_from_ml_model(
     checkpoint_name: str = "model__best.pt",
     chunk_size: int = 1024,
     model_kwargs: dict[str, Any] | None = None,
+    random_seed: int = 42,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Load a trained ML model (NPE or FMPE) and draw samples from it.
@@ -116,7 +119,13 @@ def draw_samples_from_ml_model(
             running out of GPU memory.
         model_kwargs: Additional keyword arguments for the model.
             This is useful for specifying the tolerance for FMPE models.
+        random_seed: Random seed for the random number generator.
     """
+
+    # Fix the global seed. This is not ideal, but it seems that at least the
+    # libraries used for the NPE models do not provide a way to set the seed
+    # for the RNG for the model itself.
+    torch.manual_seed(random_seed)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_kwargs = {} if model_kwargs is None else model_kwargs
@@ -177,6 +186,7 @@ def draw_samples_from_unconditional_flow(
     experiment_dir: Path,
     n_samples: int,
     chunk_size: int = 4096,
+    random_seed: int = 42,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Load a trained unconditional flow model and draw samples from it.
@@ -188,7 +198,13 @@ def draw_samples_from_unconditional_flow(
         chunk_size: Size of the "chunks" for drawing samples (i.e., the
             number of samples drawn at once). This is used to avoid
             running out of GPU memory.
+        random_seed: Random seed for the random number generator.
     """
+
+    # Fix the global seed. This is not ideal, but it seems that at least the
+    # libraries used for the NPE models do not provide a way to set the seed
+    # for the RNG for the model itself.
+    torch.manual_seed(random_seed)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
