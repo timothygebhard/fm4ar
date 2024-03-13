@@ -54,6 +54,11 @@ def draw_proposal_samples(
             ).items()
         }
 
+        # Add the error bars to the context
+        n_bins = context["flux"].shape[0]
+        sigma = config.likelihood.sigma
+        context["error_bars"] = sigma * torch.ones(n_bins).float()
+
         print("Running for ML model (FMPE / NPE)!\n")
         theta, probs = draw_samples_from_ml_model(
             context=context,
