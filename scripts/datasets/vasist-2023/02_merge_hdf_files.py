@@ -4,12 +4,12 @@ Merge the HDF files for each random seed into a single HDF file.
 
 import argparse
 import time
+from pathlib import Path
 
 import h5py
-import numpy as np
-from tqdm import tqdm
 
-from fm4ar.utils.paths import get_datasets_dir
+from fm4ar.utils.paths import expand_env_variables_in_path
+from fm4ar.utils.hdf import merge_hdf_files
 
 
 def get_cli_arguments() -> argparse.Namespace:
@@ -19,22 +19,28 @@ def get_cli_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--n-bins",
-        type=int,
-        default=947,
-        help="Number of bins in the spectra (default: 947).",
+        "--delete-after-merge",
+        default=False,
+        action="store_true",
+        help="Delete the source HDF files after merging? Default: False.",
     )
     parser.add_argument(
-        "--n-parameters",
-        type=int,
-        default=16,
-        help="Number of simulation parameters (default: 16).",
+        "--name-pattern",
+        type=str,
+        default="random-seed_*.hdf",
+        help="Name pattern for the HDF files (default: random-seed_*.hdf).",
+    )
+    parser.add_argument(
+        "--output-name",
+        type=str,
+        default="merged.hdf",
+        help="Name of the output HDF file (default: merged.hdf).",
     )
     parser.add_argument(
         "--target-dir",
-        type=str,
-        default="train",
-        help="Name of the target directory (default: train).",
+        type=Path,
+        default="$FM4AR_DATASETS_DIR/vasist-2023/output",
+        help="Path to the target directory contain HDF files to be merged.",
     )
     args = parser.parse_args()
 
@@ -48,98 +54,24 @@ if __name__ == "__main__":
 
     args = get_cli_arguments()
 
-    # Collect source HDF files
-    print("Finding HDF files...", end=" ")
-    target_dir = get_datasets_dir() / "vasist_2023" / args.target_dir
-    file_list = sorted(target_dir.glob("random-seed_*.hdf"))
-    print("Done!", flush=True)
-    print(f"Found {len(file_list)} files.\n")
+    # Construct target dir and output file path
+    target_dir = expand_env_variables_in_path(args.target_dir)
+    output_file_path = target_dir / args.output_name
 
-    # Prepare output HDF file
-    print("Preparing output HDF file...", end=" ")
-    dst_file_path = target_dir / "merged.hdf"
-    with h5py.File(dst_file_path, "w") as f:
-        f.create_dataset(
-            name="noise",
-            shape=(0, args.n_bins),
-            maxshape=(None, args.n_bins),
-            dtype=np.float32,
-        )
-        f.create_dataset(
-            name="theta",
-            shape=(0, args.n_parameters),
-            maxshape=(None, args.n_parameters),
-            dtype=np.float32,
-        )
-        f.create_dataset(
-            name="flux",
-            shape=(0, args.n_bins),
-            maxshape=(None, args.n_bins),
-            dtype=np.float32,
-        )
-    print("Done!\n", flush=True)
+    # Merge the HDF files
+    print("Merging HDF files:", flush=True)
+    merge_hdf_files(
+        target_dir=target_dir,
+        name_pattern=args.name_pattern,
+        output_file_path=output_file_path,
+        singleton_keys=("wlen", ),
+        delete_after_merge=args.delete_after_merge,
+        show_progressbar=True,
+    )
 
-    # Keep track of the number of spectra we discard due to NaNs
-    n_dropped = 0
-
-    # Open output HDF file
-    with h5py.File(dst_file_path, "a") as dst:
-
-        # Loop over source HDF files and append data to output HDF file
-        # This should be a lot more memory efficient than loading all data
-        # into memory at once, and then writing it to the output HDF file.
-        print("Collecting HDF files:", flush=True)
-        for src_file_path in tqdm(file_list, ncols=80):
-            with h5py.File(src_file_path, "r") as src:
-
-                # Load data from source HDF file
-                theta = np.array(src["theta"])
-                flux = np.array(src["flux"])
-                if "noise" in src.keys():
-                    noise = np.array(src["noise"])
-
-                # Only keep files with at least one spectrum
-                if len(theta) == 0:
-                    continue
-
-                # Exclude spectra with NaNs
-                mask = np.isnan(flux).any(axis=1)
-                noise = noise[~mask]
-                theta = theta[~mask]
-                flux = flux[~mask]
-                n = (~mask).sum()
-                n_dropped += mask.sum()
-
-                # Resize datasets in output HDF file
-                dst["theta"].resize(dst["theta"].shape[0] + n, axis=0)
-                dst["flux"].resize(dst["flux"].shape[0] + n, axis=0)
-                if "noise" in src.keys():
-                    dst["noise"].resize(dst["noise"].shape[0] + n, axis=0)
-
-                # Write data to output HDF file
-                dst["theta"][-n:] = theta
-                dst["flux"][-n:] = flux
-                if "noise" in src.keys():
-                    dst["noise"][-n:] = noise
-
-                # Copy over wavelengths
-                if "wlen" not in dst:
-                    dst.create_dataset(
-                        name="wlen",
-                        data=src["wlen"][...],
-                        dtype=np.float32,
-                    )
-
-            # Drop noise dataset if its empty
-            if "noise" in dst.keys() and len(dst["noise"]) == 0:
-                del dst["noise"]
-
-        # Get total number of spectra
-        n_spectra = dst["theta"].shape[0]
-
-    # Print some information about the data
-    print()
-    print(f"Total number of spectra: {n_spectra:,}", flush=True)
-    print(f"Excluded due to NaNs:    {n_dropped:,}", flush=True)
+    # Print total number of spectra after merging
+    with h5py.File(output_file_path, "r") as f:
+        n_spectra = f["flux"].shape[0]
+    print(f"\nTotal number of spectra after merging: {n_spectra:,}")
 
     print(f"\nThis took {time.time() - script_start:.1f} seconds.\n")
