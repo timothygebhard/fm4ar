@@ -8,6 +8,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
+from shutil import copyfile
 
 import numpy as np
 from p_tqdm import p_map
@@ -172,6 +173,12 @@ if __name__ == "__main__":
     dir_name = f"{file_stem}__{file_index}"
     output_dir = args.experiment_dir / "importance_sampling" / dir_name
     output_dir.mkdir(exist_ok=True, parents=True)
+
+    # Backup the config file for importance sampling
+    copyfile(
+        src=args.experiment_dir / "importance_sampling.yaml",
+        dst=output_dir / "importance_sampling.yaml",
+    )
 
     # -------------------------------------------------------------------------
     # If --start-submission: Create DAG file, launch job, and exit
