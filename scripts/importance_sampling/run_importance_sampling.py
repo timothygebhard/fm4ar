@@ -107,12 +107,15 @@ def prepare_and_launch_dag(
     dag = DAGManFile()
 
     # Add jobs for the different stages of the importance sampling workflow
-    for stage, depends_on in [
-        ("draw_proposal_samples", None),
-        ("merge_proposal_samples", ["draw_proposal_samples"]),
-        ("simulate_spectra", ["merge_proposal_samples"]),
-        ("merge_simulation_results", ["simulate_spectra"]),
-    ]:
+    for i, (stage, depends_on) in enumerate(
+        [
+            ("draw_proposal_samples", None),
+            ("merge_proposal_samples", ["draw_proposal_samples"]),
+            ("simulate_spectra", ["merge_proposal_samples"]),
+            ("merge_simulation_results", ["simulate_spectra"]),
+        ],
+        start=1,
+    ):
 
         # Collect HTCondorSettings for the stage
         condor_settings: HTCondorConfig = getattr(config, stage).htcondor
@@ -135,7 +138,7 @@ def prepare_and_launch_dag(
         file_path = create_submission_file(
             condor_settings=condor_settings,
             experiment_dir=output_dir,
-            file_name=f"{stage}.sub",
+            file_name=f"{i}__{stage}.sub",
         )
 
         # Add the job to the DAGMan file
@@ -147,7 +150,7 @@ def prepare_and_launch_dag(
         )
 
     # Save the DAGMan file
-    file_path = output_dir / "importance_sampling.dag"
+    file_path = output_dir / "0__importance_sampling.dag"
     dag.save(file_path=file_path)
 
     # Submit the DAGMan file to HTCondor
