@@ -89,6 +89,7 @@ def test__draw_proposal_samples__npe(
     args = Namespace(
         experiment_dir=experiment_dir,
         job=0,
+        n_jobs=1,
         stage=None,
         target_index=0,
     )
@@ -104,8 +105,7 @@ def test__draw_proposal_samples__npe(
     # Basic sanity checks
     assert theta.shape == (n_samples, dim_theta)
     assert probs.shape == (n_samples,)
-    assert np.all(probs >= 0)
-    assert np.all(probs <= 1)
+    assert np.all(probs >= 0)  # note: those are densities, not probabilities
 
 
 def test__draw_proposal_samples__unconditional_flow(
@@ -157,6 +157,7 @@ def test__draw_proposal_samples__unconditional_flow(
     args = Namespace(
         experiment_dir=experiment_dir,
         job=0,
+        n_jobs=1,
         stage=None,
         target_index=0,
     )
@@ -172,5 +173,4 @@ def test__draw_proposal_samples__unconditional_flow(
     # Basic sanity checks
     assert theta.shape == (n_samples, dim_theta)
     assert probs.shape == (n_samples,)
-    assert np.all(probs >= 0)
-    assert np.all(probs <= 1)
+    assert np.all(probs >= 0)  # note: those are densities, not probabilities
