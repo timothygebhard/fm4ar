@@ -42,8 +42,10 @@ def test__merge_hdf_file(tmp_path: Path) -> None:
     # Create HDF5 files
     file1 = tmp_path / "file1.hdf"
     file2 = tmp_path / "file2.hdf"
+    file3 = tmp_path / "file3.hdf"
     save_to_hdf(file_path=file1, a1=np.array([1, 2]), a2=np.array([3., 4.]))
     save_to_hdf(file_path=file2, a1=np.array([5, 6]), a2=np.array([3., 4.]))
+    save_to_hdf(file_path=file3, a1=np.array([]), a2=np.array([]))
 
     # Merge HDF5 files
     output_file = tmp_path / "merged.hdf"

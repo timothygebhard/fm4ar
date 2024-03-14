@@ -130,7 +130,13 @@ def merge_hdf_files(
             h5py.File(output_file_path, "a") as dst
         ):
             for key in keys_shapes_dtypes.keys():
+
+                # Empty arrays cause problems, so we skip them
                 value = np.array(src[key], dtype=src[key].dtype)
+                if len(value) == 0:
+                    continue
+
+                # Otherwise, we can concatenate the arrays
                 dst[key].resize(dst[key].shape[0] + value.shape[0], axis=0)
                 dst[key][-value.shape[0]:] = value
 
