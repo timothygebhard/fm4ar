@@ -323,8 +323,15 @@ if __name__ == "__main__":
         prior_values = np.array(prior_values).flatten()
 
         # Drop everything that has a prior of 0 (i.e., is outside the bounds),
-        # or where the simulation failed (i.e., the spectrum contains NaNs)
-        mask = np.logical_and(prior_values > 0, ~np.isnan(flux).any(axis=1))
+        # or where we have NaNs anywhere
+        mask = np.logical_and.reduce(
+            (
+                prior_values > 0,
+                ~np.isnan(flux).any(axis=1),
+                ~np.isnan(likelihoods),
+                ~np.isnan(prior_values),
+            )
+        )
         theta = theta[mask]
         probs = probs[mask]
         flux = flux[mask]
