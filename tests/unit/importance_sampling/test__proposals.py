@@ -100,12 +100,11 @@ def test__draw_proposal_samples__npe(
     n_samples = is_config.draw_proposal_samples.n_samples
 
     # Draw proposal samples
-    theta, probs = draw_proposal_samples(args=args, config=is_config)
+    theta, log_probs = draw_proposal_samples(args=args, config=is_config)
 
     # Basic sanity checks
     assert theta.shape == (n_samples, dim_theta)
-    assert probs.shape == (n_samples,)
-    assert np.all(probs >= 0)  # note: those are densities, not probabilities
+    assert log_probs.shape == (n_samples,)
 
 
 def test__draw_proposal_samples__unconditional_flow(
@@ -168,9 +167,8 @@ def test__draw_proposal_samples__unconditional_flow(
     n_samples = is_config.draw_proposal_samples.n_samples
 
     # Draw proposal samples
-    theta, probs = draw_proposal_samples(args=args, config=is_config)
+    theta, log_probs = draw_proposal_samples(args=args, config=is_config)
 
     # Basic sanity checks
     assert theta.shape == (n_samples, dim_theta)
-    assert probs.shape == (n_samples,)
-    assert np.all(probs >= 0)  # note: those are densities, not probabilities
+    assert log_probs.shape == (n_samples,)

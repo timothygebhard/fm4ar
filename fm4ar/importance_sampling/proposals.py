@@ -67,7 +67,7 @@ def draw_proposal_samples(
         context["error_bars"] = sigma * torch.ones(n_bins).float()
 
         print("Running for ML model (FMPE / NPE)!\n")
-        theta, probs = draw_samples_from_ml_model(
+        theta, log_probs = draw_samples_from_ml_model(
             context=context,
             experiment_dir=args.experiment_dir,
             n_samples=n_for_job,
@@ -80,7 +80,7 @@ def draw_proposal_samples(
     elif model_type == "unconditional_flow":
 
         print("Running for unconditional flow model!\n")
-        theta, probs = draw_samples_from_unconditional_flow(
+        theta, log_probs = draw_samples_from_unconditional_flow(
             experiment_dir=args.experiment_dir,
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
@@ -90,7 +90,7 @@ def draw_proposal_samples(
     else:  # pragma: no cover
         raise ValueError(f"Unknown model type: {model_type}!")
 
-    return theta, probs
+    return theta, log_probs
 
 
 def draw_samples_from_ml_model(
@@ -150,7 +150,7 @@ def draw_samples_from_ml_model(
     # Draw samples from the model posterior ("proposal distribution")
     print("Drawing samples from the model posterior:", flush=True)
     theta_chunks = []
-    probs_chunks = []
+    log_probs_chunks = []
     with torch.no_grad():
         for n in tqdm(chunk_sizes, ncols=80):
 
@@ -169,17 +169,17 @@ def draw_samples_from_ml_model(
 
             # Inverse-transform the samples and convert the log-probabilities
             theta_chunk = theta_scaler.inverse_tensor(theta_chunk.cpu())
-            probs_chunk = torch.exp(log_probs_chunk.cpu())
-            theta_chunks.append(theta_chunk.cpu())
-            probs_chunks.append(probs_chunk.cpu())
+            log_probs_chunk = log_probs_chunk.cpu()
+            theta_chunks.append(theta_chunk)
+            log_probs_chunks.append(log_probs_chunk)
 
     print(flush=True)
 
     # Combine all chunks into a single array
     theta = torch.cat(theta_chunks, dim=0).numpy()
-    probs = torch.cat(probs_chunks, dim=0).numpy().flatten()
+    log_probs = torch.cat(log_probs_chunks, dim=0).numpy().flatten()
 
-    return theta, probs
+    return theta, log_probs
 
 
 def draw_samples_from_unconditional_flow(
@@ -242,23 +242,23 @@ def draw_samples_from_unconditional_flow(
     # Draw samples from the unconditional flow model
     print("Drawing samples from unconditional flow:", flush=True)
     theta_chunks = []
-    probs_chunks = []
+    log_probs_chunks = []
     with torch.no_grad():
 
         # Draw samples in chunks and inverse-transform them
         for n in tqdm(chunk_sizes, ncols=80):
-            theta_chunk, logprob_chunk = model.sample_and_log_prob(
+            theta_chunk, log_prob_chunk = model.sample_and_log_prob(
                 num_samples=n,
             )
             theta_chunk = theta_scaler.inverse_tensor(theta_chunk.cpu())
-            probs_chunk = torch.exp(logprob_chunk).cpu()
+            log_probs_chunk = log_prob_chunk.cpu()
             theta_chunks.append(theta_chunk)
-            probs_chunks.append(probs_chunk)
+            log_probs_chunks.append(log_probs_chunk)
 
         # Combine all chunks into a single array
         theta = torch.cat(theta_chunks, dim=0).numpy()
-        probs = torch.cat(probs_chunks, dim=0).numpy().flatten()
+        log_probs = torch.cat(log_probs_chunks, dim=0).numpy().flatten()
 
     print("Done!\n")
 
-    return theta, probs
+    return theta, log_probs

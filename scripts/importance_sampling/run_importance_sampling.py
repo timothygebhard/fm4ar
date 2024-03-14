@@ -202,13 +202,13 @@ if __name__ == "__main__":
         print(80 * "-" + "\n", flush=True)
 
         # Draw samples (this comes with its own progress bar)
-        theta, probs = draw_proposal_samples(args=args, config=config)
+        theta, log_probs = draw_proposal_samples(args=args, config=config)
 
         print("\nSaving results to HDF...", end=" ", flush=True)
         save_to_hdf(
             file_path=output_dir / f"proposal-samples-{args.job:04d}.hdf",
             theta=theta,
-            probs=probs,
+            log_probs=log_probs,
         )
         print("Done!\n\n")
 
@@ -227,7 +227,7 @@ if __name__ == "__main__":
             target_dir=output_dir,
             name_pattern="proposal-samples-*.hdf",
             output_file_path=output_dir / "proposal-samples.hdf",
-            keys=["theta", "probs"],
+            keys=["theta", "log_probs"],
             singleton_keys=[],
             delete_after_merge=True,
             show_progressbar=True,
@@ -259,11 +259,11 @@ if __name__ == "__main__":
         # Load the theta samples and probabilities and unpack them
         proposal_samples = load_from_hdf(
             file_path=output_dir / "proposal-samples.hdf",
-            keys=["theta", "probs"],
+            keys=["theta", "log_probs"],
             idx=idx,
         )
         theta = proposal_samples["theta"]
-        probs = proposal_samples["probs"]
+        log_probs = proposal_samples["log_probs"]
 
         # Load the target spectrum
         target = load_target_spectrum(
@@ -288,27 +288,33 @@ if __name__ == "__main__":
             theta_i: np.ndarray,
         ) -> tuple[np.ndarray, float, float]:
             """
-            Returns the flux, the likelihood, and the prior values
-            for the given `theta_i`.
+            Returns the flux, the log-likelihood, and the log-prior
+            values for the given `theta_i`.
             """
 
             # Evaluate the prior at theta_i
-            # If the prior is 0, we can skip the rest (weight will be 0)
-            if (prior_value := prior.evaluate(theta_i)) == 0:
-                return np.full(n_bins, np.nan), 0.0, 0.0
+            # If the prior is 0, we can skip the rest of the computation
+            # because the weight will be 0 anyway. Otherwise, we compute
+            # the log-prior value.
+            if (prior_value := prior.evaluate(theta_i)) <= 0:
+                return np.full(n_bins, np.nan), np.nan, np.nan
+            log_prior_value = np.log(prior_value)
 
             # Simulate the spectrum that belongs to theta_i
-            # If the simulation fails, we simply set the weight to 0.
+            # If the simulation fails, we return NaNs so that we know that
+            # we need to discard this sample
             result = simulator(theta_i)
             if result is None:
-                return np.full(n_bins, np.nan), 0.0, 0.0
+                return np.full(n_bins, np.nan), np.nan, np.nan
             else:
-                _, x_i = result
+                _, flux = result
 
-            # Compute the likelihood
-            likelihood = likelihood_distribution.pdf(x_i)
+            # Compute the log-likelihood
+            # We use the log-likelihood to avoid numerical issues, because
+            # the likelihood can take on values on the order of 10^-1000
+            log_likelihood = likelihood_distribution.logpdf(flux)
 
-            return x_i, likelihood, prior_value
+            return flux, log_likelihood, log_prior_value
 
         # Compute spectra, likelihoods and prior values in parallel
         print("Simulating spectra (in parallel):", flush=True)
@@ -317,26 +323,24 @@ if __name__ == "__main__":
         print()
 
         # Unpack the results from the parallel map and convert to arrays
-        flux, likelihoods, prior_values = zip(*results, strict=True)
+        flux, log_likelihoods, log_prior_values = zip(*results, strict=True)
         flux = np.array(flux)
-        likelihoods = np.array(likelihoods).flatten()
-        prior_values = np.array(prior_values).flatten()
+        log_likelihoods = np.array(log_likelihoods).flatten()
+        log_priors_values = np.array(log_prior_values).flatten()
 
-        # Drop everything that has a prior of 0 (i.e., is outside the bounds),
-        # or where we have NaNs anywhere
+        # Drop anything with NaNs (e.g., failed simulation, prior = 0, ...)
         mask = np.logical_and.reduce(
             (
-                prior_values > 0,
                 ~np.isnan(flux).any(axis=1),
-                ~np.isnan(likelihoods),
-                ~np.isnan(prior_values),
+                ~np.isnan(log_likelihoods),
+                ~np.isnan(log_prior_values),
             )
         )
         theta = theta[mask]
-        probs = probs[mask]
+        log_probs = log_probs[mask]
         flux = flux[mask]
-        likelihoods = likelihoods[mask]
-        prior_values = prior_values[mask]
+        log_likelihoods = log_likelihoods[mask]
+        log_prior_values = log_prior_values[mask]
         n = len(theta)
         print(f"Dropped {np.sum(~mask):,} invalid samples!")
         print(f"Remaining samples: {n:,} ({100 * n / len(mask):.2f}%)\n")
@@ -347,10 +351,10 @@ if __name__ == "__main__":
         save_to_hdf(
             file_path=output_dir / file_name,
             theta=theta.astype(np.float32),
-            probs=probs.astype(np.float64),
+            log_probs=log_probs.astype(np.float64),
             flux=flux.astype(np.float32),
-            likelihoods=likelihoods.astype(np.float64),
-            prior_values=prior_values.astype(np.float32),
+            log_likelihoods=log_likelihoods.astype(np.float64),
+            log_prior_values=log_prior_values.astype(np.float64),
         )
         print("Done!\n\n")
 
@@ -369,7 +373,13 @@ if __name__ == "__main__":
         merge_hdf_files(
             target_dir=output_dir, name_pattern="simulations-*.hdf",
             output_file_path=output_dir / "simulations.hdf",
-            keys=["theta", "probs", "flux", "likelihoods", "prior_values"],
+            keys=[
+                "flux",
+                "log_likelihoods",
+                "log_prior_values",
+                "log_probs",
+                "theta",
+            ],
             singleton_keys=[],
             delete_after_merge=True,
             show_progressbar=True,
@@ -380,18 +390,24 @@ if __name__ == "__main__":
         print("Loading merged results...", end=" ", flush=True)
         merged = load_from_hdf(
             file_path=output_dir / "simulations.hdf",
-            keys=["theta", "probs", "flux", "likelihoods", "prior_values"],
+            keys=[
+                "flux",
+                "log_probs",
+                "log_likelihoods",
+                "log_prior_values",
+                "theta",
+            ],
         )
         print("Done!")
 
         # Compute the importance sampling weights
         print("Computing importance sampling weights...", end=" ", flush=True)
-        raw_weights, weights = compute_is_weights(
-            likelihoods=merged["likelihoods"],
-            prior_values=merged["prior_values"],
-            probs=merged["probs"],
+        raw_log_weights, weights = compute_is_weights(
+            log_likelihoods=merged["log_likelihoods"],
+            log_prior_values=merged["log_prior_values"],
+            log_probs=merged["log_probs"],
         )
-        merged["raw_weights"] = raw_weights.astype(np.float64)
+        merged["raw_log_weights"] = raw_log_weights.astype(np.float64)
         merged["weights"] = weights.astype(np.float64)
         print("Done!\n")
 

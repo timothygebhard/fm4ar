@@ -2,47 +2,55 @@
 Utility functions for importance sampling.
 """
 
-from warnings import warn
-
 import numpy as np
+from scipy.special import logsumexp
 
 
 def compute_is_weights(
-    likelihoods: np.ndarray,
-    prior_values: np.ndarray,
-    probs: np.ndarray,
+    log_likelihoods: np.ndarray,
+    log_prior_values: np.ndarray,
+    log_probs: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute the importance sampling weights.
 
     Args:
-        likelihoods: Likelihood values.
-        prior_values: Prior values.
-        probs: Probabilities under the proposal distribution.
+        log_likelihoods: Log-likelihood values.
+        log_prior_values: Log-prior values.
+        log_probs: Log-probabilities under the proposal distribution.
 
     Returns:
-        raw_weights: Raw importance sampling weights.
+        raw_log_weights: Raw log-weights (without normalization).
         normalized_weights: Normalized importance sampling weights.
     """
 
-    # Compute the raw weights
-    raw_weights = likelihoods * prior_values / probs
+    # Compute the raw log-weights
+    # In "normal" space, the raw importance sampling weights are given by:
+    #   w_i = L_i * p_i / q_i ,
+    # where L_i is the likelihood, p_i is the prior, and q_i is the proposal.
+    # However, L_i is usually very small, so we use the log-weights instead.
+    raw_log_weights = log_likelihoods + log_prior_values - log_probs
 
-    # In case any weights are NaN of Inf, set them to 0
-    raw_weights = np.nan_to_num(raw_weights, nan=0.0, posinf=0.0, neginf=0.0)
+    # Normalize the weights
+    # In "normal" space, we normalize the raw weights such that they sum to
+    # the number of samples, that is:
+    #   n_i = w_i * N / sum(w_i) ,
+    # where N is the number of samples. We now only have access to the log-
+    # weights log(w_i), so we use the following equivalent expression:
+    #   n_i = exp{ log(N) + log(w_i) - LSE(log(w_i)) } ,
+    # where the LSE is the log-sum-exp function:
+    #   LSE(x_i)) = log{ sum(exp(x_i)) } .
+    # Using the log-sum-exp trick, we can compute the LSE in a numerically
+    # stable way. This allows to compute the normalized weights without
+    # ever needing access to the (raw) likelihoods, priors, or proposals.
+    # For more details about the log-sum-exp trick, see, e.g.,:
+    # https://gregorygundersen.com/blog/2020/02/09/log-sum-exp/
+    N = len(raw_log_weights)
+    normalized_weights = np.exp(
+        np.log(N) + raw_log_weights - logsumexp(raw_log_weights)
+    )
 
-    # Normalize the weights such that they sum to the number of samples.
-    # If the sum of the raw weights is zero, issue a warning and set the
-    # normalized weights to a uniform distribution.
-    if np.sum(raw_weights) == 0:
-        warn(UserWarning("All raw_weights are zero!"))
-        normalized_weights = np.ones_like(raw_weights) / len(raw_weights)
-    else:
-        normalized_weights = (  # fmt: off
-            raw_weights * len(raw_weights) / np.sum(raw_weights)
-        )  # fmt: on
-
-    return raw_weights, normalized_weights
+    return raw_log_weights, normalized_weights
 
 
 def compute_effective_sample_size(
@@ -52,7 +60,7 @@ def compute_effective_sample_size(
     Compute the effective sample size.
 
     Args:
-        weights: Importance sampling weights.
+        weights: (Normalized) importance sampling weights.
 
     Returns:
         n_eff: Effective sample size.
