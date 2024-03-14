@@ -85,7 +85,7 @@ class Prior(BasePrior):
 
         # Store names and labels for the parameters
         self.names = NAMES
-        self.labels = np.array(LABELS)
+        self.labels = LABELS
 
         # Store prior bounds as arrays
         self.lower = np.array(LOWER)
