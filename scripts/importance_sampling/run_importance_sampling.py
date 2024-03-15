@@ -326,7 +326,7 @@ if __name__ == "__main__":
         flux, log_likelihoods, log_prior_values = zip(*results, strict=True)
         flux = np.array(flux)
         log_likelihoods = np.array(log_likelihoods).flatten()
-        log_priors_values = np.array(log_prior_values).flatten()
+        log_prior_values = np.array(log_prior_values).flatten()
 
         # Drop anything with NaNs (e.g., failed simulation, prior = 0, ...)
         mask = np.logical_and.reduce(
