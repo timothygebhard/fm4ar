@@ -41,11 +41,11 @@ def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
         # we can load using the `load_posterior()` convenience function) and
         # samples from FMPE or NPE (which we can load using `h5py`).
         if input_file.file_type == "ns":
-            experiment_dir = file_path.parent
+            experiment_dir = input_file.file_path.parent
             samples, _ = load_posterior(experiment_dir=experiment_dir)
             samples = samples[:input_file.n_samples]
         elif input_file.file_type == "ml":
-            with h5py.File(file_path, "r") as f:
+            with h5py.File(input_file.file_path, "r") as f:
                 samples = np.array(f["theta"][:input_file.n_samples])
         else:
             raise ValueError(f"Unknown file type: {input_file.file_type}!")
