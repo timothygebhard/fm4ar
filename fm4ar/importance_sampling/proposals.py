@@ -81,6 +81,7 @@ def draw_proposal_samples(
         theta, log_probs = draw_samples_from_ml_model(
             context=context,
             experiment_dir=args.experiment_dir,
+            checkpoint_file_name=config.checkpoint_file_name,
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
             model_kwargs=config.model_kwargs,
@@ -108,7 +109,7 @@ def draw_samples_from_ml_model(
     context: dict[str, torch.Tensor],
     n_samples: int,
     experiment_dir: Path,
-    checkpoint_name: str = "model__best.pt",
+    checkpoint_file_name: str,
     chunk_size: int = 1024,
     model_kwargs: dict[str, Any] | None = None,
     random_seed: int = 42,
@@ -123,8 +124,7 @@ def draw_samples_from_ml_model(
         n_samples: Number of samples to draw from the model.
         experiment_dir: Path to the experiment directory that holds the
             trained model.
-        checkpoint_name: Name of the checkpoint file to load. Defaults
-            to "model__best.pt".
+        checkpoint_file_name: Name of the checkpoint file to load.
         chunk_size: Size of the "chunks" for drawing samples (i.e., the
             number of samples drawn at once). This is used to avoid
             running out of GPU memory.
@@ -143,8 +143,11 @@ def draw_samples_from_ml_model(
 
     # Load the trained model
     print("Loading trained model...", end=" ")
-    file_path = experiment_dir / checkpoint_name
-    model = build_model(file_path=file_path, device=device)
+    model = build_model(
+        experiment_dir=experiment_dir,
+        file_path=experiment_dir / checkpoint_file_name,
+        device=device,
+    )
     model.network.eval()
     print("Done!")
 
