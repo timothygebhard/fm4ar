@@ -178,7 +178,7 @@ if __name__ == "__main__":
 
                 theta = batch[0].to(device, non_blocking=True)
                 optimizer.zero_grad()
-                loss = -model.log_prob(theta=theta)
+                loss = -model.log_prob(theta=theta).mean()
 
                 if ~(torch.isnan(loss) | torch.isinf(loss)):
                     loss.backward()  # type: ignore
@@ -211,7 +211,7 @@ if __name__ == "__main__":
             for batch in progressbar:
 
                 theta = batch[0].to(device, non_blocking=True)
-                loss = -model.log_prob(theta=theta)
+                loss = -model.log_prob(theta=theta).mean()
 
                 if ~(torch.isnan(loss) | torch.isinf(loss)):
                     test_losses.append(loss.item())
