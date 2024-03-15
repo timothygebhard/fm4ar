@@ -49,22 +49,33 @@ def draw_proposal_samples(
     # Draw samples either from an FMPE / NPE model...
     if model_type in ["fmpe", "npe"]:
 
-        # Construct the context for the model from the target spectrum
-        context = {
-            k: torch.from_numpy(v).float() for k, v in
-            load_target_spectrum(
-                file_path=config.target_spectrum.file_path,
-                index=(
-                    args.target_index if args.target_index is not None
-                    else config.target_spectrum.index
-                ),
-            ).items()
-        }
+        # Load the target spectrum
+        target_spectrum = load_target_spectrum(
+            file_path=config.target_spectrum.file_path,
+            index=(
+                args.target_index if args.target_index is not None
+                else config.target_spectrum.index
+            ),
+        )
 
-        # Add the error bars to the context
-        n_bins = context["flux"].shape[0]
+        # Define shortcuts
+        n_bins = target_spectrum["flux"].shape[0]
         sigma = config.likelihood.sigma
-        context["error_bars"] = sigma * torch.ones(n_bins).float()
+
+        # Construct the context for the model from the target spectrum and
+        # add the error bars based on the assumed likelihood function
+        # TODO: We should think about a more general way to handle this!
+        context = {
+            k: torch.from_numpy(v).float().reshape(1, -1) for k, v in
+            target_spectrum.items()
+        }
+        context["error_bars"] = sigma * torch.ones(1, n_bins).float()
+
+        # Double-check that all keys are present and have the correct shape
+        if not all(k in context for k in ["wlen", "flux", "error_bars"]):
+            raise ValueError("`context` is missing a mandatory key!")
+        if not all(v.shape == (1, n_bins) for v in context.values()):
+            raise ValueError("`context` entry has the wrong shape!")
 
         print("Running for ML model (FMPE / NPE)!\n")
         theta, log_probs = draw_samples_from_ml_model(
@@ -161,17 +172,15 @@ def draw_samples_from_ml_model(
                 for k, v in context.items()
             }
 
-            # Draw samples from the model
+            # Draw samples and corresponding log-probs from the model
             theta_chunk, log_probs_chunk = model.sample_and_log_prob_batch(
                 context=chunk_context,
                 **model_kwargs,
             )
 
-            # Inverse-transform the samples and convert the log-probabilities
-            theta_chunk = theta_scaler.inverse_tensor(theta_chunk.cpu())
-            log_probs_chunk = log_probs_chunk.cpu()
-            theta_chunks.append(theta_chunk)
-            log_probs_chunks.append(log_probs_chunk)
+            # Inverse-transform the theta samples and store the chunks
+            theta_chunks.append(theta_scaler.inverse_tensor(theta_chunk.cpu()))
+            log_probs_chunks.append(log_probs_chunk.cpu())
 
     print(flush=True)
 
@@ -248,12 +257,11 @@ def draw_samples_from_unconditional_flow(
         # Draw samples in chunks and inverse-transform them
         for n in tqdm(chunk_sizes, ncols=80):
             theta_chunk, log_prob_chunk = model.sample_and_log_prob(
+                context=None,
                 num_samples=n,
             )
-            theta_chunk = theta_scaler.inverse_tensor(theta_chunk.cpu())
-            log_probs_chunk = log_prob_chunk.cpu()
-            theta_chunks.append(theta_chunk)
-            log_probs_chunks.append(log_probs_chunk)
+            theta_chunks.append(theta_scaler.inverse_tensor(theta_chunk.cpu()))
+            log_probs_chunks.append(log_prob_chunk.cpu())
 
         # Combine all chunks into a single array
         theta = torch.cat(theta_chunks, dim=0).numpy()
