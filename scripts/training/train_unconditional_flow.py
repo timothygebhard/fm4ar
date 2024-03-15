@@ -35,7 +35,7 @@ def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
 
     for input_file in input_files:
 
-        print(f"Loading samples from {input_file.file_path}...", end=" ")
+        print(f"Loading samples from {input_file.file_path.name}...", end=" ")
 
         # We need to distinguish between samples from nested sampling (which
         # we can load using the `load_posterior()` convenience function) and
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     print("Creating the unconditional flow...", end=" ", flush=True)
     model = create_unconditional_flow_wrapper(
         dim_theta=samples.shape[1],
-        flow_wrapper_config=config.flow_wrapper,
+        flow_wrapper_config=config.model.flow_wrapper,
     )
     model.to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
