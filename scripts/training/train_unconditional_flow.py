@@ -159,7 +159,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
 
     print("Running training:\n")
-    for epoch in range(args.epochs):
+    for epoch in range(config.training["epochs"]):
 
         # ---------------------------------------------------------------------
         # Train the model
