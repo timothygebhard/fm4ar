@@ -8,7 +8,7 @@ from pathlib import Path
 from subprocess import run
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class HTCondorConfig(BaseModel):
@@ -31,7 +31,7 @@ class HTCondorConfig(BaseModel):
     n_cpus: int = Field(
         default=1,
         ge=1,
-        alias="num_cpus",
+        validation_alias=AliasChoices("n_cpus", "num_cpus"),
         description="Number of CPUs to request for the job.",
     )
     memory_cpus: int = Field(
@@ -42,7 +42,7 @@ class HTCondorConfig(BaseModel):
     n_gpus: int = Field(
         default=0,
         ge=0,
-        alias="num_gpus",
+        validation_alias=AliasChoices("n_gpus", "num_gpus"),
         description="Number of GPUs to request for the job.",
     )
     memory_gpus: int = Field(
