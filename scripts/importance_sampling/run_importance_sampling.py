@@ -118,8 +118,8 @@ def prepare_and_launch_dag(
     ):
 
         # Collect HTCondorSettings for the stage
-        condor_settings: HTCondorConfig = getattr(config, stage).htcondor
-        condor_settings.arguments = [
+        htcondor_config: HTCondorConfig = getattr(config, stage).htcondor
+        htcondor_config.arguments = [
             Path(__file__).resolve().as_posix(),
             f"--experiment-dir {args.experiment_dir}",
             f"--stage {stage}",
@@ -129,23 +129,23 @@ def prepare_and_launch_dag(
         # and the total number of parallel jobs as arguments; if we just take
         # this from the config file, things break down in non-parallel mode
         if stage in ("draw_proposal_samples", "simulate_spectra"):
-            condor_settings.arguments += [
+            htcondor_config.arguments += [
                 "--job $(Process)",
-                f"--n-jobs {condor_settings.queue}",
+                f"--n-jobs {htcondor_config.queue}",
             ]
 
         # Create submission file
         file_path = create_submission_file(
-            condor_settings=condor_settings,
+            htcondor_config=htcondor_config,
             experiment_dir=output_dir,
-            file_name=f"{i}__{stage}.sub",
+            file_name=f"{i}__{stage}.sub"
         )
 
         # Add the job to the DAGMan file
         dag.add_job(
             name=stage,
             file_path=file_path,
-            bid=condor_settings.bid,
+            bid=htcondor_config.bid,
             depends_on=depends_on,
         )
 

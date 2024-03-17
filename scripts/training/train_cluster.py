@@ -54,21 +54,21 @@ if __name__ == "__main__":
         # Combine condor settings from config file with job arguments and the
         # options that are required to automatically restart the job if the
         # runtime limit is reached but the training is not complete yet
-        condor_settings = HTCondorConfig(**config["local"]["condor"])
-        condor_settings.arguments = job_arguments
-        condor_settings.retry_on_exit_code = 42
-        condor_settings.log_file_name = "log.$$([NumJobStarts])"
+        htcondor_config = HTCondorConfig(**config["local"]["htcondor"])
+        htcondor_config.arguments = job_arguments
+        htcondor_config.retry_on_exit_code = 42
+        htcondor_config.log_file_name = "log.$$([NumJobStarts])"
 
         # Create submission file
         print("Creating submission file...", end=" ", flush=True)
         file_path = create_submission_file(
-            condor_settings=condor_settings,
+            htcondor_config=htcondor_config,
             experiment_dir=args.experiment_dir,
         )
         print("Done!\n")
 
         # Submit job to HTCondor cluster and exit
-        condor_submit_bid(bid=condor_settings.bid, file_path=file_path)
+        condor_submit_bid(bid=htcondor_config.bid, file_path=file_path)
         sys.exit(0)
 
     # -------------------------------------------------------------------------
@@ -108,8 +108,8 @@ if __name__ == "__main__":
             complete = train_stages(model=model, dataset=dataset)
 
         # If the training is complete, we can end the job. Otherwise, we exit
-        # with code 42 (see CondorSettings above), which will cause the job to
-        # be put on hold and retried automatically.
+        # with code 42 (see `HTCondorConfig` above), which will cause the job
+        # to be put on hold and retried automatically.
         if complete:
             print("Training complete! Ending job.\n")
             sys.exit(0)

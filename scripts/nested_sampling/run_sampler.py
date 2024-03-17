@@ -23,7 +23,6 @@ from fm4ar.priors import get_prior
 from fm4ar.simulators import get_simulator
 from fm4ar.utils.git_utils import document_git_status
 from fm4ar.utils.htcondor import (
-    HTCondorConfig,
     check_if_on_login_node,
     condor_submit_bid,
     create_submission_file,
@@ -95,23 +94,24 @@ if __name__ == "__main__":
     if args.start_submission:
 
         print("Creating submission file...", end=" ", flush=True)
-        condor_settings = HTCondorConfig(
-            executable=executable,
-            num_cpus=config.htcondor.n_cpus,
-            memory_cpus=config.htcondor.memory_cpus,
-            arguments=job_arguments,
-            retry_on_exit_code=42,
-            log_file_name="log.$$([NumJobStarts])",
-            extra_kwargs=(
-                {}
-                if config.sampler.library != "multinest"
-                else {"transfer_executable": "False"}
-            ),
+
+        # Augment the HTCondor configuration
+        htcondor_config = config.htcondor
+        htcondor_config.executable = executable
+        htcondor_config.arguments = job_arguments
+        htcondor_config.retry_on_exit_code = 42
+        htcondor_config.log_file_name = "log.$$([NumJobStarts])"
+        htcondor_config.extra_kwargs = (
+            {} if config.sampler.library != "multinest"
+            else {"transfer_executable": "False"}
         )
+
+        # Create submission file
         file_path = create_submission_file(
-            condor_settings=condor_settings,
-            experiment_dir=args.experiment_dir.resolve(),
+            htcondor_config=htcondor_config,
+            experiment_dir=args.experiment_dir.resolve()
         )
+
         print("Done!\n", flush=True)
 
         logs_dir = args.experiment_dir / "logs"

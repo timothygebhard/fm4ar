@@ -300,10 +300,9 @@ def prepare_submission_file_and_launch_job(args: argparse.Namespace) -> None:
 
     # Create submission file and submit job
     file_path = create_submission_file(
-        condor_settings=condor_settings,
-        experiment_dir=args.experiment_dir,
-        file_name=f"evaluate_on_{args.which}.sub",
-    )
+        htcondor_config=condor_settings, experiment_dir=args.experiment_dir,
+        file_name=f"evaluate_on_{args.which}.sub"
+        )
 
     print("Done!\n")
 

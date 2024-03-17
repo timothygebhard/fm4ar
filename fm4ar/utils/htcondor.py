@@ -229,7 +229,7 @@ def condor_submit_dag(
 
 
 def create_submission_file(
-    condor_settings: HTCondorConfig,
+    htcondor_config: HTCondorConfig,
     experiment_dir: Path,
     file_name: str = "run.sub",
 ) -> Path:
@@ -237,7 +237,7 @@ def create_submission_file(
     Create a new submission file for HTCondor.
 
     Args:
-        condor_settings: A `CondorSettings` object containing the
+        htcondor_config: A `HTConcodorConfig` object containing the
             settings for the HTCondor job.
         experiment_dir: Path to the experiment directory where the
             submission file will be created.
@@ -259,24 +259,24 @@ def create_submission_file(
     lines = []
 
     # Executable and environment variables
-    lines.append(f"executable = {condor_settings.executable}\n")
-    lines.append(f"getenv = {condor_settings.getenv}\n\n")
+    lines.append(f"executable = {htcondor_config.executable}\n")
+    lines.append(f"getenv = {htcondor_config.getenv}\n\n")
 
     # CPUs and memory requirements
-    lines.append(f"request_cpus = {condor_settings.n_cpus}\n")
-    lines.append(f"request_memory = {condor_settings.memory_cpus}\n")
+    lines.append(f"request_cpus = {htcondor_config.n_cpus}\n")
+    lines.append(f"request_memory = {htcondor_config.memory_cpus}\n")
 
     # Set GPU requirements (only add this section if GPUs are requested)
-    if condor_settings.n_gpus > 0:
+    if htcondor_config.n_gpus > 0:
 
         # Request the desired number of GPUs
-        lines.append(f"request_gpus = {condor_settings.n_gpus}\n")
+        lines.append(f"request_gpus = {htcondor_config.n_gpus}\n")
 
         # Construct other requirements: GPU memory and / or type
         requirements = []
-        if (memory_gpus := condor_settings.memory_gpus) > 0:
+        if (memory_gpus := htcondor_config.memory_gpus) > 0:
             requirements.append(f"TARGET.CUDAGlobalMemoryMb > {memory_gpus}")
-        if (gpu_type := condor_settings.gpu_type) is not None:
+        if (gpu_type := htcondor_config.gpu_type) is not None:
             cuda_capability = get_cuda_capability(gpu_type)
             requirements.append(f"TARGET.CUDACapability == {cuda_capability}")
 
@@ -285,20 +285,20 @@ def create_submission_file(
 
     # Set the arguments
     arguments = (
-        " ".join(condor_settings.arguments)
-        if isinstance(condor_settings.arguments, list)
-        else condor_settings.arguments
+        " ".join(htcondor_config.arguments)
+        if isinstance(htcondor_config.arguments, list)
+        else htcondor_config.arguments
     )
     lines.append(f'arguments = "{arguments}"\n\n')
 
     # Set up the log files
-    name = condor_settings.log_file_name
+    name = htcondor_config.log_file_name
     lines.append(f'error = {logs_dir / f"{name}.err"}\n')
     lines.append(f'output = {logs_dir / f"{name}.out"}\n')
     lines.append(f'log = {logs_dir / f"{name}.log"}\n\n')
 
     # If get get a particular exit code, keep retrying
-    if (exit_code := condor_settings.retry_on_exit_code) is not None:
+    if (exit_code := htcondor_config.retry_on_exit_code) is not None:
         lines.append(f"on_exit_hold = (ExitCode =?= {exit_code})\n")
         lines.append('on_exit_hold_reason = "Checkpointed, will resume"\n')
         lines.append("on_exit_hold_subcode = 1\n")
@@ -309,13 +309,13 @@ def create_submission_file(
         )
 
     # Add extra key/value pairs, if applicable
-    if condor_settings.extra_kwargs:
-        for key, value in condor_settings.extra_kwargs.items():
+    if htcondor_config.extra_kwargs:
+        for key, value in htcondor_config.extra_kwargs.items():
             lines.append(f"{key} = {value}\n")
         lines.append("\n")
 
     # Set the queue
-    queue = "" if condor_settings.queue == 1 else condor_settings.queue
+    queue = "" if htcondor_config.queue == 1 else htcondor_config.queue
     lines.append(f"queue {queue}")
 
     # Write the submission file

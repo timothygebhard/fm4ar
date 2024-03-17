@@ -107,7 +107,7 @@ local:
     max_time_per_run: 36_000
 
   # Settings for HTCondor
-  condor:
+  htcondor:
     bid: 25
     n_cpus: 8
     n_gpus: 1

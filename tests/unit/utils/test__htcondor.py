@@ -37,14 +37,14 @@ def test__create_submission_file(tmp_path: Path) -> None:
     # Case 1: Invalid experiment directory
     with pytest.raises(FileNotFoundError) as file_not_found_error:
         create_submission_file(
-            condor_settings=HTCondorConfig(arguments=""),
+            htcondor_config=HTCondorConfig(arguments=""),
             experiment_dir=tmp_path / "does_not_exist",
         )
     assert "Experiment directory does not exist" in str(file_not_found_error)
 
     # Case 2: Arguments as string
     file_path = create_submission_file(
-        condor_settings=HTCondorConfig(
+        htcondor_config=HTCondorConfig(
             arguments="arguments as string",
             num_gpus=1,
             gpu_type="A100",
@@ -56,7 +56,7 @@ def test__create_submission_file(tmp_path: Path) -> None:
 
     # Case 3: Arguments as list; retry_on_exit_code; extra kwargs
     file_path = create_submission_file(
-        condor_settings=HTCondorConfig(
+        htcondor_config=HTCondorConfig(
             arguments=["arguments", "as", "list"],
             num_gpus=1,
             retry_on_exit_code=42,
