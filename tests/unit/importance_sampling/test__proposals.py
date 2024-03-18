@@ -56,7 +56,7 @@ def test__draw_proposal_samples__npe(
     experiment_dir.mkdir()
 
     # Copy over the template configuration for a NPE model
-    template_dir = get_experiments_dir() / "npe-template"
+    template_dir = get_experiments_dir() / "templates" / "npe"
     copyfile(
         template_dir / "config.yaml",
         experiment_dir / "config.yaml",
@@ -76,10 +76,10 @@ def test__draw_proposal_samples__npe(
         experiment_dir=experiment_dir,
         config=npe_config,
     )
-    model.save_model(name="best", save_training_info=False)
+    model.save_model(name="latest", save_training_info=False)
 
     # Copy over the template configuration for an importance sampling run
-    template_dir = get_experiments_dir() / "importance-sampling-template"
+    template_dir = get_experiments_dir() / "templates" / "importance-sampling"
     copyfile(
         template_dir / "importance_sampling.yaml",
         experiment_dir / "importance_sampling.yaml",
@@ -120,7 +120,7 @@ def test__draw_proposal_samples__unconditional_flow(
     experiment_dir.mkdir()
 
     # Copy over the template configuration for a NPE model
-    template_dir = get_experiments_dir() / "unconditional-flow-template"
+    template_dir = get_experiments_dir() / "templates" / "unconditional-flow"
     copyfile(
         template_dir / "config.yaml",
         experiment_dir / "config.yaml",
@@ -146,7 +146,7 @@ def test__draw_proposal_samples__unconditional_flow(
     )
 
     # Copy over the template configuration for an importance sampling run
-    template_dir = get_experiments_dir() / "importance-sampling-template"
+    template_dir = get_experiments_dir() / "templates" / "importance-sampling"
     copyfile(
         template_dir / "importance_sampling.yaml",
         experiment_dir / "importance_sampling.yaml",

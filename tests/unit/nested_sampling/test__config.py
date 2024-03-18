@@ -12,7 +12,7 @@ def test__load_config() -> None:
     """
 
     # Load the template config
-    experiment_dir = get_experiments_dir() / "nested-sampling-template"
+    experiment_dir = get_experiments_dir() / "templates" / "nested-sampling"
     config = load_config(experiment_dir)
 
     # Check that the config is loaded correctly

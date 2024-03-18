@@ -43,7 +43,7 @@ def experiment_dir(tmp_path: Path) -> Path:
     experiment_dir.mkdir()
 
     # Copy over the template configuration
-    template_dir = get_experiments_dir() / "npe-template"
+    template_dir = get_experiments_dir() / "templates" / "npe"
     copyfile(
         template_dir / "config.yaml",
         experiment_dir / "config.yaml",
