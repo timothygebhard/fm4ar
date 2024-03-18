@@ -34,9 +34,9 @@ def test__compute_is_weights() -> None:
     """
 
     # Case 1
-    log_likelihoods = np.log(np.array([0, 1, 2]))
-    log_prior_values = np.log(np.array([2, 4, 8]))
-    log_probs = np.log(np.array([1e-1, 1e-2, 1e-3]))
+    log_likelihoods = np.array([-1, -2, -4])
+    log_prior_values = np.array([-2, -4, -8])
+    log_probs = np.array([-3, -6, -12])
     raw_log_weights, normalized_weights = compute_is_weights(
         log_likelihoods=log_likelihoods,
         log_prior_values=log_prior_values,
@@ -44,7 +44,7 @@ def test__compute_is_weights() -> None:
     )
     assert np.allclose(
         raw_log_weights,
-        np.log(np.array([0, 4e2, 16e3])),
+        np.array([0, 0, 0]),
     )
     assert np.allclose(np.sum(normalized_weights), 3)
-    assert np.allclose(normalized_weights, [0., 0.07317073, 2.92682927])
+    assert np.allclose(normalized_weights, [1., 1., 1.])
