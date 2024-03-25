@@ -173,7 +173,8 @@ if __name__ == "__main__":
     # Define and prepare ouput directory
     file_stem = config.target_spectrum.file_path.stem
     file_index = config.target_spectrum.index
-    dir_name = f"{file_stem}__{file_index}"
+    sigma = config.likelihood.sigma
+    dir_name = f"{file_stem}__{file_index}__{sigma}"
     output_dir = args.experiment_dir / "importance_sampling" / dir_name
     output_dir.mkdir(exist_ok=True, parents=True)
 
