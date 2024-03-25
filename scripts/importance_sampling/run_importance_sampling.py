@@ -31,6 +31,7 @@ from fm4ar.utils.htcondor import (
     DAGManFile,
     HTCondorConfig,
     condor_submit_dag,
+    check_if_on_login_node,
     create_submission_file,
 )
 from fm4ar.utils.multiproc import get_number_of_available_cores
@@ -169,6 +170,9 @@ if __name__ == "__main__":
     # Get the command line arguments and load the importance sampling config
     args = get_cli_arguments()
     config = load_config(experiment_dir=args.experiment_dir)
+
+    # Ensure that we do not run compute-heavy jobs on the login node
+    check_if_on_login_node(start_submission=args.start_submission)
 
     # Define and prepare ouput directory
     file_stem = config.target_spectrum.file_path.stem
