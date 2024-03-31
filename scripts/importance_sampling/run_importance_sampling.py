@@ -431,6 +431,7 @@ if __name__ == "__main__":
             file_path=output_dir / "importance_sampling_results_min.hdf",
             theta=merged["theta"],
             weights=merged["weights"],
+            raw_log_weights=merged["raw_log_weights"],
         )
         print("Done!")
 
