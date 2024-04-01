@@ -78,6 +78,8 @@ if __name__ == "__main__":
             print("\nAborting!\n")
             exit(0)
         print()
+    else:
+        print("Updating the config in the checkpoint without confirmation!\n")
 
     # Create a backup of the old checkpoint
     if not args.no_backup:
@@ -85,6 +87,8 @@ if __name__ == "__main__":
         backup_path = file_path.with_suffix(".backup.pt")
         copyfile(file_path, backup_path)
         print("Done!")
+    else:
+        print("Skipping backup of old checkpoint!")
 
     # Update config and save checkpoint
     print("Updating config in checkpoint...", end=" ")
