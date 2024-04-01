@@ -34,6 +34,16 @@ if __name__ == "__main__":
         default="model__latest.pt",
         help="Name of checkpoint file for which to update the config.",
     )
+    parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Do not create a backup of the old checkpoint.",
+    )
+    parser.add_argument(
+        "--no-confirmation",
+        action="store_true",
+        help="Skip confirmation and update the config in the checkpoint.",
+    )
     args = parser.parse_args()
 
     # Load the current config from the experiment directory
@@ -63,16 +73,18 @@ if __name__ == "__main__":
     print("\n")
 
     # Ask for confirmation
-    if not confirm("Do you want to update the config in the checkpoint?"):
-        print("\nAborting!\n")
-        exit(0)
-    print()
+    if not args.no_confirmation:
+        if not confirm("Do you want to update the config in the checkpoint?"):
+            print("\nAborting!\n")
+            exit(0)
+        print()
 
     # Create a backup of the old checkpoint
-    print("Creating backup of old checkpoint...", end=" ")
-    backup_path = file_path.with_suffix(".backup.pt")
-    copyfile(file_path, backup_path)
-    print("Done!")
+    if not args.no_backup:
+        print("Creating backup of old checkpoint...", end=" ")
+        backup_path = file_path.with_suffix(".backup.pt")
+        copyfile(file_path, backup_path)
+        print("Done!")
 
     # Update config and save checkpoint
     print("Updating config in checkpoint...", end=" ")
