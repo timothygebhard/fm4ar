@@ -52,8 +52,8 @@ if __name__ == "__main__":
     # These are added in the `prepare_new()` method when starting a new
     # training run, and dropping them here would cause an error when building
     # the model from the checkpoint file in `prepare_resume()`.
-    new_config["model"]["theta_dim"] = old_config["model"]["theta_dim"]
-    new_config["model"]["context_dim"] = old_config["model"]["context_dim"]
+    new_config["model"]["dim_theta"] = old_config["model"]["dim_theta"]
+    new_config["model"]["dim_context"] = old_config["model"]["dim_context"]
 
     # Compute the difference between the old and the new config
     print("Difference between old and new config:\n")
