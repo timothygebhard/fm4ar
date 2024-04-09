@@ -2,6 +2,8 @@
 Unit tests for `fm4ar.likelihoods`.
 """
 
+import typing
+
 import numpy as np
 import pytest
 from pydantic import ValidationError
@@ -10,6 +12,7 @@ from fm4ar.likelihoods import get_likelihood_distribution
 from fm4ar.likelihoods.config import LikelihoodConfig
 
 
+@typing.no_type_check  # required because of the `noqa` comment
 def test__likelihood_config() -> None:
     """
     Test `LikelihoodConfig`.
@@ -21,7 +24,7 @@ def test__likelihood_config() -> None:
 
     # Case 2: Invalid config
     with pytest.raises(ValidationError):
-        LikelihoodConfig(dataset="unknown", sigma=0.123)  # type: ignore
+        LikelihoodConfig(invalid="unknown")  # noqa
 
 
 def test__get_likelihood_distribution() -> None:
