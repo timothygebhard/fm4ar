@@ -21,7 +21,7 @@ def test__likelihood_config() -> None:
 
     # Case 2: Invalid config
     with pytest.raises(ValidationError):
-        LikelihoodConfig(dataset="unknown")  # type: ignore
+        LikelihoodConfig(dataset="unknown", sigma=0.123)  # type: ignore
 
 
 def test__get_likelihood_distribution() -> None:
@@ -38,4 +38,15 @@ def test__get_likelihood_distribution() -> None:
     assert np.isclose(
         likelihood.logpdf(x=np.array([0., 0.])),
         np.log(1 / (2 * np.pi)),
+    )
+
+    # Case 2
+    config = LikelihoodConfig(sigma=2)
+    likelihood = get_likelihood_distribution(
+        flux_obs=np.array([0., 0.]),
+        config=config,
+    )
+    assert np.isclose(
+        likelihood.logpdf(x=np.array([0., 0.])),
+        np.log(1 / (8 * np.pi)),
     )
