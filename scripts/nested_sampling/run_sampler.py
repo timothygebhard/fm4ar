@@ -21,6 +21,7 @@ from fm4ar.nested_sampling.utils import (
 )
 from fm4ar.priors import get_prior
 from fm4ar.simulators import get_simulator
+from fm4ar.utils.environment import document_environment
 from fm4ar.utils.git_utils import document_git_status
 from fm4ar.utils.htcondor import (
     check_if_on_login_node,
@@ -93,6 +94,10 @@ if __name__ == "__main__":
 
     if args.start_submission:
 
+        # Document the git status and the Python environment
+        document_git_status(target_dir=args.experiment_dir, verbose=True)
+        document_environment(target_dir=args.experiment_dir)
+
         print("Creating submission file...", end=" ", flush=True)
 
         # Augment the HTCondor configuration
@@ -124,9 +129,6 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # ...or actually run the nested sampling algorithm
     # -------------------------------------------------------------------------
-
-    # Document the git status
-    document_git_status(target_dir=args.experiment_dir, verbose=True)
 
     # In case of MultiNest + MPI, this will be overwritten
     comm = None
