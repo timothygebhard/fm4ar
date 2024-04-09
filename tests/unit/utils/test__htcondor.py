@@ -6,6 +6,7 @@ import socket
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from fm4ar.utils.htcondor import (
     HTCondorConfig,
@@ -46,7 +47,7 @@ def test__create_submission_file(tmp_path: Path) -> None:
     file_path = create_submission_file(
         htcondor_config=HTCondorConfig(
             arguments="arguments as string",
-            num_gpus=1,
+            n_gpus=1,
             gpu_type="A100",
         ),
         experiment_dir=tmp_path,
@@ -58,7 +59,7 @@ def test__create_submission_file(tmp_path: Path) -> None:
     file_path = create_submission_file(
         htcondor_config=HTCondorConfig(
             arguments=["arguments", "as", "list"],
-            num_gpus=1,
+            n_gpus=1,
             retry_on_exit_code=42,
             extra_kwargs={"transfer_excecutable": "False"},
         ),
@@ -66,6 +67,12 @@ def test__create_submission_file(tmp_path: Path) -> None:
         file_name="run.sub",
     )
     assert file_path.exists()
+
+    # Case 4: Trying to specify an illegal configuration parameter (= typo)
+    with pytest.raises(ValidationError) as validation_error:
+        # noinspection Pydantic, PyArgumentList
+        HTCondorConfig(this_field_does_not_exist="some_value")  # type: ignore
+    assert "Extra inputs are not permitted" in str(validation_error)
 
 
 def test__dagman_file(tmp_path: Path) -> None:

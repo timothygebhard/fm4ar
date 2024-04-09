@@ -8,13 +8,20 @@ from pathlib import Path
 from subprocess import run
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Extra, Field
 
 
 class HTCondorConfig(BaseModel):
     """
     Dataclass for storing the settings for an HTCondor job.
     """
+
+    # Don't allow any extra fields not specified here
+    # The point of this is to catch errors like a config file specifying a
+    # value for `memory_cpu` (instead of `memory_cpus`), and this typo then
+    # being silently ignored and the model using the default for `memory_cpus`
+    class Config:
+        extra = Extra.forbid
 
     executable: str = Field(
         default=sys.executable,
