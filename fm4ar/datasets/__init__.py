@@ -78,15 +78,16 @@ def load_dataset(config: dict) -> SpectraDataset:
             "The number of bins does not match between `wlen` and `flux`!"
         )
 
-    # Construct the dataset
+    # Construct the feature scaling transforms
+    theta_scaler_config = config.get("theta_scaler", {})
+    theta_scaler = get_theta_scaler(theta_scaler_config)
+
+    # Construct the dataset with the theta scaler
     dataset = SpectraDataset(
         theta=theta,
         flux=flux,
         wlen=wlen,
+        theta_scaler=theta_scaler,
     )
-
-    # Construct the feature scaling transforms and add them to the dataset
-    theta_scaler_config = config.get("theta_scaler", {})
-    dataset.theta_scaler = get_theta_scaler(theta_scaler_config)
 
     return dataset
