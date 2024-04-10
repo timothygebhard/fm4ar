@@ -2,6 +2,7 @@
 Utility functions for PyTorch.
 """
 
+import platform
 from collections import OrderedDict
 from collections.abc import Sequence
 from functools import partial
@@ -17,6 +18,7 @@ from torch.optim import lr_scheduler as lrs
 from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
 from fm4ar.nn.modules import Sine
+from fm4ar.utils.multiproc import get_number_of_available_cores
 
 
 def build_train_and_test_loaders(
@@ -192,6 +194,32 @@ def get_number_of_parameters(
         if p.requires_grad in requires_grad_flags:
             num_params += prod(p.size())
     return num_params
+
+
+def get_number_of_workers(n_workers: int | Literal["auto"]) -> int:
+    """
+    Determine the number of workers for a `DataLoader`.
+
+    Args:
+        n_workers: If an integer is given, this is returned. If "auto"
+            is given, we determine the number of cores based on the
+            host system.
+
+    Returns:
+        Number of workers for the `DataLoader`.
+    """
+
+    # If an explicit number of workers is given, return it
+    if isinstance(n_workers, int):
+        return n_workers
+
+    # If we are running locally on a Mac, the number of workers needs to be 0
+    if platform.system() == "Darwin":
+        return 0
+
+    # Otherwise, use all but one available cores (but at least one)
+    n_available_cores = get_number_of_available_cores()
+    return max(n_available_cores - 1, 1)
 
 
 def get_optimizer_from_config(

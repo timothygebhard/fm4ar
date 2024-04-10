@@ -121,7 +121,7 @@ def test__fmpe_model(
     train_loader, valid_loader = initialize_stage(
         model=model,
         dataset=dataset,
-        num_workers=0,
+        n_workers=0,
         resume=False,
         stage_config=stage_config,
         stage_number=1,

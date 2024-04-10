@@ -99,10 +99,10 @@ training:
 
 local:
 
-  # General settings: device, runtime limits, ...
-  # Note: If training locally on a Mac, set num_workers to 0!
+  # Device ("cpu" or "cuda"; or "auto")
   device: "cpu"
-  num_workers: 0
+
+  # Runtime limits (e.g., time for cluster jobs)
   runtime_limits:
     max_time_per_run: 36_000
 

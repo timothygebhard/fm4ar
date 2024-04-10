@@ -9,14 +9,17 @@ from torch.utils.data import DataLoader
 from fm4ar.datasets.dataset import SpectraDataset
 from fm4ar.datasets.data_transforms import get_data_transforms
 from fm4ar.models.base import Base
-from fm4ar.utils.torchutils import build_train_and_test_loaders
+from fm4ar.utils.torchutils import (
+    build_train_and_test_loaders,
+    get_number_of_workers,
+)
 from fm4ar.utils.tracking import RuntimeLimits
 
 
 def initialize_stage(
     model: Base,
     dataset: SpectraDataset,
-    num_workers: int,
+    n_workers: int,
     resume: bool,
     stage_config: dict,
     stage_number: int,
@@ -32,7 +35,7 @@ def initialize_stage(
         stage_number: The number of the stage. This is only used to
             set the random seed for the data loaders to ensure that
             the batch order is not exactly the same for each stage.
-        num_workers: Number of workers for the data loaders.
+        n_workers: Number of workers for the data loaders.
         resume: Whether to resume from a checkpoint.
 
     Returns:
@@ -51,7 +54,7 @@ def initialize_stage(
         dataset=dataset,
         train_fraction=model.config["dataset"]["train_fraction"],
         batch_size=stage_config["batch_size"],
-        num_workers=num_workers,
+        num_workers=n_workers,
         drop_last=stage_config.get("drop_last", True),
         random_seed=stage_number,
     )
@@ -66,7 +69,7 @@ def initialize_stage(
 
     # Set the precision for fp32 matrix multiplication
     precision = stage_config.get("float32_matmul_precision", "highest")
-    torch.set_float32_matmul_precision(precision)  # type: ignore
+    torch.set_float32_matmul_precision(precision)
 
     return train_loader, test_loader
 
@@ -118,11 +121,18 @@ def train_stages(
         begin_or_resume = "Resuming" if resume else "Beginning"
         print(f"\n{begin_or_resume} training stage '{stage_name}'")
 
+        # Determine the number of workers for the data loaders
+        # There's usually no need to change this, but it can be set in the
+        # stage configuration if desired. "auto" means all cores - 1.
+        n_workers = get_number_of_workers(
+            stage_config.get("n_workers", "auto")
+        )
+
         # Initialize the train and test loaders for the stage
         train_loader, test_loader = initialize_stage(
             model=model,
             dataset=dataset,
-            num_workers=model.config["local"]["num_workers"],
+            n_workers=n_workers,
             resume=resume,
             stage_config=stage_config,
             stage_number=stage_number,
