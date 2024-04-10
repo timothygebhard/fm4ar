@@ -142,6 +142,7 @@ class NautilusSampler(Sampler):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
+        use_pool: bool = True,
     ) -> None:
 
         super().__init__(
@@ -159,22 +160,26 @@ class NautilusSampler(Sampler):
         # Import this here to reduce dependencies
         from nautilus import Sampler as _NautilusSampler
 
-        # [1] The argument of `NautilusSampler` is called `likelihood`, but at
-        # least according to the docstring, it does indeed expect "the natural
-        # logarithm of the likelihood" as its input.
-        # [2] We need the `Pool` from `multiprocess` (instead of the default
-        # one from `multiprocessing` that we get if we pass an in to `pool`)
-        # because we need the `dill` serializer to send the `log_likelihood`
-        # to the worker processes.
+        # Set up the pool
+        # Setting the `pool` to None will disable parallelization. Otherwise,
+        # we need to use the `Pool` from `multiprocess` (instead of the default
+        # one from `multiprocessing` that we get if we pass an integer value
+        # to the `pool` argument) # because we need the `dill` serializer to
+        # send the `log_likelihood` to the worker processes.
+        self.pool = get_pool() if use_pool else None
+
+        # Note: The argument of `NautilusSampler` is called `likelihood`, but
+        # at least according to the docstring, it does indeed expect "the
+        # natural logarithm of the likelihood" as its input.
         #
         # noinspection PyTypeChecker
         # noinspection PyUnresolvedReferences
         self.sampler = _NautilusSampler(
             prior=prior_transform,
-            likelihood=log_likelihood,  # see [1]
+            likelihood=log_likelihood,  # see above
             n_dim=self.n_dim,
             n_live=self.n_livepoints,
-            pool=get_pool(),  # see [2]
+            pool=self.pool,
             filepath=self.checkpoint_path,
             seed=self.random_seed,
         )
@@ -370,6 +375,9 @@ class DynestySampler(Sampler):
                 raise e
         except UserWarning as e:
             if "You are resuming a finished static run" in str(e):
+                self.complete = True
+                return
+            if "The sampling was stopped short due to maxiter" in str(e):
                 self.complete = True
                 return
             else:  # pragma: no cover
