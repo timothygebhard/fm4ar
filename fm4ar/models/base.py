@@ -13,13 +13,19 @@ import pandas as pd
 import torch
 import wandb
 from threadpoolctl import threadpool_limits
-from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 
+from fm4ar.training.stages import StageConfig
 from fm4ar.training.train_validate import validate_epoch, train_epoch
-from fm4ar.utils.torchutils import (
-    get_lr,
+from fm4ar.torchutils.general import resolve_device
+from fm4ar.torchutils.optimizers import (
+    OptimizerConfig,
     get_optimizer_from_config,
+    get_lr,
+)
+from fm4ar.torchutils.schedulers import (
+    Scheduler,
+    SchedulerConfig,
     get_scheduler_from_config,
     perform_scheduler_step,
 )
@@ -36,7 +42,7 @@ class Base:
     # Declare attributes with type hints (but without assigning values)
     network: torch.nn.Module
     optimizer: torch.optim.Optimizer
-    scheduler: lr_scheduler.LRScheduler | lr_scheduler.ReduceLROnPlateau
+    scheduler: Scheduler
 
     def __init__(
         self,
@@ -61,6 +67,7 @@ class Base:
             load_training_info: Whether to load training information
                 (i.e., the state of the optimizer and LR scheduler)
                 when loading the model from a checkpoint file.
+            random_seed: Random seed used for model initialization.
         """
 
         # Store constructor arguments
@@ -71,8 +78,8 @@ class Base:
         # Initialize attributes
         self.epoch = 0
         self.model_config: dict | None = None
-        self.optimizer_config: dict | None = None
-        self.scheduler_config: dict | None = None
+        self.optimizer_config: OptimizerConfig | None = None
+        self.scheduler_config: SchedulerConfig | None = None
 
         # Add dataframe that will keep track of the training history
         self.history: pd.DataFrame = pd.DataFrame()
@@ -323,7 +330,7 @@ class Base:
         train_loader: DataLoader,
         valid_loader: DataLoader,
         runtime_limits: RuntimeLimits,
-        stage_config: dict[str, Any],
+        stage_config: StageConfig,
     ) -> bool:
         """
         Train the model until the runtime limits are exceeded.
@@ -397,7 +404,7 @@ class Base:
             print("Done!")
 
             # Check if we should stop early
-            if self.stop_early(patience=stage_config.get("early_stopping")):
+            if self.stop_early(patience=stage_config.early_stopping):
                 print("Early stopping criterion reached, ending training!")
                 return True
 

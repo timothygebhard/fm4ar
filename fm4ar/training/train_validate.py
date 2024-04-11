@@ -8,7 +8,9 @@ import torch
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 
-from fm4ar.utils.torchutils import check_for_nans, perform_scheduler_step
+from fm4ar.torchutils.schedulers import perform_scheduler_step
+from fm4ar.torchutils.general import check_for_nans
+from fm4ar.training.stages import StageConfig
 from fm4ar.utils.tracking import LossInfo
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -51,7 +53,7 @@ def move_batch_to_device(
 def train_epoch(
     model: "Base",
     dataloader: DataLoader,
-    stage_config: dict[str, Any],
+    stage_config: StageConfig,
 ) -> float:
     """
     Train the posterior model for one epoch.
@@ -66,13 +68,13 @@ def train_epoch(
     """
 
     # Define shortcuts
-    use_amp = stage_config.get("use_amp", False)
-    gradient_clipping_config = stage_config.get("gradient_clipping", {})
-    loss_kwargs = stage_config.get("loss_kwargs", {})
+    gradient_clipping_config = stage_config.gradient_clipping
 
     # Check if we can use automatic mixed precision
-    if use_amp and model.device == torch.device("cpu"):  # pragma: no cover
-        raise RuntimeError("Don't use automatic mixed precision on CPU!")
+    if stage_config.use_amp and model.device == torch.device("cpu"):
+        raise RuntimeError(  # pragma: no cover
+            "Don't use automatic mixed precision on CPU!"
+        )
 
     # Ensure that the neural net is in training mode
     model.network.train()
@@ -87,7 +89,7 @@ def train_epoch(
     )
 
     # Create scaler for automatic mixed precision
-    scaler = GradScaler(enabled=use_amp)
+    scaler = GradScaler(enabled=stage_config.use_amp)
 
     # Iterate over the batches
     batch: dict[str, torch.Tensor]
@@ -102,39 +104,53 @@ def train_epoch(
         model.optimizer.zero_grad(set_to_none=True)
 
         # No automatic mixed precision
-        if not use_amp:
+        if not stage_config.use_amp:
 
-            loss = model.loss(theta=theta, context=context)
+            # Compute loss and backpropagate
+            loss = model.loss(
+                theta=theta,
+                context=context,
+                **stage_config.loss_kwargs,
+            )
             check_for_nans(loss, "train loss")
-
             loss.backward()  # type: ignore
 
-            if gradient_clipping_config:
+            # Clip gradients if desired
+            if gradient_clipping_config.enabled:
                 torch.nn.utils.clip_grad_norm_(
                     parameters=model.network.parameters(),
-                    **gradient_clipping_config,
+                    max_norm=gradient_clipping_config.max_norm,
+                    norm_type=gradient_clipping_config.norm_type,
                 )
 
+            # Take a step with the optimizer
             model.optimizer.step()
 
         # With automatic mixed precision (default)
         # This cannot be tested at the moment because it requires a GPU
         else:  # pragma: no cover
 
+            # Compute loss and backpropagate
             # Note: Backward passes under autocast are not recommended
             with autocast():
-                loss = model.loss(theta=theta, context=context, **loss_kwargs)
+                loss = model.loss(
+                    theta=theta,
+                    context=context,
+                    **stage_config.loss_kwargs,
+                )
                 check_for_nans(loss, "train loss")
-
             scaler.scale(loss).backward()  # type: ignore
 
-            if gradient_clipping_config:
+            # Clip gradients if desired
+            if gradient_clipping_config.enabled:
                 scaler.unscale_(model.optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     parameters=model.network.parameters(),
-                    **gradient_clipping_config,
+                    max_norm=gradient_clipping_config.max_norm,
+                    norm_type=gradient_clipping_config.norm_type,
                 )
 
+            # Take a step with the optimizer
             scaler.step(model.optimizer)
             scaler.update()
 
@@ -156,7 +172,7 @@ def train_epoch(
 def validate_epoch(
     model: Union["Base", "FMPEModel"],  # required because of log_prob_batch()
     dataloader: DataLoader,
-    stage_config: dict[str, Any],
+    stage_config: StageConfig,
 ) -> tuple[float, float | None]:
     """
     Perform one validation epoch for the given model.
@@ -182,14 +198,10 @@ def validate_epoch(
     is_fmpe_model = model.__class__.__name__ == "FMPEModel"
 
     # Set default value for `logprob_epochs`
-    logprob_epochs = stage_config.get("logprob_epochs")
     logprob_epochs = (
-        (10 if is_fmpe_model else 1) if logprob_epochs is None
-        else logprob_epochs
+        (10 if is_fmpe_model else 1) if stage_config.logprob_epochs is None
+        else stage_config.logprob_epochs
     )
-
-    # Get additional keyword arguments for loss function
-    loss_kwargs = stage_config.get("loss_kwargs", {})
 
     # We don't need to compute gradients for the validation set
     with torch.no_grad():
@@ -227,7 +239,11 @@ def validate_epoch(
             theta, context = move_batch_to_device(batch, model.device)
 
             # Compute validation loss
-            loss = model.loss(theta=theta, context=context, **loss_kwargs)
+            loss = model.loss(
+                theta=theta,
+                context=context,
+                **stage_config.loss_kwargs,
+            )
             check_for_nans(loss, "validation loss")
 
             # Define maximum number of samples to use for log probability.
