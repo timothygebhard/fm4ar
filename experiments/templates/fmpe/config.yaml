@@ -4,8 +4,9 @@
 
 dataset:
   file_path: "$FM4AR_DATASETS_DIR/vasist-2023/train/selected.hdf"
-  train_fraction: 0.95
-  n_samples: 17
+  n_train_samples: 15
+  n_valid_samples: 5
+  random_seed: 42
 
 theta_scaler:
   method: "MeanStdScaler"
@@ -20,6 +21,7 @@ model:
 
   # General settings
   model_type: "fmpe"
+  random_seed: 42
   t_theta_with_glu: True
   context_with_glu: False
   sigma_min: 0.0001
@@ -70,15 +72,16 @@ training:
   stage_0:
     batch_size: 1024
     data_transforms:
-      - method: "add_noise"
+      - type: "AddNoise"
         kwargs:
           random_seed: 42
           complexity: 0
-          transform: "lambda wlen, error: 0.1257 * error"
+          transform: "lambda wlen, error: 0.125754 * error"
     early_stopping: 100
     epochs: 5
     float32_matmul_precision: "high"
     gradient_clipping:
+      enabled: True
       max_norm: 1.0
     logprob_epochs: -1
     optimizer:
