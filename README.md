@@ -33,17 +33,10 @@ Generally, these folders can be subfolders of this repository; however, there ma
 
 A few comments on the code style (and the tool chain used to enforce it) in this repository:
 
-- Use [**ruff**](https://github.com/charliermarsh/ruff) as a fast Python linter:
+- Use [**ruff**](https://github.com/charliermarsh/ruff) as a fast Python linter and formatter / import sorter:
     ```bash
-    ruff .
-    ```
-- Use [**isort**](https://github.com/pycqa/isort) to sort imports:
-    ```bash
-    isort .
-    ```
-- Use [**black**](https://github.com/psf/black) to format code:
-    ```bash
-    python -m black .
+    ruff check .
+    ruff format .  # double check the changes before committing
     ```
 - Use [**mypy**](https://github.com/python/mypy) to check types:
     ```bash
