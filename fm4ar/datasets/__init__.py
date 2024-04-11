@@ -22,14 +22,22 @@ class DatasetConfig(BaseModel):
         ...,
         description="Path to the HDF5 file containing the dataset.",
     )
-    n_samples: int | None = Field(
-        default=None, description="Number of samples to use from the dataset."
+    n_train_samples: int = Field(
+        ...,
+        description="Number of samples to use for training.",
     )
-    train_fraction: float = Field(
-        default=0.95,
-        ge=0.0,
-        le=1.0,
-        description="Fraction of the dataset to use for training.",
+    n_valid_samples: int = Field(
+        ...,
+        description="Number of samples to use for validation.",
+    )
+    random_seed: int = Field(
+        default=42,
+        description=(
+            "Random seed for the data loaders: This seed controls how the "
+            "dataset is split into training and validation sets. We want to "
+            "be able to control this independently of, for example, the "
+            "initialization of the model weights."
+        ),
     )
 
 
@@ -46,14 +54,17 @@ def load_dataset(config: dict) -> SpectraDataset:
     # environment variables, e.g., $FM4AR_DATASETS_DIR
     file_path = expand_env_variables_in_path(dataset_config.file_path)
 
+    # Determine the total number of samples that we need to load
+    n_samples = dataset_config.n_train_samples + dataset_config.n_valid_samples
+
     # Load the dataset
     with h5py.File(file_path, "r") as f:
-        theta = np.array(f["theta"][: dataset_config.n_samples])
-        flux = np.array(f["flux"][: dataset_config.n_samples])
+        theta = np.array(f["theta"][:n_samples])
+        flux = np.array(f["flux"][:n_samples])
         wlen = np.array(
             f["wlen"]
             if len(f["wlen"].shape) == 1
-            else f["wlen"][: dataset_config.n_samples]
+            else f["wlen"][:n_samples]
         )
 
     # TODO: Add support for filtering the dataset, e.g., based on mean flux
