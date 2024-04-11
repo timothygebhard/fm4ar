@@ -27,6 +27,12 @@ class NPEModel(Base):
         Initialize the NPE network.
         """
 
+        # Fix the random seed for reproducibility
+        torch.manual_seed(self.random_seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+        # Create the NPE network
         self.network = create_npe_network(model_config=self.config["model"])
 
     def log_prob_batch(

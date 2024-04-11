@@ -51,6 +51,7 @@ class Base:
         config: dict | None = None,
         device: Literal["auto", "cpu", "cuda"] = "auto",
         load_training_info: bool = True,
+        random_seed: int | None = 42,
     ) -> None:
         """
         Initialize a model for the posterior distribution.
@@ -74,6 +75,7 @@ class Base:
         self.config = dict({} if config is None else config)
         self.device = resolve_device(device)
         self.experiment_dir = experiment_dir
+        self.random_seed = random_seed
 
         # Initialize attributes
         self.epoch = 0

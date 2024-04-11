@@ -74,6 +74,12 @@ class FMPEModel(Base):
         Initialize the neural net that parameterizes the vectorfield.
         """
 
+        # Fix the random seed for reproducibility
+        torch.manual_seed(self.random_seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+        # Create the FMPE network
         self.network = create_fmpe_network(model_config=self.config["model"])
 
     @property
