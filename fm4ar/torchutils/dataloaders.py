@@ -3,6 +3,7 @@ Utilities for building PyTorch `DataLoader` objects.
 """
 
 import platform
+from typing import Literal
 
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
@@ -68,7 +69,7 @@ def build_dataloaders(
     return train_loader, valid_loader
 
 
-def get_number_of_workers(n_workers: int | str) -> int:
+def get_number_of_workers(n_workers: int | Literal["auto"] = "auto") -> int:
     """
     Determine the number of workers for a `DataLoader`.
 
@@ -85,13 +86,17 @@ def get_number_of_workers(n_workers: int | str) -> int:
     if isinstance(n_workers, int):
         return n_workers
 
-    # If we are running locally on a Mac, the number of workers needs to be 0
-    if platform.system() == "Darwin":
-        return 0
+    # Otherwise, determine the number depending on the host system
+    elif n_workers == "auto":
 
-    # Otherwise, use all but one available cores (but at least one)
-    if n_workers == "auto":
+        # On a Mac, the number of workers needs to be 0
+        if platform.system() == "Darwin":
+            return 0
+
+        # Otherwise, use all but one available cores (but at least one)
         n_available_cores = get_number_of_available_cores()
         return max(n_available_cores - 1, 1)
 
-    raise ValueError("Invalid value for `n_workers`!")
+    # Otherwise, raise an error
+    else:
+        raise ValueError("Invalid value for `n_workers`!")

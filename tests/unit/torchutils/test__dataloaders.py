@@ -160,3 +160,8 @@ def test__get_number_of_workers() -> None:
         assert get_number_of_workers("auto") == 11
         mp.setattr(func, lambda: 1)
         assert get_number_of_workers("auto") == 1
+
+    # Case 4: Invalid input on a non
+    with pytest.raises(ValueError) as value_error:
+        get_number_of_workers("invalid")  # type: ignore
+    assert str(value_error.value) == "Invalid value for `n_workers`!"
