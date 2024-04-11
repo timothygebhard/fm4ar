@@ -58,7 +58,9 @@ def test__load_dataset_1(path_to_dataset_1: Path) -> None:
     config = {
         "dataset": {
             "file_path": path_to_dataset_1,
-            "n_samples": 2,
+            "n_train_samples": 2,
+            "n_valid_samples": 0,
+            "random_seed": 42,
         }
     }
 
@@ -89,7 +91,9 @@ def test__load_dataset_2(path_to_dataset_2: Path) -> None:
     config = {
         "dataset": {
             "file_path": path_to_dataset_2,
-            "n_samples": None,
+            "n_train_samples": 3,
+            "n_valid_samples": 0,
+            "random_seed": 42,
         }
     }
 
