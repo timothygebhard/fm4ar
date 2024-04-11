@@ -1,17 +1,19 @@
 """
-Unit tests for `fm4ar.utils.htcondor`.
+Tests for `fm4ar.utils.htcondor`.
 """
 
 import socket
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from fm4ar.utils.htcondor import (
-    CondorSettings,
+    HTCondorConfig,
     DAGManFile,
     check_if_on_login_node,
     create_submission_file,
+    get_cuda_capability,
 )
 
 
@@ -36,16 +38,16 @@ def test__create_submission_file(tmp_path: Path) -> None:
     # Case 1: Invalid experiment directory
     with pytest.raises(FileNotFoundError) as file_not_found_error:
         create_submission_file(
-            condor_settings=CondorSettings(arguments=""),
+            htcondor_config=HTCondorConfig(arguments=""),
             experiment_dir=tmp_path / "does_not_exist",
         )
     assert "Experiment directory does not exist" in str(file_not_found_error)
 
     # Case 2: Arguments as string
     file_path = create_submission_file(
-        condor_settings=CondorSettings(
+        htcondor_config=HTCondorConfig(
             arguments="arguments as string",
-            num_gpus=1,
+            n_gpus=1,
             gpu_type="A100",
         ),
         experiment_dir=tmp_path,
@@ -55,9 +57,9 @@ def test__create_submission_file(tmp_path: Path) -> None:
 
     # Case 3: Arguments as list; retry_on_exit_code; extra kwargs
     file_path = create_submission_file(
-        condor_settings=CondorSettings(
+        htcondor_config=HTCondorConfig(
             arguments=["arguments", "as", "list"],
-            num_gpus=1,
+            n_gpus=1,
             retry_on_exit_code=42,
             extra_kwargs={"transfer_excecutable": "False"},
         ),
@@ -65,6 +67,12 @@ def test__create_submission_file(tmp_path: Path) -> None:
         file_name="run.sub",
     )
     assert file_path.exists()
+
+    # Case 4: Trying to specify an illegal configuration parameter (= typo)
+    with pytest.raises(ValidationError) as validation_error:
+        # noinspection Pydantic, PyArgumentList
+        HTCondorConfig(this_field_does_not_exist="some_value")  # type: ignore
+    assert "Extra inputs are not permitted" in str(validation_error)
 
 
 def test__dagman_file(tmp_path: Path) -> None:
@@ -116,3 +124,28 @@ def test__dagman_file(tmp_path: Path) -> None:
     with pytest.raises(ValueError) as value_error:
         dagman_file.add_job(name="job1", file_path=tmp_path / "job1.sub")
     assert "Job 'job1' already exists!" in str(value_error)
+
+
+@pytest.mark.parametrize(
+    "gpu_type, expected_capability",
+    [
+        ("H100", 9.0),
+        ("A100", 8.0),
+        (None, 1.0),
+        ("invalid", None),
+    ],
+)
+def test__get_cuda_capability(
+    gpu_type: str | None,
+    expected_capability: int | None,
+) -> None:
+    """
+    Test `get_cuda_capability()`.
+    """
+
+    if gpu_type != "invalid":
+        assert get_cuda_capability(gpu_type) == expected_capability
+    else:
+        with pytest.raises(ValueError) as value_error:
+            get_cuda_capability(gpu_type)
+        assert "Unknown GPU type" in str(value_error)

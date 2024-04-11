@@ -12,21 +12,21 @@ from typing import Any
 
 import numpy as np
 
+from fm4ar.likelihoods import get_likelihood_distribution
 from fm4ar.nested_sampling.config import load_config
-from fm4ar.nested_sampling.likelihood import get_likelihood_distribution
-from fm4ar.nested_sampling.priors import get_prior
 from fm4ar.nested_sampling.samplers import get_sampler
-from fm4ar.nested_sampling.simulators import get_simulator
 from fm4ar.nested_sampling.utils import (
     create_posterior_plot,
     get_parameter_masks,
 )
+from fm4ar.priors import get_prior
+from fm4ar.simulators import get_simulator
+from fm4ar.utils.environment import document_environment
 from fm4ar.utils.git_utils import document_git_status
 from fm4ar.utils.htcondor import (
-    CondorSettings,
     check_if_on_login_node,
-    create_submission_file,
     condor_submit_bid,
+    create_submission_file,
 )
 
 
@@ -94,24 +94,29 @@ if __name__ == "__main__":
 
     if args.start_submission:
 
+        # Document the git status and the Python environment
+        document_git_status(target_dir=args.experiment_dir, verbose=True)
+        document_environment(target_dir=args.experiment_dir)
+
         print("Creating submission file...", end=" ", flush=True)
-        condor_settings = CondorSettings(
-            executable=executable,
-            num_cpus=config.htcondor.n_cpus,
-            memory_cpus=config.htcondor.memory,
-            arguments=job_arguments,
-            retry_on_exit_code=42,
-            log_file_name="log.$$([NumJobStarts])",
-            extra_kwargs=(
-                {}
-                if config.sampler.library != "multinest"
-                else {"transfer_executable": "False"}
-            ),
+
+        # Augment the HTCondor configuration
+        htcondor_config = config.htcondor
+        htcondor_config.executable = executable
+        htcondor_config.arguments = job_arguments
+        htcondor_config.retry_on_exit_code = 42
+        htcondor_config.log_file_name = "log.$$([NumJobStarts])"
+        htcondor_config.extra_kwargs = (
+            {} if config.sampler.library != "multinest"
+            else {"transfer_executable": "False"}
         )
+
+        # Create submission file
         file_path = create_submission_file(
-            condor_settings=condor_settings,
-            experiment_dir=args.experiment_dir.resolve(),
+            htcondor_config=htcondor_config,
+            experiment_dir=args.experiment_dir.resolve()
         )
+
         print("Done!\n", flush=True)
 
         logs_dir = args.experiment_dir / "logs"
@@ -124,9 +129,6 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # ...or actually run the nested sampling algorithm
     # -------------------------------------------------------------------------
-
-    # Document the git status
-    document_git_status(target_dir=args.experiment_dir, verbose=True)
 
     # In case of MultiNest + MPI, this will be overwritten
     comm = None
@@ -162,14 +164,14 @@ if __name__ == "__main__":
     theta_obs = np.array([config.ground_truth[n] for n in prior.names])
     if (result := simulator(theta_obs)) is None:
         raise RuntimeError("Failed to simulate ground truth!")
-    _, x_obs = result
+    _, flux_obs = result
     print("Done!", flush=True)
 
     sync_mpi_processes(comm)
 
     print("Creating likelihood distribution...", end=" ", flush=True)
     likelihood_distribution = get_likelihood_distribution(
-        x_obs=x_obs,
+        flux_obs=flux_obs,
         config=config.likelihood,
     )
     print("Done!", flush=True)
@@ -246,7 +248,7 @@ if __name__ == "__main__":
 
     print("Running sampler:", flush=True)
     sampler.run(
-        max_runtime=config.htcondor.max_runtime,
+        max_runtime=config.sampler.max_runtime,
         verbose=True,
         run_kwargs=config.sampler.run_kwargs,
     )

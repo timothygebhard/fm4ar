@@ -8,9 +8,9 @@ dataset:
   n_samples: 17
 
 theta_scaler:
-  method: "MinMaxScaler"
+  method: "MeanStdScaler"
   kwargs:
-    dataset: "vasist-2023"
+    dataset: "vasist_2023"
 
 # -----------------------------------------------------------------------------
 # MODEL ARCHITECTURE
@@ -87,20 +87,20 @@ training:
 
 local:
 
-  # General settings: device, runtime limits, ...
-  # Note: If training locally on a Mac, set num_workers to 0!
+  # Device ("cpu" or "cuda"; or "auto")
   device: "cpu"
-  num_workers: 0
+
+  # Runtime limits (e.g., time for cluster jobs)
   runtime_limits:
     max_time_per_run: 36_000
 
   # Settings for HTCondor
-  condor:
+  htcondor:
     bid: 25
-    num_cpus: 8
+    n_cpus: 8
+    n_gpus: 1
     memory_cpus: 200_000
-    num_gpus: 1
-    memory_gpus: 85_000
+    gpu_type: "H100"
 
   # Settings for Weights & Biases, remove if not used
   # wandb:

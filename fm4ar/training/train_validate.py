@@ -183,8 +183,10 @@ def validate_epoch(
 
     # Set default value for `logprob_epochs`
     logprob_epochs = stage_config.get("logprob_epochs")
-    if logprob_epochs is None:
-        logprob_epochs = 10 if is_fmpe_model else 1
+    logprob_epochs = (
+        (10 if is_fmpe_model else 1) if logprob_epochs is None
+        else logprob_epochs
+    )
 
     # Get additional keyword arguments for loss function
     loss_kwargs = stage_config.get("loss_kwargs", {})

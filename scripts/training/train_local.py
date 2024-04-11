@@ -10,6 +10,7 @@ from fm4ar.training.args import get_cli_arguments
 from fm4ar.training.preparation import prepare_new, prepare_resume
 from fm4ar.training.stages import train_stages
 from fm4ar.utils.config import load_config
+from fm4ar.utils.environment import document_environment
 from fm4ar.utils.git_utils import document_git_status
 
 
@@ -21,8 +22,9 @@ if __name__ == "__main__":
     args = get_cli_arguments()
     config = load_config(args.experiment_dir)
 
-    # Document the status of the git repository
+    # Document the status of the git repository and the Python environment
     document_git_status(target_dir=args.experiment_dir, verbose=True)
+    document_environment(target_dir=args.experiment_dir)
 
     # Check if there exists a checkpoint file from which we can resume
     checkpoint_file_path = args.experiment_dir / args.checkpoint_name

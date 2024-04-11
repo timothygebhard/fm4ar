@@ -16,7 +16,10 @@ def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
     # Get the sampler type from the files present in the directory
     if (experiment_dir / "checkpoint.hdf5").exists():
         sampler = "nautilus"
-    elif (experiment_dir / "checkpoint.save").exists():
+    elif (
+        (experiment_dir / "checkpoint.save").exists()
+        or (experiment_dir / "posterior.pickle").exists()
+    ):
         sampler = "dynesty"
     elif (experiment_dir / "run.txt").exists():
         sampler = "multinest"
@@ -49,7 +52,8 @@ def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
         samples = np.array(analyzer.get_equal_weighted_posterior()[:, :-1])
         weights = np.ones(len(samples))
 
-    else:
+    # This should never happen; but the linter complains otherwise...
+    else:  # pragma: no cover
         raise ValueError(f"Unknown sampler: {sampler}")
 
     return samples, weights

@@ -5,9 +5,10 @@
 # Folders with datasets or results (except template config files)
 datasets/**
 scripts/nested_sampling/*/results/**
-experiments/**
-!experiments/*-template/
-!experiments/*-template/config.yaml
+experiments/**/*
+!experiments/templates
+!experiments/templates/**
+!experiments/templates/**/*.yaml
 
 # jupyter notebooks
 jupyter/

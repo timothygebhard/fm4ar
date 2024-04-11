@@ -19,6 +19,7 @@ from fm4ar.utils.torchutils import (
     get_lr,
     get_mlp,
     get_number_of_parameters,
+    get_number_of_workers,
     get_optimizer_from_config,
     get_scheduler_from_config,
     get_weights_from_pt_file,
@@ -205,6 +206,33 @@ def test__get_number_of_parameters() -> None:
     assert n_trainable == 6
     assert n_fixed == 55
     assert n_total == 61
+
+
+def test__get_number_of_workers() -> None:
+    """
+    Test `get_number_of_workers()`.
+    """
+
+    # Case 1: Explicit number specified
+    assert get_number_of_workers(123) == 123
+
+    # Case 2: Assume we are on a Mac
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("platform.system", lambda: "Darwin")
+        assert get_number_of_workers("auto") == 0
+
+    # Case 3: Assume we are on a Linux machine
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("platform.system", lambda: "Linux")
+
+        # We need to patch the function in torchutils, not in multiproc,
+        # otherwise the patch has no effect because of the import order
+        func_path = "fm4ar.utils.torchutils.get_number_of_available_cores"
+
+        mp.setattr(func_path, lambda: 12)
+        assert get_number_of_workers("auto") == 11
+        mp.setattr(func_path, lambda: 1)
+        assert get_number_of_workers("auto") == 1
 
 
 @pytest.mark.parametrize(

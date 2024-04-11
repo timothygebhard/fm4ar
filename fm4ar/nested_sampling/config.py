@@ -1,5 +1,6 @@
 """
-Methods for managing the configuration of a nested sampling run.
+Define a parser for nested sampling configurations, and a method to
+load such a configuration from a YAML file.
 """
 
 from pathlib import Path
@@ -7,6 +8,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from yaml import safe_load
+
+from fm4ar.likelihoods.config import LikelihoodConfig
+from fm4ar.priors.config import PriorConfig
+from fm4ar.simulators.config import SimulatorConfig
+from fm4ar.utils.htcondor import HTCondorConfig
 
 
 class SamplerConfig(BaseModel):
@@ -17,6 +23,14 @@ class SamplerConfig(BaseModel):
     library: Literal["nautilus", "dynesty", "multinest"] = Field(
         ...,
         description="Which nested sampling implementation to use.",
+    )
+    max_runtime: int = Field(
+        default=28_800,  # = 8 hours
+        ge=1,
+        description=(
+            "Maximum runtime (in seconds) for the sampler. This can be used "
+            "to limit the runtime of a job on a cluster, for example."
+        ),
     )
     n_livepoints: int = Field(
         ...,
@@ -45,91 +59,7 @@ class SamplerConfig(BaseModel):
     )
 
 
-class SimulatorConfig(BaseModel):
-    """
-    Configuration for the simulator.
-    """
-
-    dataset: Literal["vasist_2023"] = Field(
-        default="vasist_2023",
-        description="Name of the dataset whose simulator we use.",
-    )
-    kwargs: dict[str, Any] = Field(
-        default={
-            "R": 1000,  # spectral resolution R = λ/Δλ
-            "time_limit": 20,  # maximum time (in seconds) per simulation
-        },
-        description="Additional keyword arguments for the simulator.",
-    )
-
-
-class LikelihoodConfig(BaseModel):
-    """
-    Configuration for the likelihood function.
-    """
-
-    # TODO: We might want to figure out a way to specify generic distributions
-    #  for the likelihood function in the configuration file. For now, we just
-    #  assume a multivariate normal distribution.
-
-    # TODO: We need to figure out a way to specify generic covariance matrices
-    #  in the configuration file. For now, we just assume that the covariance
-    #  matrix is given as `sigma * np.eye(len(x_obs))`.
-
-    sigma: float = Field(
-        ...,
-        description="Standard deviation of the likelihood function",
-    )
-
-
-class PriorConfig(BaseModel):
-    """
-    Configuration for the prior distribution.
-    """
-
-    dataset: Literal["vasist_2023"] = Field(
-        default="vasist_2023",
-        description="Name of the dataset whose prior distribution we use.",
-    )
-    parameters: dict[str, str] = Field(
-        ...,
-        description="Mapping of parameter names to actions.",
-    )
-    random_seed: int = Field(
-        default=42,
-        description="Random seed to use for the prior distribution",
-    )
-
-
-class HTCondorConfig(BaseModel):
-    """
-    Configuration for the HTCondor cluster.
-    """
-
-    bid: int = Field(
-        ...,
-        ge=1,
-        le=999,
-        description="HTCondor bid",
-    )
-    n_cpus: int = Field(
-        ...,
-        ge=1,
-        description="Number of CPUs to request",
-    )
-    memory: int = Field(
-        ...,
-        ge=1,
-        description="Memory (in MB) to request",
-    )
-    max_runtime: int = Field(
-        ...,
-        ge=1,
-        description="Maximum runtime per job (in seconds)",
-    )
-
-
-class Config(BaseModel):
+class NestedSamplingConfig(BaseModel):
     """
     Full configuration for a nested sampling run.
     """
@@ -142,7 +72,10 @@ class Config(BaseModel):
     prior: PriorConfig
 
 
-def load_config(experiment_dir: Path, name: str = "config.yaml") -> Config:
+def load_config(
+    experiment_dir: Path,
+    name: str = "config.yaml",
+) -> NestedSamplingConfig:
     """
     Load the configuration inside the given experiment directory.
     """
@@ -153,4 +86,4 @@ def load_config(experiment_dir: Path, name: str = "config.yaml") -> Config:
         config_dict = safe_load(file)
 
     # Construct the configuration object
-    return Config(**config_dict)
+    return NestedSamplingConfig(**config_dict)

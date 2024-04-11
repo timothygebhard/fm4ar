@@ -1,11 +1,11 @@
 """
-Abstract base classes for priors and simulators of datasets.
+Define an abstract base class for priors.
 """
 
-from abc import ABC, abstractmethod
-from scipy.stats import rv_continuous, rv_discrete
+from abc import ABC
 
 import numpy as np
+from scipy.stats import rv_continuous, rv_discrete
 
 
 class BasePrior(ABC):
@@ -34,12 +34,27 @@ class BasePrior(ABC):
         # Use random seed to initialize the random number generator
         self.random_state = np.random.default_rng(random_seed)
 
-    def evaluate(self, theta: np.ndarray) -> float:
+    def evaluate(
+        self,
+        theta: np.ndarray,
+        mask: np.ndarray | None = None,
+    ) -> float:
         """
         Compute the prior probability of a given sample.
+        Note: This assumes that the parameters are independent!
         """
 
-        return float(self.distribution.pdf(theta).prod())
+        # The `mask` is used to evaluate if `len(theta) < len(self.names)`, as
+        # it the case when we do not infer all parameters. See the `transform`
+        # method for more details.
+        if mask is not None:
+            theta_full = np.zeros_like(mask, dtype=float)
+            theta_full[mask] = theta
+            return float(self.distribution.pdf(theta_full)[mask].prod())
+
+        # Without a mask, we can simply compute the product of the PDFs
+        else:
+            return float(self.distribution.pdf(theta).prod())
 
     def sample(self) -> np.ndarray:
         """
@@ -72,24 +87,3 @@ class BasePrior(ABC):
         # Without a mask, we can simply apply the transformation directly
         else:
             return np.asarray(self.distribution.ppf(u))
-
-
-class BaseSimulator(ABC):
-    """
-    Common base class for all simulators.
-    """
-
-    @abstractmethod
-    def __call__(
-        self,
-        theta: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray] | None:
-        """
-        Run the simulation and return the result.
-
-        Every simulator should take an array of parameters `theta`
-        as its input, and return a tuple (wavelengths, fluxes) as
-        its result (or None, in case the simulation failed).
-        """
-
-        raise NotImplementedError

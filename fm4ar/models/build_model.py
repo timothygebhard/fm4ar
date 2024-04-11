@@ -42,14 +42,14 @@ def build_model(
 
     # Select the model class
     match model_type:
-        case "flow_matching" | "fm" | "fmpe":
+        case "fmpe":
             return FMPEModel(
                 experiment_dir=experiment_dir,
                 file_path=file_path,
                 config=config,
                 **kwargs,
             )
-        case "neural_posterior_estimation" | "npe":
+        case "npe":
             return NPEModel(
                 experiment_dir=experiment_dir,
                 file_path=file_path,

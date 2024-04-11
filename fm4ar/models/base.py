@@ -234,7 +234,11 @@ class Base:
 
         # If no directory is given, we don't save anything
         if self.experiment_dir is None and target_dir is None:
-            warn("save_model() was called, but not directory was specified!")
+            warn(
+                UserWarning(
+                    "save_model() was called, but no directory was specified!"
+                )
+            )
             return None
 
         # Collect all the data that we want to save

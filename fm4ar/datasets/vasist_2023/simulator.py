@@ -15,7 +15,7 @@ import petitRADTRANS.retrieval.parameter as prm
 from joblib import Memory
 from petitRADTRANS.nat_cst import r_jup_mean
 
-from fm4ar.datasets.base_classes import BaseSimulator
+from fm4ar.simulators.base import BaseSimulator
 from fm4ar.utils.timeout import timelimit, TimeoutException
 
 

@@ -34,6 +34,16 @@ if __name__ == "__main__":
         default="model__latest.pt",
         help="Name of checkpoint file for which to update the config.",
     )
+    parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Do not create a backup of the old checkpoint.",
+    )
+    parser.add_argument(
+        "--no-confirmation",
+        action="store_true",
+        help="Skip confirmation and update the config in the checkpoint.",
+    )
     args = parser.parse_args()
 
     # Load the current config from the experiment directory
@@ -52,8 +62,8 @@ if __name__ == "__main__":
     # These are added in the `prepare_new()` method when starting a new
     # training run, and dropping them here would cause an error when building
     # the model from the checkpoint file in `prepare_resume()`.
-    new_config["model"]["theta_dim"] = old_config["model"]["theta_dim"]
-    new_config["model"]["context_dim"] = old_config["model"]["context_dim"]
+    new_config["model"]["dim_theta"] = old_config["model"]["dim_theta"]
+    new_config["model"]["dim_context"] = old_config["model"]["dim_context"]
 
     # Compute the difference between the old and the new config
     print("Difference between old and new config:\n")
@@ -63,16 +73,22 @@ if __name__ == "__main__":
     print("\n")
 
     # Ask for confirmation
-    if not confirm("Do you want to update the config in the checkpoint?"):
-        print("\nAborting!\n")
-        exit(0)
-    print()
+    if not args.no_confirmation:
+        if not confirm("Do you want to update the config in the checkpoint?"):
+            print("\nAborting!\n")
+            exit(0)
+        print()
+    else:
+        print("Updating the config in the checkpoint without confirmation!\n")
 
     # Create a backup of the old checkpoint
-    print("Creating backup of old checkpoint...", end=" ")
-    backup_path = file_path.with_suffix(".backup.pt")
-    copyfile(file_path, backup_path)
-    print("Done!")
+    if not args.no_backup:
+        print("Creating backup of old checkpoint...", end=" ")
+        backup_path = file_path.with_suffix(".backup.pt")
+        copyfile(file_path, backup_path)
+        print("Done!")
+    else:
+        print("Skipping backup of old checkpoint!")
 
     # Update config and save checkpoint
     print("Updating config in checkpoint...", end=" ")

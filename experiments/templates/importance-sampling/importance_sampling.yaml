@@ -1,0 +1,66 @@
+#
+# Configuration file for running importance sampling.
+#
+
+# General settings
+checkpoint_file_name: "model__latest.pt"
+random_seed: 42
+model_kwargs: {}
+
+# Define target spectrum
+target_spectrum:
+  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/target/target__R-1000__pRT-2.6.7.hdf"
+  index: 0
+
+# Prior settings
+prior:
+  dataset: vasist_2023
+
+# Likelihood settings
+likelihood:
+  sigma: 0.1257
+
+# Simulator settings
+simulator:
+  dataset: vasist_2023
+  kwargs:
+    R: 1000
+    time_limit: 15
+
+# Stage 1: Draw samples from the proposal distribution
+draw_proposal_samples:
+  chunk_size: 1024
+  n_samples: 2048
+  htcondor:
+    bid: 50
+    n_cpus: 4
+    n_gpus: 1
+    memory_cpus: 50_000
+    memory_gpus: 50_000
+    log_file_name: "1__draw_proposal_samples.$(Process)"
+    queue: 4  # = number of parallel jobs
+
+# Stage 2: Merge the samples from the proposal distribution
+merge_proposal_samples:
+  htcondor:
+    bid: 50
+    n_cpus: 2
+    memory_cpus: 50_000
+    log_file_name: "2__merge_proposal_samples.$(Process)"
+
+# Stage 3: Simulate spectra for the proposal samples
+simulate_spectra:
+  htcondor:
+    bid: 50
+    n_cpus: 32
+    memory_cpus: 50_000
+    log_file_name: "3__simulate_spectra.$(Process)"
+    queue: 32  # = number of parallel jobs
+
+# Stage 4: Merge the results from all jobs and compute the weights
+merge_simulation_results:
+  htcondor:
+    bid: 50
+    n_cpus: 2
+    memory_cpus: 50_000
+    log_file_name: "4__merge_simulation_results.$(Process)"

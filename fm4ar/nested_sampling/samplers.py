@@ -5,6 +5,7 @@ Define abstractions for the different nested sampling implementations.
 import contextlib
 import json
 import time
+import warnings
 from abc import ABC, abstractmethod
 from functools import partial
 from pathlib import Path
@@ -141,6 +142,7 @@ class NautilusSampler(Sampler):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
+        use_pool: bool = True,
     ) -> None:
 
         super().__init__(
@@ -158,22 +160,26 @@ class NautilusSampler(Sampler):
         # Import this here to reduce dependencies
         from nautilus import Sampler as _NautilusSampler
 
-        # [1] The argument of `NautilusSampler` is called `likelihood`, but at
-        # least according to the docstring, it does indeed expect "the natural
-        # logarithm of the likelihood" as its input.
-        # [2] We need the `Pool` from `multiprocess` (instead of the default
-        # one from `multiprocessing` that we get if we pass an in to `pool`)
-        # because we need the `dill` serializer to send the `log_likelihood`
-        # to the worker processes.
+        # Set up the pool
+        # Setting the `pool` to None will disable parallelization. Otherwise,
+        # we need to use the `Pool` from `multiprocess` (instead of the default
+        # one from `multiprocessing` that we get if we pass an integer value
+        # to the `pool` argument) # because we need the `dill` serializer to
+        # send the `log_likelihood` to the worker processes.
+        self.pool = get_pool() if use_pool else None
+
+        # Note: The argument of `NautilusSampler` is called `likelihood`, but
+        # at least according to the docstring, it does indeed expect "the
+        # natural logarithm of the likelihood" as its input.
         #
         # noinspection PyTypeChecker
         # noinspection PyUnresolvedReferences
         self.sampler = _NautilusSampler(
             prior=prior_transform,
-            likelihood=log_likelihood,  # see [1]
+            likelihood=log_likelihood,  # see above
             n_dim=self.n_dim,
             n_live=self.n_livepoints,
-            pool=get_pool(),  # see [2]
+            pool=self.pool,
             filepath=self.checkpoint_path,
             seed=self.random_seed,
         )
@@ -280,7 +286,7 @@ class DynestySampler(Sampler):
             from dynesty import NestedSampler as _DynestySampler
         elif sampling_mode == "dynamic":
             from dynesty import DynamicNestedSampler as _DynestySampler
-        else:
+        else:  # pragma: no cover
             raise ValueError(
                 "`sampling_mode` must be 'standard' or 'dynamic', "
                 f"not '{sampling_mode}'!"
@@ -301,14 +307,14 @@ class DynestySampler(Sampler):
         # the petitRADTRANS retrievals, we want also want to enable the option
         # for `propose_point`. More experiments might be required to understand
         # what are the best options here.
-        if use_pool is None:
-            self.use_pool = {
+        self.use_pool = (
+            use_pool if use_pool is not None else
+            {
                 "propose_point": True,
                 "prior_transform": False,
                 "loglikelihood": True,
             }
-        else:
-            self.use_pool = use_pool
+        )
 
         # Define the path for the checkpoint file
         self.checkpoint_path = self.run_dir / "checkpoint.save"
@@ -347,6 +353,9 @@ class DynestySampler(Sampler):
         start_time = time.time()
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
+        # Treat warnings as errors to catch them via try/except
+        warnings.filterwarnings("error")
+
         try:
             with timelimit(max_runtime):
                 self.sampler.run_nested(
@@ -362,15 +371,19 @@ class DynestySampler(Sampler):
             if "resume the run that has ended successfully." in str(e):
                 self.complete = True
                 return
-            else:
+            else:  # pragma: no cover
                 raise e
         except UserWarning as e:
             if "You are resuming a finished static run" in str(e):
                 self.complete = True
                 return
-            else:
+            if "The sampling was stopped short due to maxiter" in str(e):
+                self.complete = True
+                return
+            else:  # pragma: no cover
                 raise e
         finally:
+            warnings.resetwarnings()
             self.save_runtime(start_time)
 
         self.complete = True
@@ -541,5 +554,5 @@ def get_sampler(name: str) -> Type[Sampler]:
             return DynestySampler
         case "multinest":
             return MultiNestSampler
-        case _:
+        case _:  # pragma: no cover
             raise ValueError(f"Sampler `{name}` not supported!")

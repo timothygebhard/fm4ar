@@ -45,7 +45,7 @@ class ResidualBlock(nn.Module):
 
         self.dropout = nn.Dropout(p=dropout_probability)
 
-        if use_batch_norm and use_layer_norm:
+        if use_batch_norm and use_layer_norm:  # pragma: no cover
             raise ValueError(
                 "Cannot use both batch normalization and layer normalization!"
             )

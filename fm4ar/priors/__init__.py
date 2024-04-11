@@ -1,9 +1,9 @@
 """
-Method for loading priors from a configuration object.
+Convenience function for loading priors from a config.
 """
 
-from fm4ar.datasets.base_classes import BasePrior
-from fm4ar.nested_sampling.config import PriorConfig
+from fm4ar.priors.base import BasePrior
+from fm4ar.priors.config import PriorConfig
 
 
 def get_prior(config: PriorConfig) -> BasePrior:
@@ -15,4 +15,5 @@ def get_prior(config: PriorConfig) -> BasePrior:
         from fm4ar.datasets.vasist_2023.prior import Prior
         return Prior(random_seed=config.random_seed)
 
-    raise ValueError(f"Unknown prior dataset: {config.dataset}")
+    # This should never happen, because the `config` object is validated
+    raise ValueError("Unknown prior dataset!")  # pragma: no cover

@@ -8,13 +8,20 @@ from pathlib import Path
 from subprocess import run
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Extra, Field
 
 
-class CondorSettings(BaseModel):
+class HTCondorConfig(BaseModel):
     """
     Dataclass for storing the settings for an HTCondor job.
     """
+
+    # Don't allow any extra fields not specified here
+    # The point of this is to catch errors like a config file specifying a
+    # value for `memory_cpu` (instead of `memory_cpus`), and this typo then
+    # being silently ignored and the model using the default for `memory_cpus`
+    class Config:
+        extra = Extra.forbid
 
     executable: str = Field(
         default=sys.executable,
@@ -28,9 +35,10 @@ class CondorSettings(BaseModel):
         default=None,  # don't request a specific GPU type
         description="Type of GPU to request for the job.",
     )
-    num_cpus: int = Field(
+    n_cpus: int = Field(
         default=1,
         ge=1,
+        validation_alias=AliasChoices("n_cpus", "num_cpus"),
         description="Number of CPUs to request for the job.",
     )
     memory_cpus: int = Field(
@@ -38,9 +46,10 @@ class CondorSettings(BaseModel):
         ge=1024,  # 1 GB is the minimum unit of memory on the cluster
         description="Amount of memory (in MB) to request for the job.",
     )
-    num_gpus: int = Field(
+    n_gpus: int = Field(
         default=0,
         ge=0,
+        validation_alias=AliasChoices("n_gpus", "num_gpus"),
         description="Number of GPUs to request for the job.",
     )
     memory_gpus: int = Field(
@@ -207,6 +216,7 @@ def condor_submit_bid(
 def condor_submit_dag(
     file_path: Path,
     verbose: bool = True,
+    bid: int = 25,
 ) -> None:  # pragma: no cover
     """
     Submit a DAGMan file to HTCondor.
@@ -214,9 +224,10 @@ def condor_submit_dag(
     Args:
         file_path: Path to the DAGMan file.
         verbose: If True, print the output of `condor_submit_dag`.
+        bid: Bid to use for the job (default: 25).
     """
 
-    cmd = ["condor_submit_dag", str(file_path)]
+    cmd = ["condor_submit_dag_bid", str(bid), str(file_path)]
     process = run(cmd, capture_output=True, check=False)
 
     if verbose:
@@ -225,7 +236,7 @@ def condor_submit_dag(
 
 
 def create_submission_file(
-    condor_settings: CondorSettings,
+    htcondor_config: HTCondorConfig,
     experiment_dir: Path,
     file_name: str = "run.sub",
 ) -> Path:
@@ -233,7 +244,7 @@ def create_submission_file(
     Create a new submission file for HTCondor.
 
     Args:
-        condor_settings: A `CondorSettings` object containing the
+        htcondor_config: A `HTConcodorConfig` object containing the
             settings for the HTCondor job.
         experiment_dir: Path to the experiment directory where the
             submission file will be created.
@@ -255,24 +266,24 @@ def create_submission_file(
     lines = []
 
     # Executable and environment variables
-    lines.append(f"executable = {condor_settings.executable}\n")
-    lines.append(f"getenv = {condor_settings.getenv}\n\n")
+    lines.append(f"executable = {htcondor_config.executable}\n")
+    lines.append(f"getenv = {htcondor_config.getenv}\n\n")
 
     # CPUs and memory requirements
-    lines.append(f"request_cpus = {condor_settings.num_cpus}\n")
-    lines.append(f"request_memory = {condor_settings.memory_cpus}\n")
+    lines.append(f"request_cpus = {htcondor_config.n_cpus}\n")
+    lines.append(f"request_memory = {htcondor_config.memory_cpus}\n")
 
     # Set GPU requirements (only add this section if GPUs are requested)
-    if condor_settings.num_gpus > 0:
+    if htcondor_config.n_gpus > 0:
 
         # Request the desired number of GPUs
-        lines.append(f"request_gpus = {condor_settings.num_gpus}\n")
+        lines.append(f"request_gpus = {htcondor_config.n_gpus}\n")
 
         # Construct other requirements: GPU memory and / or type
         requirements = []
-        if (memory_gpus := condor_settings.memory_gpus) > 0:
+        if (memory_gpus := htcondor_config.memory_gpus) > 0:
             requirements.append(f"TARGET.CUDAGlobalMemoryMb > {memory_gpus}")
-        if (gpu_type := condor_settings.gpu_type) is not None:
+        if (gpu_type := htcondor_config.gpu_type) is not None:
             cuda_capability = get_cuda_capability(gpu_type)
             requirements.append(f"TARGET.CUDACapability == {cuda_capability}")
 
@@ -281,20 +292,20 @@ def create_submission_file(
 
     # Set the arguments
     arguments = (
-        " ".join(condor_settings.arguments)
-        if isinstance(condor_settings.arguments, list)
-        else condor_settings.arguments
+        " ".join(htcondor_config.arguments)
+        if isinstance(htcondor_config.arguments, list)
+        else htcondor_config.arguments
     )
     lines.append(f'arguments = "{arguments}"\n\n')
 
     # Set up the log files
-    name = condor_settings.log_file_name
+    name = htcondor_config.log_file_name
     lines.append(f'error = {logs_dir / f"{name}.err"}\n')
     lines.append(f'output = {logs_dir / f"{name}.out"}\n')
     lines.append(f'log = {logs_dir / f"{name}.log"}\n\n')
 
     # If get get a particular exit code, keep retrying
-    if (exit_code := condor_settings.retry_on_exit_code) is not None:
+    if (exit_code := htcondor_config.retry_on_exit_code) is not None:
         lines.append(f"on_exit_hold = (ExitCode =?= {exit_code})\n")
         lines.append('on_exit_hold_reason = "Checkpointed, will resume"\n')
         lines.append("on_exit_hold_subcode = 1\n")
@@ -305,13 +316,13 @@ def create_submission_file(
         )
 
     # Add extra key/value pairs, if applicable
-    if condor_settings.extra_kwargs:
-        for key, value in condor_settings.extra_kwargs.items():
+    if htcondor_config.extra_kwargs:
+        for key, value in htcondor_config.extra_kwargs.items():
             lines.append(f"{key} = {value}\n")
         lines.append("\n")
 
     # Set the queue
-    queue = "" if condor_settings.queue == 1 else condor_settings.queue
+    queue = "" if htcondor_config.queue == 1 else htcondor_config.queue
     lines.append(f"queue {queue}")
 
     # Write the submission file

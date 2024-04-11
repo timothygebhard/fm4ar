@@ -28,7 +28,7 @@ from fm4ar.utils.tracking import RuntimeLimits
 N_TOTAL = 22  # number of samples in the mock dataset
 N_LOAD = 20  # number of samples to load from the mock dataset
 BATCH_SIZE = 5  # batch size for the mock data
-DIM_THETA = 16  # required to use Vasist-2023 feature scaler
+DIM_THETA = 16  # required to use `vasist_2023` feature scaler
 N_BINS = 39  # number of bins in the mock data
 
 
@@ -43,7 +43,7 @@ def experiment_dir(tmp_path: Path) -> Path:
     experiment_dir.mkdir()
 
     # Copy over the template configuration
-    template_dir = get_experiments_dir() / "fmpe-template"
+    template_dir = get_experiments_dir() / "templates" / "fmpe"
     copyfile(
         template_dir / "config.yaml",
         experiment_dir / "config.yaml",
@@ -121,7 +121,7 @@ def test__fmpe_model(
     train_loader, valid_loader = initialize_stage(
         model=model,
         dataset=dataset,
-        num_workers=0,
+        n_workers=0,
         resume=False,
         stage_config=stage_config,
         stage_number=1,

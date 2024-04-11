@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from fm4ar.datasets.theta_scalers import ThetaScaler
+from fm4ar.datasets.theta_scalers import ThetaScaler, IdentityScaler
 from fm4ar.datasets.data_transforms import DataTransform
 
 
@@ -22,6 +22,7 @@ class SpectraDataset(Dataset):
         theta: np.ndarray,
         flux: np.ndarray,
         wlen: np.ndarray,
+        theta_scaler: ThetaScaler | None = None,
     ) -> None:
         """
         Instantiate a dataset.
@@ -40,6 +41,8 @@ class SpectraDataset(Dataset):
                 Expected shape(s):
                     - (1, dim_x): Same wavelength for all spectra.
                     - (n_samples, dim_x): Different for each spectrum.
+            theta_scaler: Scaler for the parameters `theta`. If None,
+                the identity scaler is used (i.e., no scaling).
         """
 
         super().__init__()
@@ -55,7 +58,10 @@ class SpectraDataset(Dataset):
         self.data_transforms: list[DataTransform] = []
 
         # Scaling transform for the parameters `theta` (e.g., minmax scaling)
-        self.theta_scaler: ThetaScaler
+        if theta_scaler is not None:
+            self.theta_scaler = theta_scaler
+        else:
+            self.theta_scaler = IdentityScaler()
 
     def __len__(self) -> int:
         """
