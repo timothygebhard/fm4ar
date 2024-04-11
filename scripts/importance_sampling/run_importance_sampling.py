@@ -328,10 +328,10 @@ if __name__ == "__main__":
         print()
 
         # Unpack the results from the parallel map and convert to arrays
-        flux, log_likelihoods, log_prior_values = zip(*results, strict=True)
-        flux = np.array(flux)
-        log_likelihoods = np.array(log_likelihoods).flatten()
-        log_prior_values = np.array(log_prior_values).flatten()
+        _flux, _log_likelihoods, _log_prior_values = zip(*results, strict=True)
+        flux = np.array(_flux)
+        log_likelihoods = np.array(_log_likelihoods).flatten()
+        log_prior_values = np.array(_log_prior_values).flatten()
 
         # Drop anything with NaNs (e.g., failed simulation, prior = 0, ...)
         mask = np.logical_and.reduce(

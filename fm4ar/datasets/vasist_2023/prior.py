@@ -15,7 +15,7 @@ LOWER: tuple[float]
 UPPER: tuple[float]
 NAMES: tuple[str]
 LABELS: tuple[str]
-LOWER, UPPER, NAMES, LABELS = zip(  # type: ignore
+LOWER, UPPER, NAMES, LABELS = zip(
     *[
         [0.1, 1.6, "C/O", r"${\rm C/O}$"],
         [-1.5, 1.5, "Fe/H", r"$\left[{\rm Fe/H}\right]$"],
