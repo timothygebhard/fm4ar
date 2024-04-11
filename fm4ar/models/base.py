@@ -49,7 +49,7 @@ class Base:
         experiment_dir: Path | None = None,
         file_path: Path | None = None,
         config: dict | None = None,
-        device: Literal["cpu", "cuda"] = "cpu",
+        device: Literal["auto", "cpu", "cuda"] = "auto",
         load_training_info: bool = True,
     ) -> None:
         """
@@ -72,7 +72,7 @@ class Base:
 
         # Store constructor arguments
         self.config = dict({} if config is None else config)
-        self.device = torch.device(device)
+        self.device = resolve_device(device)
         self.experiment_dir = experiment_dir
 
         # Initialize attributes
@@ -89,13 +89,12 @@ class Base:
             self.load_model(
                 file_path=file_path,
                 load_training_info=load_training_info,
-                device=device,
             )
 
         # ...or initialize it from the configuration
         else:
             self.initialize_network()
-            self.network_to_device(device)
+            self.network_to_device()
 
     @abstractmethod
     def initialize_network(self) -> None:
@@ -152,18 +151,11 @@ class Base:
 
         raise NotImplementedError()  # pragma: no cover
 
-    def network_to_device(
-        self,
-        device: Literal["cpu", "cuda"] = "cpu",
-    ) -> None:
+    def network_to_device(self) -> None:
         """
-        Move network to `device`, and set `self.device` accordingly.
+        Move network to `self.device`.
         """
 
-        if device not in ("cpu", "cuda"):  # pragma: no cover
-            raise ValueError(f"Invalid device: `{device}`")
-
-        self.device = torch.device(device)
         self.network.to(self.device)
 
     def initialize_optimizer_and_scheduler(self) -> None:
@@ -278,7 +270,6 @@ class Base:
         self,
         file_path: Path,
         load_training_info: bool = True,
-        device: Literal["cpu", "cuda"] = "cpu",
     ) -> None:
         """
         Load a posterior model (`FMPEModel` or `NPEModel`) from disk.
@@ -287,11 +278,10 @@ class Base:
             file_path: Path to saved model.
             load_training_info: Whether to load information required to
                 continue training, e.g., the optimizer state dict.
-            device: Device on which to load the model.
         """
 
         # Load data from disk and move everything to the correct device
-        data = torch.load(file_path, map_location=device)
+        data = torch.load(file_path, map_location=self.device)
 
         # Load some required metadata
         self.epoch = data["epoch"]
@@ -301,7 +291,7 @@ class Base:
         # Initialize network, load state dict, and move to device
         self.initialize_network()
         self.network.load_state_dict(data["network_state_dict"])
-        self.network_to_device(device)
+        self.network_to_device()
 
         # Set up optimizer and learning rate scheduler for resuming training
         if load_training_info:
