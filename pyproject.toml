@@ -38,6 +38,7 @@ dependencies = [
     "nautilus-sampler~=1.0.0",
     "normflows",
     "numpy",
+    "p_tqdm",
     "pandas",
     "pydantic>=2.0.0",
     "pyyaml",
