@@ -9,7 +9,7 @@ from typing import Any
 import torch
 
 from fm4ar.nn.resnets import DenseResidualNet
-from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
+from fm4ar.torchutils.weights import load_and_or_freeze_model_weights
 
 
 def create_vectorfield_net(

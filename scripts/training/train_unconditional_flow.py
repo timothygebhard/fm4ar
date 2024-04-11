@@ -18,11 +18,11 @@ from fm4ar.datasets.theta_scalers import get_theta_scaler
 from fm4ar.nested_sampling.posteriors import load_posterior
 from fm4ar.nn.flows import create_unconditional_flow_wrapper
 from fm4ar.utils.multiproc import get_number_of_available_cores
-from fm4ar.utils.torchutils import (
-    get_optimizer_from_config,
+from fm4ar.torchutils.schedulers import (
     get_scheduler_from_config,
     perform_scheduler_step,
 )
+from fm4ar.torchutils.optimizers import get_optimizer_from_config
 from fm4ar.unconditional_flow.config import InputFileConfig, load_config
 
 

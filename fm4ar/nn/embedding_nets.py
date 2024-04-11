@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from fm4ar.nn.resnets import DenseResidualNet
-from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
+from fm4ar.torchutils.weights import load_and_or_freeze_model_weights
 
 
 class SupportsDictInput(ABC):
