@@ -14,7 +14,7 @@ from deepdiff import DeepDiff
 from fm4ar.models.build_model import build_model
 from fm4ar.utils.config import load_config
 from fm4ar.training.preparation import prepare_new, prepare_resume
-from fm4ar.training.stages import initialize_stage, train_stages
+from fm4ar.training.stages import StageConfig, initialize_stage, train_stages
 from fm4ar.training.train_validate import (
     move_batch_to_device,
     train_epoch,
@@ -26,7 +26,6 @@ from fm4ar.utils.tracking import RuntimeLimits
 
 # Define some constants for the mock data
 N_TOTAL = 22  # number of samples in the mock dataset
-N_LOAD = 20  # number of samples to load from the mock dataset
 BATCH_SIZE = 5  # batch size for the mock data
 DIM_THETA = 16  # required to use `vasist_2023` feature scaler
 N_BINS = 39  # number of bins in the mock data
@@ -61,6 +60,7 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
     file_path = tmp_path / "dummy_dataset.hdf"
 
     # Create a dummy dataset
+    np.random.seed(0)
     with h5py.File(file_path, "w") as f:
         f.create_dataset("theta", data=np.random.rand(N_TOTAL, DIM_THETA))
         f.create_dataset("wlen", data=np.random.rand(N_TOTAL, N_BINS))
@@ -71,43 +71,56 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
 
 # We run for both flow libraries
 @pytest.mark.parametrize(
-    "flow_wrapper_config",
+    "flow_wrapper_config, random_seed, expected_sum, expected_loss",
     [
-        {
-            "flow_library": "glasflow",
-            "kwargs": {
-                "num_flow_steps": 3,
-                "base_transform_type": "rq-coupling",
-                "base_transform_kwargs": {
-                    "hidden_dim": 64,
-                    "num_transform_blocks": 2,
-                    "activation": "ELU",
-                    "dropout_probability": 0.1,
-                    "use_batch_norm": True,
-                    "num_bins": 10,
+        (
+            {
+                "flow_library": "glasflow",
+                "kwargs": {
+                    "num_flow_steps": 3,
+                    "base_transform_type": "rq-coupling",
+                    "base_transform_kwargs": {
+                        "hidden_dim": 64,
+                        "num_transform_blocks": 2,
+                        "activation": "ELU",
+                        "dropout_probability": 0.1,
+                        "use_batch_norm": True,
+                        "num_bins": 10,
+                    },
                 },
             },
-        },
-        {
-            "flow_library": "normflows",
-            "kwargs": {
-                "num_flow_steps": 3,
-                "base_transform_type": "rq-coupling",
-                "base_transform_kwargs": {
-                    "num_blocks": 2,
-                    "num_hidden_channels": 64,
-                    "num_bins": 10,
-                    "tail_bound": 10,
-                    "activation": "ELU",
-                    "dropout_probability": 0.1,
+            0,
+            868.3368530273438,
+            46.689642588297524,
+        ),
+        (
+            {
+                "flow_library": "normflows",
+                "kwargs": {
+                    "num_flow_steps": 3,
+                    "base_transform_type": "rq-coupling",
+                    "base_transform_kwargs": {
+                        "num_blocks": 2,
+                        "num_hidden_channels": 64,
+                        "num_bins": 10,
+                        "tail_bound": 10,
+                        "activation": "ELU",
+                        "dropout_probability": 0.1,
+                    },
                 },
             },
-        },
+            1,
+            200.9569854736328,
+            30.386603673299152,
+        )
     ],
 )
 @pytest.mark.integration_test
 def test__npe_model(
     flow_wrapper_config: dict,
+    random_seed: int,
+    expected_sum: float,
+    expected_loss: float,
     experiment_dir: Path,
     path_to_dummy_dataset: Path,
 ) -> None:
@@ -117,16 +130,17 @@ def test__npe_model(
     """
 
     # Set the random seed for reproducibility
-    torch.manual_seed(0)
+    torch.manual_seed(123456)
 
     # Read in template configuration (which was copied to the experiment dir)
     config = load_config(experiment_dir=experiment_dir)
+    config["model"]["random_seed"] = random_seed
 
     # Overwrite the dataset section
     # This should give us 3 training batches and 1 validation batch
     config["dataset"]["file_path"] = path_to_dummy_dataset.as_posix()
-    config["dataset"]["train_fraction"] = 0.75
-    config["dataset"]["n_samples"] = N_LOAD
+    config["dataset"]["n_train_samples"] = 15
+    config["dataset"]["n_valid_samples"] = 5
 
     # Overwrite the the flow_wrapper configuration
     config["model"]["flow_wrapper"] = flow_wrapper_config
@@ -134,17 +148,20 @@ def test__npe_model(
     # Prepare the model and the dataset
     model, dataset = prepare_new(experiment_dir=experiment_dir, config=config)
 
+    # Check that the weight initialization is deterministic
+    actual_sum = float(sum(p.sum() for p in model.network.parameters()))
+    assert np.isclose(actual_sum, expected_sum)
+
     # Select the first stage; make sure config is suitable for testing
-    stage_config = next(iter(config["training"].values()))
-    stage_config["batch_size"] = BATCH_SIZE
-    stage_config["logprob_epochs"] = 3
-    stage_config["use_amp"] = False
+    stage_config = StageConfig(**next(iter(config["training"].values())))
+    stage_config.batch_size = BATCH_SIZE
+    stage_config.logprob_epochs = 3
+    stage_config.use_amp = False
 
     # Initialize the stage
     train_loader, valid_loader = initialize_stage(
         model=model,
         dataset=dataset,
-        n_workers=0,
         resume=False,
         stage_config=stage_config,
         stage_number=1,
@@ -168,6 +185,7 @@ def test__npe_model(
     # Check that we can train and validate manually for two epochs.
     # We train for _two_ epochs to be sure that `validate_epoch()` goes into
     # the branch where we compute the average log probability.
+    train_loss = 0.0
     for epoch in range(1, 3):
 
         # Manually set the model epoch
@@ -194,6 +212,9 @@ def test__npe_model(
             assert np.isfinite(avg_log_prob)
         if epoch == 2:
             assert avg_log_prob is None
+
+    # Check the last train loss --- this should also be reproducible
+    assert np.isclose(train_loss, expected_loss)
 
     # Check that we can train for two more epochs using the .train() method
     model.train(

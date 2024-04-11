@@ -14,7 +14,7 @@ from deepdiff import DeepDiff
 from fm4ar.models.build_model import build_model
 from fm4ar.utils.config import load_config
 from fm4ar.training.preparation import prepare_new, prepare_resume
-from fm4ar.training.stages import initialize_stage, train_stages
+from fm4ar.training.stages import StageConfig, initialize_stage, train_stages
 from fm4ar.training.train_validate import (
     move_batch_to_device,
     train_epoch,
@@ -26,7 +26,6 @@ from fm4ar.utils.tracking import RuntimeLimits
 
 # Define some constants for the mock data
 N_TOTAL = 22  # number of samples in the mock dataset
-N_LOAD = 20  # number of samples to load from the mock dataset
 BATCH_SIZE = 5  # batch size for the mock data
 DIM_THETA = 16  # required to use `vasist_2023` feature scaler
 N_BINS = 39  # number of bins in the mock data
@@ -61,6 +60,7 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
     file_path = tmp_path / "dummy_dataset.hdf"
 
     # Create a dummy dataset
+    np.random.seed(0)
     with h5py.File(file_path, "w") as f:
         f.create_dataset("theta", data=np.random.rand(N_TOTAL, DIM_THETA))
         f.create_dataset("wlen", data=np.random.rand(N_TOTAL, N_BINS))
@@ -69,59 +69,75 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
     return file_path
 
 
-# We run the same test for all combinations of the the *_with_glu flags
 @pytest.mark.parametrize(
-    "t_theta_with_glu, context_with_glu",
+    (
+        "t_theta_with_glu, " +
+        "context_with_glu, " +
+        "random_seed, " +
+        "expected_sum, " +
+        "expected_loss"
+    ),
     [
-        (True, True),
-        (True, False),
-        (False, True),
-        (False, False),
+        (True, True, 0, 200.03622436523438, 5.358018398284912),
+        (True, False, 1, 172.3665008544922, 4.889272054036458),
+        (False, True, 2, 216.8440704345703, 5.372802257537842),
+        (False, False, 3, 218.73599243164062, 5.409043629964192),
     ],
 )
 @pytest.mark.integration_test
 def test__fmpe_model(
     t_theta_with_glu: bool,
     context_with_glu: bool,
+    random_seed: int,
+    expected_sum: float,
+    expected_loss: float,
     experiment_dir: Path,
     path_to_dummy_dataset: Path,
 ) -> None:
     """
     Integration test to check that we can build an FMPE model from the
-    template confiruation and send some mock data through it.
+    template configuration and send some mock data through it.
     """
 
-    # Set the random seed for reproducibility
-    torch.manual_seed(0)
+    # Set the random seed --- this is to make sure that any global random
+    # seed does not interfere with the seed passed to the model constructor
+    torch.manual_seed(123456)
 
     # Read in template configuration (which was copied to the experiment dir)
     config = load_config(experiment_dir=experiment_dir)
+    config["model"]["random_seed"] = random_seed
 
     # Overwrite the dataset section
     # This should give us 3 training batches and 1 validation batch
     config["dataset"]["file_path"] = path_to_dummy_dataset.as_posix()
-    config["dataset"]["train_fraction"] = 0.75
-    config["dataset"]["n_samples"] = N_LOAD
+    config["dataset"]["n_train_samples"] = 15
+    config["dataset"]["n_valid_samples"] = 5
 
     # Set the *_with_glu flags
     config["model"]["t_theta_with_glu"] = t_theta_with_glu
     config["model"]["context_with_glu"] = context_with_glu
 
     # Prepare the model and the dataset
-    model, dataset = prepare_new(experiment_dir=experiment_dir, config=config)
+    model, dataset = prepare_new(
+        experiment_dir=experiment_dir,
+        config=config,
+    )
+
+    # Check that the weight initialization is deterministic
+    actual_sum = float(sum(p.sum() for p in model.network.parameters()))
+    assert np.isclose(actual_sum, expected_sum)
 
     # Select the first stage; make sure config is suitable for testing
-    stage_config = next(iter(config["training"].values()))
-    stage_config["batch_size"] = BATCH_SIZE
-    stage_config["logprob_epochs"] = 3
-    stage_config["early_stopping"] = 0
-    stage_config["use_amp"] = False
+    stage_config = StageConfig(**next(iter(config["training"].values())))
+    stage_config.batch_size = BATCH_SIZE
+    stage_config.logprob_epochs = 3
+    stage_config.early_stopping = 0
+    stage_config.use_amp = False
 
     # Initialize the stage
     train_loader, valid_loader = initialize_stage(
         model=model,
         dataset=dataset,
-        n_workers=0,
         resume=False,
         stage_config=stage_config,
         stage_number=1,
@@ -145,6 +161,7 @@ def test__fmpe_model(
     # Check that we can train and validate manually for two epochs.
     # We train for _two_ epochs to be sure that `validate_epoch()` goes into
     # the branch where we compute the average log probability.
+    train_loss = 0.0
     for epoch in range(1, 3):
 
         # Manually set the model epoch
@@ -171,6 +188,9 @@ def test__fmpe_model(
             assert np.isfinite(avg_log_prob)
         if epoch == 2:
             assert avg_log_prob is None
+
+    # Check the last train loss --- this should also be reproducible
+    assert np.isclose(train_loss, expected_loss)
 
     # Check that we can train for two more epochs using the .train() method
     model.train(
@@ -226,4 +246,4 @@ def test__fmpe_model(
     # Check that we can use train_stages()
     done = train_stages(model=model, dataset=dataset)
     assert done
-    assert model.epoch == 4
+    assert model.epoch == 5
