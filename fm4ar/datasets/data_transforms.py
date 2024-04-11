@@ -13,11 +13,27 @@ from abc import abstractmethod
 from collections.abc import Mapping
 
 import numpy as np
+from pydantic import BaseModel, Field
 
 from fm4ar.datasets.noise import (
     NoiseGenerator,
     get_noise_transform_from_string,
 )
+
+
+class DataTransformConfig(BaseModel):
+    """
+    Configuration for a data transform.
+    """
+
+    type: str = Field(
+        ...,
+        description="Type of the data transform.",
+    )
+    kwargs: dict = Field(
+        {},
+        description="Keyword arguments for the data transform.",
+    )
 
 
 class DataTransform:
@@ -37,34 +53,34 @@ class DataTransform:
         raise NotImplementedError  # pragma: no cover
 
 
-def get_data_transforms(stage_config: dict) -> list[DataTransform]:
+def get_data_transforms(
+    data_transform_configs: list[DataTransformConfig],
+) -> list[DataTransform]:
     """
     Build the data transforms for the given stage.
 
     Args:
-        stage_config: Dictionary containing the config for a stage.
+        data_transform_configs: List of data transform configurations.
 
     Returns:
         List of data transforms.
     """
 
+    data_transform: DataTransform
     data_transforms: list[DataTransform] = []
 
     # Loop over the data transforms and instantiate the corresponding classes
-    for transform_config in stage_config.get("data_transforms", []):
-
-        # Get the class and the keyword arguments
-        method = transform_config["method"]
-        kwargs = transform_config.get("kwargs", {})
-
-        # Instantiate the class and append it to the list
-        match method:
-            case "add_noise":
-                data_transforms.append(AddNoise(**kwargs))
-            case "subsample":
-                data_transforms.append(Subsample(**kwargs))
+    for data_transform_config in data_transform_configs:
+        match data_transform_config.type:
+            case "AddNoise":
+                data_transform = AddNoise(**data_transform_config.kwargs)
+            case "Subsample":
+                data_transform = Subsample(**data_transform_config.kwargs)
             case _:
-                raise ValueError(f"Unknown data transform: {method}")
+                raise ValueError(
+                    f"Unknown data transform: {data_transform_config.type}"
+                )
+        data_transforms.append(data_transform)
 
     return data_transforms
 
