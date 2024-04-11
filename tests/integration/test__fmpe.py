@@ -71,11 +71,11 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
 
 @pytest.mark.parametrize(
     (
-        "t_theta_with_glu, " +
-        "context_with_glu, " +
-        "random_seed, " +
-        "expected_sum, " +
-        "expected_loss"
+        "t_theta_with_glu, "
+        + "context_with_glu, "
+        + "random_seed, "
+        + "expected_sum, "
+        + "expected_loss"
     ),
     [
         (True, True, 0, 200.03622436523438, 5.358018398284912),

@@ -35,21 +35,21 @@ def test__get_likelihood_distribution() -> None:
     # Case 1
     config = LikelihoodConfig(sigma=1)
     likelihood = get_likelihood_distribution(
-        flux_obs=np.array([0., 0.]),
+        flux_obs=np.array([0.0, 0.0]),
         config=config,
     )
     assert np.isclose(
-        likelihood.logpdf(x=np.array([0., 0.])),
+        likelihood.logpdf(x=np.array([0.0, 0.0])),
         np.log(1 / (2 * np.pi)),
     )
 
     # Case 2
     config = LikelihoodConfig(sigma=2)
     likelihood = get_likelihood_distribution(
-        flux_obs=np.array([0., 0.]),
+        flux_obs=np.array([0.0, 0.0]),
         config=config,
     )
     assert np.isclose(
-        likelihood.logpdf(x=np.array([0., 0.])),
+        likelihood.logpdf(x=np.array([0.0, 0.0])),
         np.log(1 / (8 * np.pi)),
     )

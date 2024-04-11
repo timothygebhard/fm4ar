@@ -112,7 +112,7 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
             1,
             200.9569854736328,
             30.386603673299152,
-        )
+        ),
     ],
 )
 @pytest.mark.integration_test

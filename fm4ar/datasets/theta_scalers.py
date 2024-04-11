@@ -29,9 +29,11 @@ class ThetaScaler(ABC):
         return self.forward({"theta": x})["theta"]
 
     def forward_tensor(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.from_numpy(
-            self.forward_array(x.cpu().numpy())
-        ).type_as(x).to(x.device)
+        return (
+            torch.from_numpy(self.forward_array(x.cpu().numpy()))
+            .type_as(x)
+            .to(x.device)
+        )
 
     @abstractmethod
     def inverse(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -41,9 +43,11 @@ class ThetaScaler(ABC):
         return self.inverse({"theta": x})["theta"]
 
     def inverse_tensor(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.from_numpy(
-            self.inverse_array(x.cpu().numpy())
-        ).type_as(x).to(x.device)
+        return (
+            torch.from_numpy(self.inverse_array(x.cpu().numpy()))
+            .type_as(x)
+            .to(x.device)
+        )
 
 
 class IdentityScaler(ThetaScaler):

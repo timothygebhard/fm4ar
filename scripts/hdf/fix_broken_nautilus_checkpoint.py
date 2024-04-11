@@ -73,6 +73,8 @@ if __name__ == "__main__":
                     name=weights_key,
                     shape=(0, ),
                     maxshape=(None, ),
+                    shape=(0,),
+                    maxshape=(None,),
                 )
                 print(" Done!", flush=True)
 

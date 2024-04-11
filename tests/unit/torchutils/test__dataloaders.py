@@ -57,7 +57,7 @@ def test__build_dataloaders(
     assert isinstance(train_loader, DataLoader)
     assert isinstance(valid_loader, DataLoader)
     assert len(train_loader) == 21  # last batch is dropped
-    assert len(valid_loader) == 6   # last batch is not dropped
+    assert len(valid_loader) == 6  # last batch is not dropped
     assert len(train_loader.dataset) == 64  # type: ignore
     assert len(valid_loader.dataset) == 16  # type: ignore
 

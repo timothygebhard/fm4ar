@@ -139,7 +139,7 @@ def prepare_and_launch_dag(
         file_path = create_submission_file(
             htcondor_config=htcondor_config,
             experiment_dir=output_dir,
-            file_name=f"{i}__{stage}.sub"
+            file_name=f"{i}__{stage}.sub",
         )
 
         # Add the job to the DAGMan file
@@ -274,7 +274,8 @@ if __name__ == "__main__":
         target = load_target_spectrum(
             file_path=config.target_spectrum.file_path,
             index=(
-                args.target_index if args.target_index is not None
+                args.target_index
+                if args.target_index is not None
                 else config.target_spectrum.index
             ),
         )
@@ -376,7 +377,8 @@ if __name__ == "__main__":
         # Merge the results from all simulation jobs
         print("Merging HDF files:")
         merge_hdf_files(
-            target_dir=output_dir, name_pattern="simulations-*.hdf",
+            target_dir=output_dir,
+            name_pattern="simulations-*.hdf",
             output_file_path=output_dir / "simulations.hdf",
             keys=[
                 "flux",

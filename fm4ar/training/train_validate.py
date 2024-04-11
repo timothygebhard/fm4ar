@@ -199,7 +199,8 @@ def validate_epoch(
 
     # Set default value for `logprob_epochs`
     logprob_epochs = (
-        (10 if is_fmpe_model else 1) if stage_config.logprob_epochs is None
+        (10 if is_fmpe_model else 1)
+        if stage_config.logprob_epochs is None
         else stage_config.logprob_epochs
     )
 

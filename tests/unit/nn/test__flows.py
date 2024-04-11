@@ -143,7 +143,7 @@ def test__create_unconditional_flow_wrapper(
         flow_wrapper_config={
             "flow_library": flow_library,
             "kwargs": kwargs,
-        }
+        },
     )
 
     if flow_library == "normflows":

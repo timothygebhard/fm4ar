@@ -62,9 +62,7 @@ def load_dataset(config: dict) -> SpectraDataset:
         theta = np.array(f["theta"][:n_samples])
         flux = np.array(f["flux"][:n_samples])
         wlen = np.array(
-            f["wlen"]
-            if len(f["wlen"].shape) == 1
-            else f["wlen"][:n_samples]
+            f["wlen"] if len(f["wlen"].shape) == 1 else f["wlen"][:n_samples]
         )
 
     # TODO: Add support for filtering the dataset, e.g., based on mean flux

@@ -171,8 +171,8 @@ def train_stages(
     # Extract list of stages from settings dict
     stage_names = list(model.config["training"].keys())
     stage_configs = [
-        StageConfig(**stage_config_dict) for stage_config_dict
-        in model.config["training"].values()
+        StageConfig(**stage_config_dict)
+        for stage_config_dict in model.config["training"].values()
     ]
     num_stages = len(stage_configs)
 

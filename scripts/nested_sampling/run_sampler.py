@@ -107,14 +107,15 @@ if __name__ == "__main__":
         htcondor_config.retry_on_exit_code = 42
         htcondor_config.log_file_name = "log.$$([NumJobStarts])"
         htcondor_config.extra_kwargs = (
-            {} if config.sampler.library != "multinest"
+            {}
+            if config.sampler.library != "multinest"
             else {"transfer_executable": "False"}
         )
 
         # Create submission file
         file_path = create_submission_file(
             htcondor_config=htcondor_config,
-            experiment_dir=args.experiment_dir.resolve()
+            experiment_dir=args.experiment_dir.resolve(),
         )
 
         print("Done!\n", flush=True)

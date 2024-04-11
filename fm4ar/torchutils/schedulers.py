@@ -30,9 +30,7 @@ class SchedulerConfig(BaseModel):
     )
     kwargs: dict = Field(
         {},
-        description=(
-            "Keyword arguments for the optimizer (e.g., patience)."
-        ),
+        description="Keyword arguments for the optimizer (e.g., patience).",
     )
 
     @field_validator('type')

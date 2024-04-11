@@ -308,8 +308,9 @@ class DynestySampler(Sampler):
         # for `propose_point`. More experiments might be required to understand
         # what are the best options here.
         self.use_pool = (
-            use_pool if use_pool is not None else
-            {
+            use_pool
+            if use_pool is not None
+            else {
                 "propose_point": True,
                 "prior_transform": False,
                 "loglikelihood": True,

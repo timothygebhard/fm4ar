@@ -17,7 +17,7 @@ def test__save_to_hdf__load_from_hdf(tmp_path: Path) -> None:
     file_path = tmp_path / "test.hdf"
 
     a1 = np.array([1, 2, 3])
-    a2 = np.array([4.12, 5, 6 + 1/3])
+    a2 = np.array([4.12, 5, 6 + 1 / 3])
     a3 = np.array([True, False, True])
 
     # Case 1: Save arrays
@@ -43,8 +43,8 @@ def test__merge_hdf_file(tmp_path: Path) -> None:
     file1 = tmp_path / "file1.hdf"
     file2 = tmp_path / "file2.hdf"
     file3 = tmp_path / "file3.hdf"
-    save_to_hdf(file_path=file1, a1=np.array([1, 2]), a2=np.array([3., 4.]))
-    save_to_hdf(file_path=file2, a1=np.array([5, 6]), a2=np.array([3., 4.]))
+    save_to_hdf(file_path=file1, a1=np.array([1, 2]), a2=np.array([3.0, 4.0]))
+    save_to_hdf(file_path=file2, a1=np.array([5, 6]), a2=np.array([3.0, 4.0]))
     save_to_hdf(file_path=file3, a1=np.array([]), a2=np.array([]))
 
     # Merge HDF5 files
@@ -61,7 +61,7 @@ def test__merge_hdf_file(tmp_path: Path) -> None:
     # Load merged HDF5 file
     loaded = load_from_hdf(file_path=output_file, keys=["a1", "a2"])
     assert np.array_equal(loaded["a1"], np.array([1, 2, 5, 6]))
-    assert np.array_equal(loaded["a2"], np.array([3., 4.]))
+    assert np.array_equal(loaded["a2"], np.array([3.0, 4.0]))
 
     # Check if the original files were deleted
     assert not file1.exists()

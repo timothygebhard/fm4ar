@@ -47,4 +47,4 @@ def test__compute_is_weights() -> None:
         np.array([0, 0, 0]),
     )
     assert np.allclose(np.sum(normalized_weights), 3)
-    assert np.allclose(normalized_weights, [1., 1., 1.])
+    assert np.allclose(normalized_weights, [1.0, 1.0, 1.0])
