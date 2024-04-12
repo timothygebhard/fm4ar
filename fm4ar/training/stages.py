@@ -22,6 +22,7 @@ from fm4ar.torchutils.dataloaders import (
 )
 from fm4ar.torchutils.early_stopping import EarlyStoppingConfig
 from fm4ar.torchutils.gradient_clipping import GradientClippingConfig
+from fm4ar.torchutils.logprob_evaluation import LogProbEvaluationConfig
 from fm4ar.torchutils.optimizers import OptimizerConfig
 from fm4ar.torchutils.schedulers import SchedulerConfig
 from fm4ar.utils.tracking import RuntimeLimits
@@ -78,13 +79,7 @@ class StageConfig(BaseModel):
         description="Internal precision for float32 matrix multiplication.",
     )
     gradient_clipping: GradientClippingConfig
-    logprob_epochs: int | None = Field(
-        ...,
-        description=(
-            "Number of epochs between log-probability calculation. "
-            "None means no log-probability calculation."
-        ),
-    )
+    logprob_evaluation: LogProbEvaluationConfig
     loss_kwargs: dict = Field(
         default={},
         description=(

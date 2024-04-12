@@ -85,7 +85,12 @@ training:
     gradient_clipping:
       enabled: True
       max_norm: 1.0
-    logprob_epochs: -1
+    logprob_evaluation:
+      interval: null
+      n_samples: 1024
+      ode_solver:
+        method: "dopri8"
+        tolerance: 1.0e-3
     optimizer:
       type: "AdamW"
       kwargs:

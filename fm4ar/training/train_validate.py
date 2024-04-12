@@ -2,7 +2,7 @@
 Methods to train (or validate) a given model for one epoch.
 """
 
-from typing import Any, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Union
 
 import torch
 from torch.cuda.amp import GradScaler, autocast
@@ -173,7 +173,7 @@ def validate_epoch(
     model: Union["Base", "FMPEModel"],  # required because of log_prob_batch()
     dataloader: DataLoader,
     stage_config: StageConfig,
-) -> tuple[float, float | None]:
+) -> tuple[float, float]:
     """
     Perform one validation epoch for the given model.
 
@@ -193,19 +193,13 @@ def validate_epoch(
     # Ensure that the neural net is in evaluation mode
     model.network.eval()
 
-    # Check the `model` is an FMPE model. We cannot directly use `isinstance`
-    # here, since this would create a circular import.
-    is_fmpe_model = model.__class__.__name__ == "FMPEModel"
+    # -------------------------------------------------------------------------
+    # Compute validation loss
+    # -------------------------------------------------------------------------
 
-    # Set default value for `logprob_epochs`
-    logprob_epochs = (
-        (10 if is_fmpe_model else 1)
-        if stage_config.logprob_epochs is None
-        else stage_config.logprob_epochs
-    )
-
+    # We first compute only the validation loss
     # We don't need to compute gradients for the validation set
-    with torch.no_grad():
+    with torch.no_grad() and autocast(enabled=stage_config.use_amp):
 
         # Set up a LossInfo object to keep track of the loss and times
         loss_info = LossInfo(
@@ -215,20 +209,6 @@ def validate_epoch(
             mode="Validate",
             print_freq=1,
         )
-
-        # Store average logprob: We only compute this from the first batch,
-        # because it otherwise takes extremely long for flow matching models.
-        avg_logprob = None
-
-        # Additional keyword arguments for log_prob_batch
-        # Background: It seems that the time-inverse ODE required to compute
-        # the log probability of the true parameter value is sometimes stiffer
-        # than the "forward" ODE, so we need to use a different solver.
-        # TODO: Check this again more thoroughly!
-        log_prob_kwargs: dict[str, Any] = dict()
-        if is_fmpe_model:
-            log_prob_kwargs["tolerance"] = 1e-3
-            log_prob_kwargs["method"] = "dopri8"
 
         # Iterate over the batches
         batch: dict[str, torch.Tensor]
@@ -247,31 +227,53 @@ def validate_epoch(
             )
             check_for_nans(loss, "validation loss")
 
-            # Define maximum number of samples to use for log probability.
-            # This is to limit the memory usage for batch sizes that cannot
-            # be processed without AMP anymore.
-            # TODO: Maybe there is a cleaner way of handling this?
-            MAX_SAMPLES_FOR_LOGPROB = 1024
-
-            # Compute log probability of true parameter values of first batch
-            if (
-                logprob_epochs > 0
-                and (model.epoch - 1) % logprob_epochs == 0
-                and batch_idx == 0
-            ):
-                logprob = model.log_prob_batch(
-                    theta=theta[:MAX_SAMPLES_FOR_LOGPROB],
-                    context={
-                        key: value[:MAX_SAMPLES_FOR_LOGPROB]
-                        for key, value in context.items()
-                    },
-                    **log_prob_kwargs,  # for FMPE: tolerance, method
-                )
-                avg_logprob = float(logprob.mean().item())
-
             # Update loss for history and logging
             loss_info.update(loss.item(), len(theta))
             loss_info.print_info(batch_idx)
 
-        # Return the average validation loss and log probability
-        return loss_info.get_avg(), avg_logprob
+    # Select the average validation loss
+    avg_loss = loss_info.get_avg()
+
+    # -------------------------------------------------------------------------
+    # Optionally: Compute log prob
+    # -------------------------------------------------------------------------
+
+    # Optionally, we now also compute the average log probability of the true
+    # parameter values. This is relatively expensive for flow matching models,
+    # so we only do this for a subset of a single batch.
+    if (
+        stage_config.logprob_evaluation.interval is not None
+        and (model.epoch - 1) % stage_config.logprob_evaluation.interval == 0
+    ):
+
+        # Get the first batch of the dataloader and move it to the device
+        batch = next(iter(dataloader))
+        theta, context = move_batch_to_device(batch, model.device)
+
+        # Check the `model` is an FMPE model and select any additional kwargs
+        # for the ODE solver that we might need. Note: We cannot directly use
+        # `isinstance` here, since this would create a circular import.
+        is_fmpe_model = model.__class__.__name__ == "FMPEModel"
+        extra_kwargs = (
+            {} if not is_fmpe_model
+            else stage_config.logprob_evaluation.ode_solver.dict()
+        )
+
+        # Compute logprob of the first `n_samples` samples of the batch
+        n_samples = stage_config.logprob_evaluation.n_samples
+        with torch.no_grad() and autocast(enabled=stage_config.use_amp):
+            logprob = model.log_prob_batch(
+                theta=theta[:n_samples],
+                context={k: v[:n_samples] for k, v in context.items()},
+                **extra_kwargs,
+            )
+
+        # Compute the average log probability
+        avg_logprob = float(logprob.mean().item())
+
+    # If we do not compute the log probability, set it to NaN
+    # TODO: Alternatively, we could return the last computed logprob?
+    else:
+        avg_logprob = float("nan")
+
+    return avg_loss, avg_logprob

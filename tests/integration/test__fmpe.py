@@ -82,10 +82,10 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
         )
     ),
     [
-        (True, True, 0, 200.03622436523438, 5.256303628285726),
-        (True, False, 1, 172.3665008544922, 4.726151784261067),
-        (False, True, 2, 216.8440704345703, 5.06025759379069),
-        (False, False, 3, 218.73599243164062, 5.48011573155721),
+        (True, True, 0, 200.03622436523438, 5.227041721343994),
+        (True, False, 1, 172.3665008544922, 4.751931667327881),
+        (False, True, 2, 216.8440704345703, 5.16398557027181),
+        (False, False, 3, 218.73599243164062, 5.091914335886638),
     ],
 )
 @pytest.mark.integration_test
@@ -134,7 +134,7 @@ def test__fmpe_model(
     # Select the first stage; make sure config is suitable for testing
     stage_config = StageConfig(**list(config["training"].values())[0])
     stage_config.batch_size = BATCH_SIZE
-    stage_config.logprob_epochs = 3
+    stage_config.logprob_evaluation.interval = 3
     stage_config.use_amp = False
 
     # Initialize the stage
@@ -188,10 +188,10 @@ def test__fmpe_model(
         )
         assert np.isfinite(val_loss)
         if epoch == 1:
-            assert avg_log_prob is not None
+            assert np.isfinite(avg_log_prob)
             assert np.isfinite(avg_log_prob)
         if epoch == 2:
-            assert avg_log_prob is None
+            assert np.isnan(avg_log_prob)
 
     # Check that the number of epochs and stage name are correct
     assert model.epoch == 2

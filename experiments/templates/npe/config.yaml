@@ -73,7 +73,9 @@ training:
     gradient_clipping:
       enabled: True
       max_norm: 1.0
-    logprob_epochs: null
+    logprob_evaluation:
+      interval: null
+      n_samples: 1024
     optimizer:
       type: "AdamW"
       kwargs:

@@ -91,7 +91,7 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
             },
             0,
             868.3368530273438,
-            45.92727788289388,
+            45.54263178507487,
         ),
         (
             {
@@ -111,7 +111,7 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
             },
             1,
             200.9569854736328,
-            28.383124669392902,
+            29.38198407491048,
         ),
     ],
 )
@@ -155,7 +155,7 @@ def test__npe_model(
     # Select the first stage; make sure config is suitable for testing
     stage_config = StageConfig(**list(config["training"].values())[0])
     stage_config.batch_size = BATCH_SIZE
-    stage_config.logprob_epochs = 3
+    stage_config.logprob_evaluation.interval = 3
     stage_config.use_amp = False
 
     # Initialize the stage
@@ -209,10 +209,10 @@ def test__npe_model(
         )
         assert np.isfinite(val_loss)
         if epoch == 1:
-            assert avg_log_prob is not None
+            assert np.isfinite(avg_log_prob)
             assert np.isfinite(avg_log_prob)
         if epoch == 2:
-            assert avg_log_prob is None
+            assert np.isnan(avg_log_prob)
 
     # Check that the number of epochs and stage name are correct
     assert model.epoch == 2
