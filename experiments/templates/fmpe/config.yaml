@@ -77,7 +77,8 @@ training:
           random_seed: 42
           complexity: 0
           transform: "lambda wlen, error: 0.125754 * error"
-    early_stopping: 100
+    early_stopping:
+      stage_patience: 100
     epochs: 5
     float32_matmul_precision: "high"
     gradient_clipping:
