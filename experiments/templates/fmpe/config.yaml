@@ -111,7 +111,7 @@ local:
 
   # Settings for HTCondor
   htcondor:
-    bid: 25
+    bid: 50
     n_cpus: 8
     n_gpus: 1
     memory_cpus: 200_000
