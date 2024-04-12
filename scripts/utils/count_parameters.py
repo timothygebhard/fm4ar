@@ -35,8 +35,8 @@ if __name__ == "__main__":
     # Load config and update local settings to ensure they work on macOS.
     # Also, load only the smaller test set to get the correct theta_dim.
     config = load_config(args.experiment_dir)
-    config["dataset"]["n_samples"] = 10
-    config["local"]["wandb"] = False
+    config["dataset"]["n_train_samples"] = 10
+    config["dataset"]["n_valid_samples"] = 0
     config["local"]["device"] = "cpu"
     config["local"]["n_workers"] = 0
     if "wandb" in config["local"]:
