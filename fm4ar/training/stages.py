@@ -72,7 +72,10 @@ class StageConfig(BaseModel):
     gradient_clipping: GradientClippingConfig
     logprob_epochs: int | None = Field(
         ...,
-        description="Number of epochs between log-probability calculation.",
+        description=(
+            "Number of epochs between log-probability calculation. "
+            "None means no log-probability calculation."
+        ),
     )
     loss_kwargs: dict = Field(
         default={},
@@ -83,13 +86,19 @@ class StageConfig(BaseModel):
     )
     n_workers: int | Literal["auto"] = Field(
         default="auto",
-        description="Number of workers for the data loaders.",
+        description=(
+            "Number of workers for the data loaders. If 'auto', the number "
+            "of workers is set to n_available_cpus - 1, or 0 on a Mac."
+        ),
     )
     optimizer: OptimizerConfig
     scheduler: SchedulerConfig
     use_amp: bool = Field(
         ...,
-        description="Whether to use automatic mixed precision training.",
+        description=(
+            "Whether to use automatic mixed precision training. Empirically, "
+            "this only give an advantage for FMPE models, but not NPE."
+        ),
     )
 
 
