@@ -20,6 +20,7 @@ from fm4ar.torchutils.dataloaders import (
     build_dataloaders,
     get_number_of_workers,
 )
+from fm4ar.torchutils.early_stopping import EarlyStoppingConfig
 from fm4ar.torchutils.gradient_clipping import GradientClippingConfig
 from fm4ar.torchutils.optimizers import OptimizerConfig
 from fm4ar.torchutils.schedulers import SchedulerConfig
@@ -59,10 +60,7 @@ class StageConfig(BaseModel):
             "if it is smaller than the batch size."
         ),
     )
-    early_stopping: int = Field(
-        ...,
-        description="Number of epochs without improvement before stopping.",
-    )
+    early_stopping: EarlyStoppingConfig
     epochs: int = Field(
         ...,
         description="Number of epochs to train the model for.",

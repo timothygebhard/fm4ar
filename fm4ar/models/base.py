@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 
 from fm4ar.training.stages import ExitStatus, StageConfig
 from fm4ar.training.train_validate import validate_epoch, train_epoch
+from fm4ar.torchutils.early_stopping import early_stopping_criterion_reached
 from fm4ar.torchutils.general import resolve_device
 from fm4ar.torchutils.optimizers import (
     OptimizerConfig,
@@ -404,7 +405,11 @@ class Base:
             print("Done!")
 
             # Check if we should stop early
-            if self.stop_early(patience=stage_config.early_stopping):
+            if early_stopping_criterion_reached(
+                loss_history=self.history["test_loss"].values,
+                stage_epoch=self.stage_epoch,
+                early_stopping_config=stage_config.early_stopping,
+            ):
                 print("Early stopping criterion reached, ending training!")
                 return ExitStatus.EARLY_STOPPED
 
@@ -458,17 +463,3 @@ class Base:
         print("Done!")
 
         return file_path
-
-    def stop_early(self, patience: int | None) -> bool:
-        """
-        Check if we should stop early: If the test loss has not improved
-        for `patience` epochs, we stop the training.
-        """
-
-        if patience is None:  # pragma: no cover
-            return False
-
-        min_idx = int(self.history["test_loss"].values.argmin())
-        last_idx = len(self.history)
-
-        return bool(last_idx - min_idx > patience)
