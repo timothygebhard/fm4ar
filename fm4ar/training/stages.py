@@ -73,9 +73,9 @@ class StageConfig(BaseModel):
         ...,
         description="Number of epochs to train the model for.",
     )
-    float32_matmul_precision: str = Field(
+    float32_matmul_precision: Literal["highest", "high", "medium"] = Field(
         default="highest",
-        description="Precision for float32 matrix multiplication.",
+        description="Internal precision for float32 matrix multiplication.",
     )
     gradient_clipping: GradientClippingConfig
     logprob_epochs: int | None = Field(
