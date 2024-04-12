@@ -71,17 +71,21 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
 
 @pytest.mark.parametrize(
     (
-        "t_theta_with_glu, "
-        + "context_with_glu, "
-        + "random_seed, "
-        + "expected_sum, "
-        + "expected_loss"
+        ",".join(
+            [
+                "t_theta_with_glu",
+                "context_with_glu",
+                "random_seed",
+                "expected_sum",
+                "expected_loss",
+            ]
+        )
     ),
     [
-        (True, True, 0, 200.03622436523438, 5.358018398284912),
-        (True, False, 1, 172.3665008544922, 4.889272054036458),
-        (False, True, 2, 216.8440704345703, 5.372802257537842),
-        (False, False, 3, 218.73599243164062, 5.409043629964192),
+        (True, True, 0, 200.03622436523438, 5.256303628285726),
+        (True, False, 1, 172.3665008544922, 4.726151784261067),
+        (False, True, 2, 216.8440704345703, 5.06025759379069),
+        (False, False, 3, 218.73599243164062, 5.48011573155721),
     ],
 )
 @pytest.mark.integration_test
@@ -128,10 +132,9 @@ def test__fmpe_model(
     assert np.isclose(actual_sum, expected_sum)
 
     # Select the first stage; make sure config is suitable for testing
-    stage_config = StageConfig(**next(iter(config["training"].values())))
+    stage_config = StageConfig(**list(config["training"].values())[0])
     stage_config.batch_size = BATCH_SIZE
     stage_config.logprob_epochs = 3
-    stage_config.early_stopping = 0
     stage_config.use_amp = False
 
     # Initialize the stage
@@ -139,8 +142,8 @@ def test__fmpe_model(
         model=model,
         dataset=dataset,
         resume=False,
+        stage_name=list(config["training"].keys())[0],
         stage_config=stage_config,
-        stage_number=1,
     )
 
     # Get a batch of mock data
@@ -166,6 +169,7 @@ def test__fmpe_model(
 
         # Manually set the model epoch
         model.epoch = epoch
+        model.stage_epoch = epoch
 
         # This should be 3 batches
         train_loss = train_epoch(
@@ -189,6 +193,11 @@ def test__fmpe_model(
         if epoch == 2:
             assert avg_log_prob is None
 
+    # Check that the number of epochs and stage name are correct
+    assert model.epoch == 2
+    assert model.stage_name == "stage_0"
+    assert model.stage_epoch == 2
+
     # Check the last train loss --- this should also be reproducible
     assert np.isclose(train_loss, expected_loss)
 
@@ -196,9 +205,11 @@ def test__fmpe_model(
     model.train(
         train_loader=train_loader,
         valid_loader=valid_loader,
-        runtime_limits=RuntimeLimits(max_epochs_total=4),
+        runtime_limits=RuntimeLimits(max_epochs=4),
         stage_config=stage_config,
     )
+    assert model.epoch == 4
+    assert model.stage_epoch == 4
 
     # Check that we can sample from the model
     samples = model.sample_batch(context=context)

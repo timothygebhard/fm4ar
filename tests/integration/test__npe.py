@@ -91,7 +91,7 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
             },
             0,
             868.3368530273438,
-            46.689642588297524,
+            45.92727788289388,
         ),
         (
             {
@@ -111,7 +111,7 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
             },
             1,
             200.9569854736328,
-            30.386603673299152,
+            28.383124669392902,
         ),
     ],
 )
@@ -153,7 +153,7 @@ def test__npe_model(
     assert np.isclose(actual_sum, expected_sum)
 
     # Select the first stage; make sure config is suitable for testing
-    stage_config = StageConfig(**next(iter(config["training"].values())))
+    stage_config = StageConfig(**list(config["training"].values())[0])
     stage_config.batch_size = BATCH_SIZE
     stage_config.logprob_epochs = 3
     stage_config.use_amp = False
@@ -163,8 +163,8 @@ def test__npe_model(
         model=model,
         dataset=dataset,
         resume=False,
+        stage_name=list(config["training"].keys())[0],
         stage_config=stage_config,
-        stage_number=1,
     )
 
     # Get a batch of mock data
@@ -190,6 +190,7 @@ def test__npe_model(
 
         # Manually set the model epoch
         model.epoch = epoch
+        model.stage_epoch = epoch
 
         # This should be 3 batches
         train_loss = train_epoch(
@@ -213,6 +214,11 @@ def test__npe_model(
         if epoch == 2:
             assert avg_log_prob is None
 
+    # Check that the number of epochs and stage name are correct
+    assert model.epoch == 2
+    assert model.stage_name == "stage_0"
+    assert model.stage_epoch == 2
+
     # Check the last train loss --- this should also be reproducible
     assert np.isclose(train_loss, expected_loss)
 
@@ -220,9 +226,11 @@ def test__npe_model(
     model.train(
         train_loader=train_loader,
         valid_loader=valid_loader,
-        runtime_limits=RuntimeLimits(max_epochs_total=4),
+        runtime_limits=RuntimeLimits(max_epochs=4),
         stage_config=stage_config,
     )
+    assert model.epoch == 4
+    assert model.stage_epoch == 4
 
     # Check that we can sample from the model
     samples = model.sample_batch(context=context)
