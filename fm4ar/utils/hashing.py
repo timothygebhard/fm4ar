@@ -12,8 +12,8 @@ def get_sha512sum(file_path: Path, buffer_size: int = 4096) -> str:
     This should match output of `sha512sum` command.
     """
 
-    hash_md5 = hashlib.sha512()
+    hash_sha512 = hashlib.sha512()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(buffer_size), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()
+            hash_sha512.update(chunk)
+    return hash_sha512.hexdigest()
