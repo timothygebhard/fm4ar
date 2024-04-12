@@ -2,6 +2,7 @@
 Methods to train (or validate) a given model for one epoch.
 """
 
+import time
 from typing import TYPE_CHECKING, Union
 
 import torch
@@ -246,6 +247,9 @@ def validate_epoch(
         and (model.epoch - 1) % stage_config.logprob_evaluation.interval == 0
     ):
 
+        evaluation_start = time.time()
+        print("\nEvaluating log probability...", end=" ", flush=True)
+
         # Get the first batch of the dataloader and move it to the device
         batch = next(iter(dataloader))
         theta, context = move_batch_to_device(batch, model.device)
@@ -261,7 +265,7 @@ def validate_epoch(
 
         # Compute logprob of the first `n_samples` samples of the batch
         n_samples = stage_config.logprob_evaluation.n_samples
-        with torch.no_grad() and autocast(enabled=stage_config.use_amp):
+        with torch.no_grad():  # and autocast(enabled=stage_config.use_amp):
             logprob = model.log_prob_batch(
                 theta=theta[:n_samples],
                 context={k: v[:n_samples] for k, v in context.items()},
@@ -270,6 +274,10 @@ def validate_epoch(
 
         # Compute the average log probability
         avg_logprob = float(logprob.mean().item())
+
+        # Print the time it took to compute the log probability
+        evaluation_time = time.time() - evaluation_start
+        print(f"Done! ({evaluation_time:,.2f}s)")
 
     # If we do not compute the log probability, set it to NaN
     # TODO: Alternatively, we could return the last computed logprob?
