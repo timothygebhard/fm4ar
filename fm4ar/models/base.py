@@ -15,7 +15,7 @@ import wandb
 from threadpoolctl import threadpool_limits
 from torch.utils.data import DataLoader
 
-from fm4ar.training.stages import StageConfig
+from fm4ar.training.stages import ExitStatus, StageConfig
 from fm4ar.training.train_validate import validate_epoch, train_epoch
 from fm4ar.torchutils.general import resolve_device
 from fm4ar.torchutils.optimizers import (
@@ -78,7 +78,9 @@ class Base:
         self.random_seed = random_seed
 
         # Initialize attributes
-        self.epoch = 0
+        self.epoch: int = 0  # global epoch (across all stages)
+        self.stage_name: str | None = None  # name of current training stage
+        self.stage_epoch: int = 0  # epoch within current training stage
         self.model_config: dict | None = None
         self.optimizer_config: OptimizerConfig | None = None
         self.scheduler_config: SchedulerConfig | None = None
@@ -246,6 +248,8 @@ class Base:
         data = {
             "config": self.config,
             "epoch": self.epoch,
+            "stage_name": self.stage_name,
+            "stage_epoch": self.stage_epoch,
             "history": self.history,
             "network_state_dict": self.network.state_dict(),
         }
@@ -287,6 +291,8 @@ class Base:
 
         # Load some required metadata
         self.epoch = data["epoch"]
+        self.stage_name = data["stage_name"]
+        self.stage_epoch = data["stage_epoch"]
         self.config = data["config"]
         self.history = data["history"]
 
@@ -323,7 +329,7 @@ class Base:
         valid_loader: DataLoader,
         runtime_limits: RuntimeLimits,
         stage_config: StageConfig,
-    ) -> bool:
+    ) -> ExitStatus:
         """
         Train the model until the runtime limits are exceeded.
 
@@ -334,14 +340,16 @@ class Base:
             stage_config: Configuration for the current training stage.
 
         Returns:
-            True if we stopped because we reached the early stopping
-            criterion, False otherwise.
+            ExitStatus indicating the reason for why this function
+            stopped (completed, early stopped, or runtime exceeded).
         """
 
         # Run for as long as the runtime limits allow
         while not runtime_limits.limits_exceeded(self.epoch):
 
+            # Increase epoch counters
             self.epoch += 1
+            self.stage_epoch += 1
 
             # Run one epoch of training and testing
             lr = get_lr(self.optimizer)
@@ -398,13 +406,16 @@ class Base:
             # Check if we should stop early
             if self.stop_early(patience=stage_config.early_stopping):
                 print("Early stopping criterion reached, ending training!")
-                return True
+                return ExitStatus.EARLY_STOPPED
 
             # Save the best model if the test loss has improved
             self.save_best_model(test_loss=test_loss)
             print()
 
-        return False
+        return (
+            ExitStatus.COMPLETED if not runtime_limits.max_runtime_exceeded()
+            else ExitStatus.MAX_RUNTIME_EXCEEDED
+        )
 
     def save_best_model(self, test_loss: float) -> None:
         """
