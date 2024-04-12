@@ -465,14 +465,11 @@ class Base:
         # Create the snapshots directory if it doesn't exist yet
         snapshots_dir = self.experiment_dir / "snapshots"
         snapshots_dir.mkdir(exist_ok=True)
-
-        print("Saving snapshot...", end=" ")
         file_path = self.save_model(
             prefix="snapshot",
             name=f"{self.epoch:04d}",
             save_training_info=True,
             target_dir=snapshots_dir,
         )
-        print("Done!")
 
         return file_path
