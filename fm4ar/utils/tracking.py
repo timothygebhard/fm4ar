@@ -100,7 +100,7 @@ class LossInfo:
         """
 
         # Print only every `print_freq` batches
-        if batch_idx % self.print_freq != 0:
+        if batch_idx % self.print_freq != 0:  # pragma: no cover
             return
 
         # Print progress (epoch, batch, percentage)
@@ -135,57 +135,65 @@ class LossInfo:
 
 class RuntimeLimits:
     """
-    Keeps track of the runtime limits (time and / or number of epochs)
+    Keeps track of the runtime limits.
+
+    This is used both to control the maximum runtime of a job on the
+    cluster, but also to enforce the number of epochs specified in the
+    configuration of a training stage.
     """
 
     def __init__(
         self,
-        max_time_per_run: float | None = None,
-        max_epochs_per_run: int | None = None,
-        max_epochs_total: int | None = None,
-        epoch_start: int = 0,
+        max_runtime: float | None = None,
+        max_epochs: int | None = None,
     ) -> None:
         """
         Initialize new `RuntimeLimits` object.
 
         Args:
-            max_time_per_run: Maximum time for run, in seconds. This is
-                a soft limit (i.e., the run will only be stopped after
-                a full epoch).
-            max_epochs_per_run: Maximum number of epochs for run.
-            max_epochs_total: Maximum total number of training epochs.
-            epoch_start: Start epoch of current run.
+            max_runtime: Maximum time for run, in seconds.
+                Note that this is a soft limit (i.e., a run will
+                only be stopped after a full epoch).
+            max_epochs: Maximum number of training epochs. When using
+                `train_stages()`, this will be updated for each stage.
         """
 
-        self.max_time_per_run = max_time_per_run
-        self.max_epochs_per_run = max_epochs_per_run
-        self.max_epochs_total = max_epochs_total
-        self.epoch_start = epoch_start
+        # Store the limits
+        self.max_runtime = max_runtime
+        self.max_epochs = max_epochs
+
+        # Store the start time
         self.time_start = time.time()
+
+    def max_runtime_exceeded(self) -> bool:
+        """
+        Check whether the runtime limit is exceeded.
+        """
+
+        if self.max_runtime is None:
+            return False
+        return time.time() - self.time_start >= self.max_runtime
+
+    def max_epochs_exceeded(self, epoch: int) -> bool:
+        """
+        Check whether the maximum number of epochs is exceeded.
+        """
+
+        if self.max_epochs is None:
+            return False
+        return epoch >= self.max_epochs
 
     def limits_exceeded(self, epoch: int) -> bool:
         """
         Check whether any of the runtime limits are exceeded.
         """
 
-        # Check time limit for run
-        if self.max_time_per_run is not None:
-            if time.time() - self.time_start >= self.max_time_per_run:
-                print(f"Time limit of {self.max_time_per_run} s exceeded!")
-                return True
+        if self.max_runtime_exceeded():
+            print(f"Reached time limit of {self.max_runtime} seconds!")
+            return True
 
-        # Check epoch limit for run
-        if self.max_epochs_per_run is not None:
-            if epoch - self.epoch_start >= self.max_epochs_per_run:
-                print(f"Run epoch limit of {self.max_epochs_per_run} reached!")
-                return True
-
-        # Check total epoch limit
-        if self.max_epochs_total is not None:
-            if epoch is None:
-                raise ValueError("`epoch` argument is required!")
-            if epoch >= self.max_epochs_total:
-                print(f"Total epoch limit of {self.max_epochs_total} reached!")
-                return True
+        if self.max_epochs_exceeded(epoch):
+            print(f"Reached maximum number of epochs ({self.max_epochs})!")
+            return True
 
         return False
