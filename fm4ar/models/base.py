@@ -409,7 +409,7 @@ class Base:
                 loss_history=self.history["test_loss"].values,
                 stage_epoch=self.stage_epoch,
                 early_stopping_config=stage_config.early_stopping,
-            ):
+            ):  # pragma: no cover
                 print("Early stopping criterion reached, ending training!")
                 return ExitStatus.EARLY_STOPPED
 
