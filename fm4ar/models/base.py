@@ -400,9 +400,11 @@ class Base:
             print("Done!")
 
             # Save the latest model
-            print("Saving latest model...", end=" ")
+            print("Saving latest model...", end=" ", flush=True)
+            save_start = time.time()
             self.save_model()
-            print("Done!")
+            save_time = time.time() - save_start
+            print(f"Done! ({save_time:,.2f} seconds)")
 
             # Check if we should stop early
             if early_stopping_criterion_reached(
