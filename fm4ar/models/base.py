@@ -438,9 +438,11 @@ class Base:
 
         # Note: "<=" (instead of "<") is important here!
         if test_loss <= best_loss:
-            print("Saving best model...", end=" ")
+            print("Saving best model...", end=" ", flush=True)
+            save_start = time.time()
             self.save_model(name="best", save_training_info=False)
-            print("Done!")
+            save_time = time.time() - save_start
+            print(f"Done! ({save_time:,.2f} seconds)")
 
     def save_snapshot(self) -> Path | None:
         """
