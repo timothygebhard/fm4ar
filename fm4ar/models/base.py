@@ -216,6 +216,7 @@ class Base:
         self,
         name: str = "latest",
         prefix: str = "model",
+        backup_interval: int | None = 1,
         save_training_info: bool = True,
         target_dir: Path | None = None,
     ) -> Path | None:
@@ -225,6 +226,10 @@ class Base:
         Args:
             prefix: The prefix for the model name (default: 'model').
             name: Model name (e.g., "latest" or "best").
+            backup_interval: Number of epochs between saving the model.
+                If `None`, the model is only saved at the end of the
+                stage, or when the runtime limits are exceeded. Default
+                is 1, which means "definitely save the model".
             save_training_info: Whether to save training information
                 that is required to continue training (i.e., the state
                 dicts of the optimizer and LR scheduler).
@@ -236,6 +241,10 @@ class Base:
             Path to the saved model.
         """
 
+        # Check if we even want to save the model
+        if backup_interval is None or self.epoch % backup_interval != 0:
+            return None
+
         # If no directory is given, we don't save anything
         if self.experiment_dir is None and target_dir is None:
             warn(
@@ -244,6 +253,10 @@ class Base:
                 )
             )
             return None
+
+        file_name = f"{prefix}__{name}.pt"
+        print(f"Saving model as '{file_name}'...", end=" ", flush=True)
+        save_start = time.time()
 
         # Collect all the data that we want to save
         data = {
@@ -268,8 +281,11 @@ class Base:
         if target_dir is None:
             target_dir = self.experiment_dir
         assert target_dir is not None  # mypy is a bit dumb
-        file_path = target_dir / f"{prefix}__{name}.pt"
+        file_path = target_dir / file_name
         torch.save(obj=data, f=file_path)
+
+        save_time = time.time() - save_start
+        print(f"Done! ({save_time:,.2f} seconds)")
 
         return file_path
 
@@ -399,12 +415,8 @@ class Base:
             )
             print("Done!")
 
-            # Save the latest model
-            print("Saving latest model...", end=" ", flush=True)
-            save_start = time.time()
-            self.save_model()
-            save_time = time.time() - save_start
-            print(f"Done! ({save_time:,.2f} seconds)")
+            # Save the latest model (every `backup_interval` epochs)
+            self.save_model(backup_interval=stage_config.backup_interval)
 
             # Check if we should stop early
             if early_stopping_criterion_reached(
@@ -416,6 +428,7 @@ class Base:
                 return ExitStatus.EARLY_STOPPED
 
             # Save the best model if the test loss has improved
+            # Note: This cannot be the case of we have just early stopped
             self.save_best_model(test_loss=test_loss)
             print()
 
@@ -438,11 +451,7 @@ class Base:
 
         # Note: "<=" (instead of "<") is important here!
         if test_loss <= best_loss:
-            print("Saving best model...", end=" ", flush=True)
-            save_start = time.time()
             self.save_model(name="best", save_training_info=False)
-            save_time = time.time() - save_start
-            print(f"Done! ({save_time:,.2f} seconds)")
 
     def save_snapshot(self) -> Path | None:
         """

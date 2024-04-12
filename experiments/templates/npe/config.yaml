@@ -58,6 +58,7 @@ model:
 training:
 
   stage_0:
+    backup_interval: 10
     batch_size: 1024
     data_transforms:
       - type: "AddNoise"

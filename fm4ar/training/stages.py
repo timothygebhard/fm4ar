@@ -45,6 +45,14 @@ class StageConfig(BaseModel):
     Configuration for a training stage.
     """
 
+    backup_interval: int | None = Field(
+        default=10,
+        description=(
+            "Number of epochs between saving the 'lastest' model. "
+            "If None, the model is only saved at the end of the stage, or "
+            "when the runtime limits are exceeded."
+        ),
+    )
     batch_size: int = Field(
         ...,
         description="Batch size for the stage.",
@@ -248,14 +256,18 @@ def train_stages(
         # Save the model if we have reached the end of the stage
         if exit_status == ExitStatus.COMPLETED:
             print(f"Training stage '{stage_name}' complete!")
-            print("Saving model...", end=" ")
             model.save_model(name=stage_name, save_training_info=True)
-            print("Done!\n", flush=True)
 
         # If we start another loop, we will definitely not be resuming but
         # instead be starting a new stage from scratch
         resume = False
 
-    # Check if we have reached the end of the training, either because we
-    # stopped early or because we have completed all the stages
-    return exit_status in [ExitStatus.COMPLETED, ExitStatus.EARLY_STOPPED]
+    # If we have exceeded the maximum runtime, we save the latest model. This
+    # is to ensure we do not lose anything if we choose the `backup_interval`
+    # greater than 1.
+    if exit_status == ExitStatus.MAX_RUNTIME_EXCEEDED:  # pragma: no cover
+        model.save_model(name="latest", save_training_info=True)
+        return False
+
+    # If we got to this point, all stages have been completed
+    return True
