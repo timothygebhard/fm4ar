@@ -72,6 +72,11 @@ def determine_output_shape(
         The shape of the output of the block.
     """
 
+    # We could do the shape inference also using tensors on a `meta` device;
+    # however, that would require to create a deep copy of the `block` first,
+    # which we could then also move to `meta`. (Apparently, moving the `block`
+    # to `meta` and back is not possible.)
+
     # Define an arbitrary batch size
     batch_size = 19
 
