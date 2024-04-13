@@ -182,8 +182,14 @@ class Base:
 
     def log_metrics(self, **kwargs: Any) -> None:
         """
-        Add a row to the training history (locally and wandb).
+        Add a row to the training history (currently only to wandb).
         """
+
+        # Drop any None values from the kwargs (wandb does not handle them
+        # well, but it might make sense to return None instead of NaN because
+        # the latter can also be the result of things going wrong, and we
+        # might want to distinguish between these cases)
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
         # Convert kwargs to a row and append it to the history dataframe
         new_row = pd.DataFrame(kwargs, index=[0])
