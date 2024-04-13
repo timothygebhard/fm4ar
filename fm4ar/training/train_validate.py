@@ -174,7 +174,7 @@ def validate_epoch(
     model: Union["Base", "FMPEModel"],  # required because of log_prob_batch()
     dataloader: DataLoader,
     stage_config: StageConfig,
-) -> tuple[float, float]:
+) -> tuple[float, float | None]:
     """
     Perform one validation epoch for the given model.
 
@@ -264,8 +264,11 @@ def validate_epoch(
         )
 
         # Compute logprob of the first `n_samples` samples of the batch
+        # TODO: Trying to use AMP here has resulted in out-of-memory errors.
+        #   We could processing things in a chunked fashion here?
         n_samples = stage_config.logprob_evaluation.n_samples
-        with torch.no_grad():  # and autocast(enabled=stage_config.use_amp):
+        use_amp = stage_config.logprob_evaluation.use_amp
+        with torch.no_grad() and autocast(enabled=use_amp):
             logprob = model.log_prob_batch(
                 theta=theta[:n_samples],
                 context={k: v[:n_samples] for k, v in context.items()},
@@ -279,9 +282,10 @@ def validate_epoch(
         evaluation_time = time.time() - evaluation_start
         print(f"Done! ({evaluation_time:,.2f}s)")
 
-    # If we do not compute the log probability, set it to NaN
-    # TODO: Alternatively, we could return the last computed logprob?
+    # If we do not compute the log probability, set it to None (not NaN)
+    # This is to distinguish it from something going wrong in the computation
+    # of the log probability.
     else:
-        avg_logprob = float("nan")
+        avg_logprob = None
 
     return avg_loss, avg_logprob

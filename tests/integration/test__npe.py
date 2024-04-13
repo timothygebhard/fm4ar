@@ -209,10 +209,9 @@ def test__npe_model(
         )
         assert np.isfinite(val_loss)
         if epoch == 1:
-            assert np.isfinite(avg_log_prob)
-            assert np.isfinite(avg_log_prob)
+            assert avg_log_prob is not None and np.isfinite(avg_log_prob)
         if epoch == 2:
-            assert np.isnan(avg_log_prob)
+            assert avg_log_prob is None
 
     # Check that the number of epochs and stage name are correct
     assert model.epoch == 2

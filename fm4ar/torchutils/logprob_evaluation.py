@@ -11,7 +11,7 @@ class ODESolverSettings(BaseModel):
     """
 
     method: str = Field(
-        default="dopri8",
+        default="dopri5",
         description="The ODE solver method to use."
     )
     tolerance: float = Field(
@@ -45,5 +45,14 @@ class LogProbEvaluationConfig(BaseModel):
             "Additional keyword arguments for the `model.log_prob_batch()` "
             "call to specify the solver method and tolerance. This is only "
             "used for FMPE models; NPE models will ignore this setting."
+        ),
+    )
+    use_amp: bool = Field(
+        default=False,
+        description=(
+            "Whether to use automatic mixed precision for the log-probability "
+            "calculation. Combining this with the ODE solver is still highly "
+            "experimental, therefore this setting is independent from the "
+            "AMP setting for the general training loop."
         ),
     )
