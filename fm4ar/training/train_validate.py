@@ -248,7 +248,7 @@ def validate_epoch(
     ):
 
         evaluation_start = time.time()
-        print("\nEvaluating log probability...", end=" ", flush=True)
+        print("Evaluating log probability...", end=" ", flush=True)
 
         # Get the first batch of the dataloader and move it to the device
         batch = next(iter(dataloader))
@@ -264,18 +264,17 @@ def validate_epoch(
         )
 
         # Compute logprob of the first `n_samples` samples of the batch
-        # TODO: Trying to use AMP here has resulted in out-of-memory errors.
-        #   We could processing things in a chunked fashion here?
+        # Note: Trying to speed up this part with AMP has not been successful
+        # so far and has mostly resulted in out-of-memory errors...
         n_samples = stage_config.logprob_evaluation.n_samples
-        use_amp = stage_config.logprob_evaluation.use_amp
-        with torch.no_grad() and autocast(enabled=use_amp):
+        with torch.no_grad():
             logprob = model.log_prob_batch(
                 theta=theta[:n_samples],
                 context={k: v[:n_samples] for k, v in context.items()},
                 **extra_kwargs,
             )
 
-        # Compute the average log probability
+        # Compute the average log probability of the samples
         avg_logprob = float(logprob.mean().item())
 
         # Print the time it took to compute the log probability

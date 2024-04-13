@@ -47,12 +47,3 @@ class LogProbEvaluationConfig(BaseModel):
             "used for FMPE models; NPE models will ignore this setting."
         ),
     )
-    use_amp: bool = Field(
-        default=False,
-        description=(
-            "Whether to use automatic mixed precision for the log-probability "
-            "calculation. Combining this with the ODE solver is still highly "
-            "experimental, therefore this setting is independent from the "
-            "AMP setting for the general training loop."
-        ),
-    )
