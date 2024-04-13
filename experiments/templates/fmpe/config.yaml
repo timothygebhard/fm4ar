@@ -89,7 +89,7 @@ training:
       interval: null
       n_samples: 1024
       ode_solver:
-        method: "dopri8"
+        method: "dopri5"
         tolerance: 1.0e-3
     optimizer:
       type: "AdamW"
