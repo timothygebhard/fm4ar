@@ -104,6 +104,7 @@ def perform_scheduler_step(
         end_of_epoch_schedulers = (
             lrs.CosineAnnealingLR,
             lrs.CosineAnnealingWarmRestarts,
+            lrs.ExponentialLR,
             lrs.StepLR,
         )
         if isinstance(scheduler, end_of_epoch_schedulers):
