@@ -189,8 +189,6 @@ def validate_epoch(
         (2) The average log probability of the true parameter values.
     """
 
-    # TODO: Maybe we also want to use AMP here to speed up the logprob stuff?
-
     # Ensure that the neural net is in evaluation mode
     model.network.eval()
 
