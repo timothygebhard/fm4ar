@@ -69,9 +69,12 @@ dev = [
 ]
 
 # petitRADTRANS can be tricky to install, so we keep it separate
+# Note: petitRADTRANS 2.7.x seems to give the exact same results in our tests
+# but introduces a weird runtime degradation in our nested sampling code that
+# basically makes it unusable...
 petitRADTRANS = [
     "mpi4py",
-    "petitRADTRANS==2.7.6",
+    "petitRADTRANS==2.6.7",
 ]
 
 # PyMultiNest is also a bit tricky to install (see docs for pre-requisites)
