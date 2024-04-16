@@ -90,40 +90,38 @@ def perform_scheduler_step(
             If `None`, no callback is called.
     """
 
-    if end_of == "batch":
+    # Map scheduler types onto when they should be called
+    scheduler_map = {
+        lrs.CyclicLR: "batch",
+        lrs.OneCycleLR: "batch",
+        lrs.CosineAnnealingLR: "epoch",
+        lrs.CosineAnnealingWarmRestarts: "epoch",
+        lrs.ExponentialLR: "epoch",
+        lrs.StepLR: "epoch",
+        lrs.ReduceLROnPlateau: "epoch",
+    }
 
-        # CyclicLR and OneCycleLR need to be called at the end of each batch
-        end_of_batch_schedulers = (lrs.CyclicLR, lrs.OneCycleLR)
-        if isinstance(scheduler, end_of_batch_schedulers):
-            scheduler.step()
+    # Make sure we know how to handle the end_of argument
+    if end_of not in ("epoch", "batch"):
+        raise ValueError("Invalid value for `end_of` argument!")
 
-    elif end_of == "epoch":
+    # Make sure we know how to handle the scheduler type
+    if type(scheduler) not in scheduler_map:
+        raise ValueError("Unknown scheduler type!")
 
-        # StepLR, CosineAnnealingLR and CosineAnnealingWarmRestarts need
-        # to be called at the end of each epoch
-        end_of_epoch_schedulers = (
-            lrs.CosineAnnealingLR,
-            lrs.CosineAnnealingWarmRestarts,
-            lrs.ExponentialLR,
-            lrs.StepLR,
-        )
-        if isinstance(scheduler, end_of_epoch_schedulers):
-            scheduler.step()
+    # Check if we need to take a step with the scheduler
+    if scheduler_map[type(scheduler)] == end_of:
 
-        # ReduceLROnPlateau requires special treatment as it needs to be
-        # called with the validation loss. It is also the only scheduler
-        # that supports a callback function that is called every time the
-        # learning rate is lowered.
+        # Handle ReduceLROnPlateau separately as it requires the loss
         if isinstance(scheduler, lrs.ReduceLROnPlateau):
-
             if loss is None:
                 raise ValueError("Must provide loss for ReduceLROnPlateau!")
-
             old_lr = get_lr(scheduler.optimizer)[0]
             scheduler.step(loss)
             new_lr = get_lr(scheduler.optimizer)[0]
             if new_lr < old_lr and on_lower is not None:
                 on_lower()
 
-    else:
-        raise ValueError("Invalid value for `end_of`!")
+        # Handle all other schedulers
+        else:
+            scheduler.step()

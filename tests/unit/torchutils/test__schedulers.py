@@ -133,4 +133,10 @@ def test__perform_scheduler_step() -> None:
     with pytest.raises(ValueError) as value_error:
         # noinspection PyTypeChecker
         perform_scheduler_step(scheduler, end_of="invalid")
-    assert "Invalid value for `end_of`!" in str(value_error)
+    assert "Invalid value for" in str(value_error)
+
+    # Case 5: Invalid scheduler type
+    scheduler = object()
+    with pytest.raises(ValueError) as value_error:
+        perform_scheduler_step(scheduler, end_of="epoch")
+    assert "Unknown scheduler type" in str(value_error)
