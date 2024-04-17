@@ -1,5 +1,5 @@
 """
-Unified script to run different nested sampling algorithms.
+Script to run different nested sampling implementations on HTCondor.
 """
 
 import argparse
@@ -257,34 +257,31 @@ if __name__ == "__main__":
 
     sync_mpi_processes(comm)
 
-    # If the sampler finished, we can save the results
-    exit_code = 0
-    if rank == 0:
+    # Determine the exit code: 42 means "hold and restart the job"
+    exit_code = 0 if sampler.complete else 42
 
-        # If we are not done, exit with code 42 to signal that we need to
-        # hold the job on exit and resubmit it
-        if not sampler.complete:
-            exit_code = 42
+    # If we are done, save the results and create a plot
+    # For the case of MultiNest, we only do this on the "root" process
+    if sampler.complete and rank == 0:
 
-        else:
-            print("Sampling complete!", flush=True)
+        print("Sampling complete!", flush=True)
+        print("Saving results...", end=" ", flush=True)
+        sampler.save_results()
+        print("Done!", flush=True)
 
-            print("Saving results...", end=" ", flush=True)
-            sampler.save_results()
-            print("Done!", flush=True)
+        print("Creating plot...", end=" ", flush=True)
+        create_posterior_plot(
+            points=np.array(sampler.points),
+            weights=np.array(sampler.weights),
+            names=np.array(prior.labels)[infer_mask],
+            file_path=args.experiment_dir / "posterior.pdf",
+            ground_truth=theta_obs[infer_mask],
+        )
+        print("Done!", flush=True)
 
-            print("Creating plot...", end=" ", flush=True)
-            create_posterior_plot(
-                points=np.array(sampler.points),
-                weights=np.array(sampler.weights),
-                names=np.array(prior.labels)[infer_mask],
-                file_path=args.experiment_dir / "posterior.pdf",
-                ground_truth=theta_obs[infer_mask],
-            )
-            print("Done!", flush=True)
-
-            print("\nAll done!\n", flush=True)
+        print("\nAll done!\n", flush=True)
 
     # Make sure all processes are done before exiting
     sync_mpi_processes(comm)
+    print(f"Exiting job {rank} with code {exit_code}!", flush=True)
     sys.exit(exit_code)
