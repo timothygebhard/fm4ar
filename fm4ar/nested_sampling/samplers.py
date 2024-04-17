@@ -211,23 +211,39 @@ class NautilusSampler(Sampler):
         Run the Nautilus sampler.
         """
 
+        # Note: Limiting the runtime of the sampler is a bit tricky because
+        # the naive approach via `timelimit` regularly leads to corrupted
+        # checkpoint files. For now, we try to estimate the average time to
+        # estimate the likelihood once, and then limit the total number of
+        # likelihood calls. An upcoming release of `nautilus` will hopefully
+        # provide a more robust solution for this problem...
+
         start_time = time.time()
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         # Determine the number of parallel workers that we can use
-        n_workers = 1 if self.pool is None else len(self.pool)
+        # noinspection PyProtectedMember
+        n_workers = 1 if self.pool is None else len(self.pool._pool)
 
         # Get an estimate for the runtime of the simulator and, consequently,
-        # the number of iterations that we can run in the given `max_runtime`
+        # the number of iterations that we can run in the given `max_runtime`.
+        # The magic number attempts to correct for all the overhead beyond the
+        # simulator runtime itself. This is a *very* rough estimate...
         runtime_estimate = self.get_simulator_runtime_estimate()
-        n_like_max_per_run = int(max_runtime / runtime_estimate * n_workers)
+        magic_number = 0.7
+        n_like_max_per_run = int(
+            max_runtime / runtime_estimate * n_workers * magic_number
+        )
 
         # Print some debugging information
-        print(f"\nRuntime estimate: {runtime_estimate:.2f} s")
-        print(f"Running for {n_like_max_per_run:,} likelihood evaluations\n")
+        print(f"\nMaximum total runtime:        {max_runtime} s")
+        print(f"Simulator runtime (estimate): {runtime_estimate:.2f} s")
+        print(f"Number of parallel workers:   {n_workers}\n")
+        print(f"Running for {n_like_max_per_run:,} likelihood evaluations!")
 
         # Store the number of likelihood evaluations before the run() call
         before = self.sampler.n_like
+        print(f"\nn_like (before): {self.sampler.n_like}\n")
 
         # Run for a maximum of `n_like_max_per_run` likelihood evaluations
         self.sampler.run(
@@ -239,8 +255,11 @@ class NautilusSampler(Sampler):
 
         # Check if the number of `n_like` changed to see if we have converged
         # or reached the maximum runtime
+        print(f"\nn_like (after):  {self.sampler.n_like}\n")
         if self.sampler.n_like == before:
             self.complete = True
+        else:
+            print("\nn_like_max reached, stopping sampler!\n")
 
         return time.time() - start_time
 
