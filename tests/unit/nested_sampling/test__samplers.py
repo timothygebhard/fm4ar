@@ -45,7 +45,7 @@ def test__sampler_timeout(
         return u
 
     def log_likelihood(_: np.ndarray) -> float:
-        time.sleep(2)
+        time.sleep(0.1)
         return 10 + np.random.normal(0, 1)  # dynesty breaks if all are equal
 
     # Set up the sampler
@@ -54,13 +54,18 @@ def test__sampler_timeout(
         prior_transform=prior_transform,
         log_likelihood=log_likelihood,
         n_dim=2,
-        n_livepoints=10,
+        n_livepoints=100,
         inferred_parameters=["x", "y"],
         random_seed=42,
     )
 
     # Run the sampler and save the results
-    sampler.run(max_runtime=1, verbose=True)
+    max_runtime = 10
+    runtime = sampler.run(max_runtime=max_runtime, verbose=True)
     sampler.cleanup()
     captured = capsys.readouterr()
-    assert "Timeout reached, stopping sampler!" in captured.out
+    assert "stopping sampler!" in captured.out
+
+    # The runtime limitation is not exact (especially for small problems where
+    # we are not dominated by the simulator), so we allow for some slack
+    assert runtime < 1.5 * max_runtime
