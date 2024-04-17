@@ -2,6 +2,7 @@
 Unit tests for `fm4ar.nested_sampling.samplers`.
 """
 
+import os
 import time
 from pathlib import Path
 
@@ -33,10 +34,12 @@ def test__sampler_timeout(
     `pytest` directly, not when using PyCharm's test runner.
     """
 
+    # Fail this test if it runs in PyCharm (it cannot handle multinest)
+    if library == "multinest" and "PYCHARM_HOSTED" in os.environ:
+        pytest.fail("This test does not work in PyCharm!")
+
     experiment_dir = tmp_path / library
     experiment_dir.mkdir()
-
-    print(experiment_dir)
 
     def prior_transform(u: np.ndarray) -> np.ndarray:
         return u
