@@ -248,14 +248,21 @@ if __name__ == "__main__":
     sync_mpi_processes(comm)
 
     print("Running sampler:", flush=True)
-    sampler.run(
+    runtime = sampler.run(
         max_runtime=config.sampler.max_runtime,
         verbose=True,
         run_kwargs=config.sampler.run_kwargs,
     )
     sampler.cleanup()
 
-    sync_mpi_processes(comm)
+    # Note: It seems that adding any more `sync_mpi_processes(comm)` calls
+    # after this point will cause the MultiNest sampler to hang indefinitely.
+
+    # Store the runtime of the sampler
+    # We do this only once, on the "root" process, to avoid having multiple
+    # processes write to the same file at the same time
+    if rank == 0:
+        sampler.save_runtime(runtime=runtime)
 
     # Determine the exit code: 42 means "hold and restart the job"
     exit_code = 0 if sampler.complete else 42
@@ -282,6 +289,5 @@ if __name__ == "__main__":
         print("\nAll done!\n", flush=True)
 
     # Make sure all processes are done before exiting
-    sync_mpi_processes(comm)
     print(f"Exiting job {rank} with code {exit_code}!", flush=True)
     sys.exit(exit_code)
