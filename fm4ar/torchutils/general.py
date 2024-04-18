@@ -4,7 +4,7 @@ General utility functions for PyTorch.
 
 from importlib import import_module
 from math import prod
-from typing import Type
+from typing import Any, Type
 
 import torch
 import torch.nn as nn
@@ -44,6 +44,25 @@ def get_activation_from_name(name: str) -> torch.nn.Module:
 
     # Instantiate the activation function and return it
     return ActivationFunction()
+
+
+def get_cuda_info() -> dict[str, Any]:
+    """
+    Get information about the CUDA devices available in the system.
+    """
+
+    # No CUDA devices available
+    if not torch.cuda.is_available():
+        return {}
+
+    # CUDA devices are available
+    return {
+        "cuDNN version": torch.backends.cudnn.version(),  # type: ignore
+        "CUDA version": torch.version.cuda,
+        "device count": torch.cuda.device_count(),
+        "device name": torch.cuda.get_device_name(0),
+        "memory (GB)": torch.cuda.get_device_properties(0).total_memory / 1e9,
+    }
 
 
 def get_number_of_parameters(
