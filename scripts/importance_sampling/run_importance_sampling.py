@@ -81,8 +81,11 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--target-index",
         type=int,
-        default=0,
-        help="Index of the target spectrum to use. Default: 0.",
+        default=None,
+        help=(
+            "Index of the target spectrum to use. Default: None = use the "
+            "value specified in the importance_sampling.yaml config file."
+        ),
     )
     args = parser.parse_args()
 
