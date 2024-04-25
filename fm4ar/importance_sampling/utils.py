@@ -99,7 +99,7 @@ def compute_effective_sample_size(
         sampling_efficiency: Sampling efficiency.
     """
 
-    n_eff = np.sum(weights) ** 2 / np.sum(weights ** 2)
+    n_eff = np.sum(weights) ** 2 / np.sum(weights**2)
     sampling_efficiency = float(n_eff / len(weights))
 
     return n_eff, sampling_efficiency

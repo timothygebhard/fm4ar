@@ -4,6 +4,7 @@ Tests for `fm4ar.utils.htcondor`.
 
 import socket
 from pathlib import Path
+from typing import no_type_check
 
 import pytest
 from pydantic import ValidationError
@@ -126,6 +127,7 @@ def test__dagman_file(tmp_path: Path) -> None:
     assert "Job 'job1' already exists!" in str(value_error)
 
 
+@no_type_check
 @pytest.mark.parametrize(
     "gpu_type, expected_capability",
     [

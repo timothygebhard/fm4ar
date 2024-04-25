@@ -58,10 +58,9 @@ class SpectraDataset(Dataset):
         self.data_transforms: list[DataTransform] = []
 
         # Scaling transform for the parameters `theta` (e.g., minmax scaling)
-        if theta_scaler is not None:
-            self.theta_scaler = theta_scaler
-        else:
-            self.theta_scaler = IdentityScaler()
+        self.theta_scaler = (
+            theta_scaler if theta_scaler is not None else IdentityScaler()
+        )
 
     def __len__(self) -> int:
         """

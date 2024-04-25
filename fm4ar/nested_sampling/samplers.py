@@ -82,9 +82,10 @@ class Sampler(ABC):
         max_runtime: int,
         verbose: bool = False,
         run_kwargs: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> float:
         """
-        Run the sampler for the given `max_runtime`.
+        Run the sampler (for a maximum of `max_runtime` seconds) and
+        return the actual runtime of the sampler.
         """
         raise NotImplementedError  # pragma: no cover
 
@@ -103,8 +104,10 @@ class Sampler(ABC):
         """
         raise NotImplementedError  # pragma: no cover
 
-    def save_runtime(self, start_time: float) -> None:
-        runtime = time.time() - start_time
+    def save_runtime(self, runtime: float) -> None:
+        """
+        Save the runtime of the sampler (in seconds) to a file.
+        """
         with open(self.run_dir / "runtime.txt", "a") as f:
             f.write(f"{runtime}\n")
 
@@ -184,33 +187,81 @@ class NautilusSampler(Sampler):
             seed=self.random_seed,
         )
 
+    def get_simulator_runtime_estimate(self) -> float:
+        """
+        Run the simulator once to get an estimate of its runtime.
+        """
+
+        # Get a random sample from the prior
+        theta = self.sampler.prior(np.random.rand(self.n_dim))
+
+        # Run the simulator and measure the runtime
+        start_time = time.time()
+        self.log_likelihood(theta)
+
+        return time.time() - start_time
+
     def run(
         self,
         max_runtime: int,
         verbose: bool = True,
         run_kwargs: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> float:
         """
         Run the Nautilus sampler.
         """
 
+        # Note: Limiting the runtime of the sampler is a bit tricky because
+        # the naive approach via `timelimit` regularly leads to corrupted
+        # checkpoint files. For now, we try to estimate the average time to
+        # estimate the likelihood once, and then limit the total number of
+        # likelihood calls. An upcoming release of `nautilus` will hopefully
+        # provide a more robust solution for this problem...
+
         start_time = time.time()
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
-        try:
-            with timelimit(max_runtime):
-                self.sampler.run(
-                    verbose=verbose,
-                    discard_exploration=True,
-                    **run_kwargs,
-                )
-        except TimeoutException:
-            print("\nTimeout reached, stopping sampler!\n")
-            return
-        finally:
-            self.save_runtime(start_time)
+        # Determine the number of parallel workers that we can use
+        # noinspection PyProtectedMember
+        n_workers = 1 if self.pool is None else len(self.pool._pool)
 
-        self.complete = True
+        # Get an estimate for the runtime of the simulator and, consequently,
+        # the number of iterations that we can run in the given `max_runtime`.
+        # The magic number attempts to correct for all the overhead beyond the
+        # simulator runtime itself. This is a *very* rough estimate...
+        runtime_estimate = self.get_simulator_runtime_estimate()
+        magic_number = 0.7
+        n_like_max_per_run = int(
+            max_runtime / runtime_estimate * n_workers * magic_number
+        )
+
+        # Print some debugging information
+        print(f"\nMaximum total runtime:        {max_runtime} s")
+        print(f"Simulator runtime (estimate): {runtime_estimate:.2f} s")
+        print(f"Number of parallel workers:   {n_workers}\n")
+        print(f"Running for {n_like_max_per_run:,} likelihood evaluations!")
+
+        # Store the number of likelihood evaluations before the run() call
+        before = self.sampler.n_like
+        print(f"\nn_like (before): {self.sampler.n_like}\n")
+
+        # Run for a maximum of `n_like_max_per_run` likelihood evaluations
+        self.sampler.run(
+            verbose=verbose,
+            discard_exploration=True,
+            n_like_max=before + n_like_max_per_run,
+            **run_kwargs,
+        )
+
+        # Check if the number of `n_like` changed to see if we have converged
+        # or reached the maximum runtime
+        print(f"\nn_like (after):  {self.sampler.n_like}\n")
+        if self.sampler.n_like == before:
+            self.complete = True
+        else:
+            print("\nn_like_max reached, stopping sampler!\n")
+
+        return time.time() - start_time
 
     def cleanup(self) -> None:
         for pool in (self.sampler.pool_l, self.sampler.pool_s):
@@ -308,8 +359,9 @@ class DynestySampler(Sampler):
         # for `propose_point`. More experiments might be required to understand
         # what are the best options here.
         self.use_pool = (
-            use_pool if use_pool is not None else
-            {
+            use_pool
+            if use_pool is not None
+            else {
                 "propose_point": True,
                 "prior_transform": False,
                 "loglikelihood": True,
@@ -345,9 +397,9 @@ class DynestySampler(Sampler):
         max_runtime: int,
         verbose: bool = True,
         run_kwargs: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> float:
         """
-        Run the Dynesty sampler.
+        Run the dynesty sampler.
         """
 
         start_time = time.time()
@@ -366,27 +418,21 @@ class DynestySampler(Sampler):
                 )
         except TimeoutException:
             print("\nTimeout reached, stopping sampler!\n")
-            return
-        except RuntimeWarning as e:
-            if "resume the run that has ended successfully." in str(e):
-                self.complete = True
-                return
-            else:  # pragma: no cover
-                raise e
+            return time.time() - start_time
         except UserWarning as e:
             if "You are resuming a finished static run" in str(e):
                 self.complete = True
-                return
+                return time.time() - start_time
             if "The sampling was stopped short due to maxiter" in str(e):
                 self.complete = True
-                return
+                return time.time() - start_time
             else:  # pragma: no cover
                 raise e
         finally:
             warnings.resetwarnings()
-            self.save_runtime(start_time)
 
         self.complete = True
+        return time.time() - start_time
 
     def cleanup(self) -> None:
         self.pool.close()
@@ -444,7 +490,7 @@ class MultiNestSampler(Sampler):
         max_runtime: int,
         verbose: bool = True,
         run_kwargs: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> float:
         """
         Run the MultiNest sampler.
         """
@@ -485,10 +531,10 @@ class MultiNestSampler(Sampler):
         if process.is_alive():
             process.terminate()
             print("Timeout reached, stopping sampler!")
-            self.save_runtime(start_time)
-            return
+        else:
+            self.complete = True
 
-        self.complete = True
+        return time.time() - start_time
 
     def cleanup(self) -> None:
         pass

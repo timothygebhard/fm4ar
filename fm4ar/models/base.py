@@ -13,13 +13,20 @@ import pandas as pd
 import torch
 import wandb
 from threadpoolctl import threadpool_limits
-from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 
+from fm4ar.training.stages import ExitStatus, StageConfig
 from fm4ar.training.train_validate import validate_epoch, train_epoch
-from fm4ar.utils.torchutils import (
-    get_lr,
+from fm4ar.torchutils.early_stopping import early_stopping_criterion_reached
+from fm4ar.torchutils.general import resolve_device
+from fm4ar.torchutils.optimizers import (
+    OptimizerConfig,
     get_optimizer_from_config,
+    get_lr,
+)
+from fm4ar.torchutils.schedulers import (
+    Scheduler,
+    SchedulerConfig,
     get_scheduler_from_config,
     perform_scheduler_step,
 )
@@ -36,15 +43,16 @@ class Base:
     # Declare attributes with type hints (but without assigning values)
     network: torch.nn.Module
     optimizer: torch.optim.Optimizer
-    scheduler: lr_scheduler.LRScheduler | lr_scheduler.ReduceLROnPlateau
+    scheduler: Scheduler
 
     def __init__(
         self,
         experiment_dir: Path | None = None,
         file_path: Path | None = None,
         config: dict | None = None,
-        device: Literal["cpu", "cuda"] = "cpu",
+        device: Literal["auto", "cpu", "cuda"] = "auto",
         load_training_info: bool = True,
+        random_seed: int | None = 42,
     ) -> None:
         """
         Initialize a model for the posterior distribution.
@@ -61,18 +69,22 @@ class Base:
             load_training_info: Whether to load training information
                 (i.e., the state of the optimizer and LR scheduler)
                 when loading the model from a checkpoint file.
+            random_seed: Random seed used for model initialization.
         """
 
         # Store constructor arguments
         self.config = dict({} if config is None else config)
-        self.device = torch.device(device)
+        self.device = resolve_device(device)
         self.experiment_dir = experiment_dir
+        self.random_seed = random_seed
 
         # Initialize attributes
-        self.epoch = 0
+        self.epoch: int = 0  # global epoch (across all stages)
+        self.stage_name: str | None = None  # name of current training stage
+        self.stage_epoch: int = 0  # epoch within current training stage
         self.model_config: dict | None = None
-        self.optimizer_config: dict | None = None
-        self.scheduler_config: dict | None = None
+        self.optimizer_config: OptimizerConfig | None = None
+        self.scheduler_config: SchedulerConfig | None = None
 
         # Add dataframe that will keep track of the training history
         self.history: pd.DataFrame = pd.DataFrame()
@@ -82,13 +94,12 @@ class Base:
             self.load_model(
                 file_path=file_path,
                 load_training_info=load_training_info,
-                device=device,
             )
 
         # ...or initialize it from the configuration
         else:
             self.initialize_network()
-            self.network_to_device(device)
+            self.network_to_device()
 
     @abstractmethod
     def initialize_network(self) -> None:
@@ -145,18 +156,11 @@ class Base:
 
         raise NotImplementedError()  # pragma: no cover
 
-    def network_to_device(
-        self,
-        device: Literal["cpu", "cuda"] = "cpu",
-    ) -> None:
+    def network_to_device(self) -> None:
         """
-        Move network to `device`, and set `self.device` accordingly.
+        Move network to `self.device`.
         """
 
-        if device not in ("cpu", "cuda"):  # pragma: no cover
-            raise ValueError(f"Invalid device: `{device}`")
-
-        self.device = torch.device(device)
         self.network.to(self.device)
 
     def initialize_optimizer_and_scheduler(self) -> None:
@@ -178,8 +182,14 @@ class Base:
 
     def log_metrics(self, **kwargs: Any) -> None:
         """
-        Add a row to the training history (locally and wandb).
+        Add a row to the training history (currently only to wandb).
         """
+
+        # Drop any None values from the kwargs (wandb does not handle them
+        # well, but it might make sense to return None instead of NaN because
+        # the latter can also be the result of things going wrong, and we
+        # might want to distinguish between these cases)
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
         # Convert kwargs to a row and append it to the history dataframe
         new_row = pd.DataFrame(kwargs, index=[0])
@@ -212,6 +222,7 @@ class Base:
         self,
         name: str = "latest",
         prefix: str = "model",
+        backup_interval: int | None = 1,
         save_training_info: bool = True,
         target_dir: Path | None = None,
     ) -> Path | None:
@@ -221,6 +232,10 @@ class Base:
         Args:
             prefix: The prefix for the model name (default: 'model').
             name: Model name (e.g., "latest" or "best").
+            backup_interval: Number of epochs between saving the model.
+                If `None`, the model is only saved at the end of the
+                stage, or when the runtime limits are exceeded. Default
+                is 1, which means "definitely save the model".
             save_training_info: Whether to save training information
                 that is required to continue training (i.e., the state
                 dicts of the optimizer and LR scheduler).
@@ -232,6 +247,10 @@ class Base:
             Path to the saved model.
         """
 
+        # Check if we even want to save the model
+        if backup_interval is None or self.epoch % backup_interval != 0:
+            return None
+
         # If no directory is given, we don't save anything
         if self.experiment_dir is None and target_dir is None:
             warn(
@@ -241,10 +260,16 @@ class Base:
             )
             return None
 
+        file_name = f"{prefix}__{name}.pt"
+        print(f"Saving model as '{file_name}'...", end=" ", flush=True)
+        save_start = time.time()
+
         # Collect all the data that we want to save
         data = {
             "config": self.config,
             "epoch": self.epoch,
+            "stage_name": self.stage_name,
+            "stage_epoch": self.stage_epoch,
             "history": self.history,
             "network_state_dict": self.network.state_dict(),
         }
@@ -262,8 +287,11 @@ class Base:
         if target_dir is None:
             target_dir = self.experiment_dir
         assert target_dir is not None  # mypy is a bit dumb
-        file_path = target_dir / f"{prefix}__{name}.pt"
+        file_path = target_dir / file_name
         torch.save(obj=data, f=file_path)
+
+        save_time = time.time() - save_start
+        print(f"Done! ({save_time:,.2f} seconds)")
 
         return file_path
 
@@ -271,7 +299,6 @@ class Base:
         self,
         file_path: Path,
         load_training_info: bool = True,
-        device: Literal["cpu", "cuda"] = "cpu",
     ) -> None:
         """
         Load a posterior model (`FMPEModel` or `NPEModel`) from disk.
@@ -280,21 +307,22 @@ class Base:
             file_path: Path to saved model.
             load_training_info: Whether to load information required to
                 continue training, e.g., the optimizer state dict.
-            device: Device on which to load the model.
         """
 
         # Load data from disk and move everything to the correct device
-        data = torch.load(file_path, map_location=device)
+        data = torch.load(file_path, map_location=self.device)
 
         # Load some required metadata
         self.epoch = data["epoch"]
+        self.stage_name = data["stage_name"]
+        self.stage_epoch = data["stage_epoch"]
         self.config = data["config"]
         self.history = data["history"]
 
         # Initialize network, load state dict, and move to device
         self.initialize_network()
         self.network.load_state_dict(data["network_state_dict"])
-        self.network_to_device(device)
+        self.network_to_device()
 
         # Set up optimizer and learning rate scheduler for resuming training
         if load_training_info:
@@ -323,8 +351,8 @@ class Base:
         train_loader: DataLoader,
         valid_loader: DataLoader,
         runtime_limits: RuntimeLimits,
-        stage_config: dict[str, Any],
-    ) -> bool:
+        stage_config: StageConfig,
+    ) -> ExitStatus:
         """
         Train the model until the runtime limits are exceeded.
 
@@ -335,14 +363,16 @@ class Base:
             stage_config: Configuration for the current training stage.
 
         Returns:
-            True if we stopped because we reached the early stopping
-            criterion, False otherwise.
+            ExitStatus indicating the reason for why this function
+            stopped (completed, early stopped, or runtime exceeded).
         """
 
         # Run for as long as the runtime limits allow
         while not runtime_limits.limits_exceeded(self.epoch):
 
+            # Increase epoch counters
             self.epoch += 1
+            self.stage_epoch += 1
 
             # Run one epoch of training and testing
             lr = get_lr(self.optimizer)
@@ -391,21 +421,27 @@ class Base:
             )
             print("Done!")
 
-            # Save the latest model
-            print("Saving latest model...", end=" ")
-            self.save_model()
-            print("Done!")
+            # Save the latest model (every `backup_interval` epochs)
+            self.save_model(backup_interval=stage_config.backup_interval)
 
             # Check if we should stop early
-            if self.stop_early(patience=stage_config.get("early_stopping")):
+            if early_stopping_criterion_reached(
+                loss_history=self.history["test_loss"].values,
+                stage_epoch=self.stage_epoch,
+                early_stopping_config=stage_config.early_stopping,
+            ):  # pragma: no cover
                 print("Early stopping criterion reached, ending training!")
-                return True
+                return ExitStatus.EARLY_STOPPED
 
             # Save the best model if the test loss has improved
+            # Note: This cannot be the case of we have just early stopped
             self.save_best_model(test_loss=test_loss)
             print()
 
-        return False
+        return (
+            ExitStatus.COMPLETED if not runtime_limits.max_runtime_exceeded()
+            else ExitStatus.MAX_RUNTIME_EXCEEDED
+        )
 
     def save_best_model(self, test_loss: float) -> None:
         """
@@ -421,9 +457,7 @@ class Base:
 
         # Note: "<=" (instead of "<") is important here!
         if test_loss <= best_loss:
-            print("Saving best model...", end=" ")
             self.save_model(name="best", save_training_info=False)
-            print("Done!")
 
     def save_snapshot(self) -> Path | None:
         """
@@ -437,28 +471,11 @@ class Base:
         # Create the snapshots directory if it doesn't exist yet
         snapshots_dir = self.experiment_dir / "snapshots"
         snapshots_dir.mkdir(exist_ok=True)
-
-        print("Saving snapshot...", end=" ")
         file_path = self.save_model(
             prefix="snapshot",
             name=f"{self.epoch:04d}",
             save_training_info=True,
             target_dir=snapshots_dir,
         )
-        print("Done!")
 
         return file_path
-
-    def stop_early(self, patience: int | None) -> bool:
-        """
-        Check if we should stop early: If the test loss has not improved
-        for `patience` epochs, we stop the training.
-        """
-
-        if patience is None:  # pragma: no cover
-            return False
-
-        min_idx = int(self.history["test_loss"].values.argmin())
-        last_idx = len(self.history)
-
-        return bool(last_idx - min_idx > patience)

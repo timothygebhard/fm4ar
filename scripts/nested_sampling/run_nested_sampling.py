@@ -1,5 +1,5 @@
 """
-Unified script to run different nested sampling algorithms.
+Script to run different nested sampling implementations on HTCondor.
 """
 
 import argparse
@@ -107,14 +107,15 @@ if __name__ == "__main__":
         htcondor_config.retry_on_exit_code = 42
         htcondor_config.log_file_name = "log.$$([NumJobStarts])"
         htcondor_config.extra_kwargs = (
-            {} if config.sampler.library != "multinest"
+            {}
+            if config.sampler.library != "multinest"
             else {"transfer_executable": "False"}
         )
 
         # Create submission file
         file_path = create_submission_file(
             htcondor_config=htcondor_config,
-            experiment_dir=args.experiment_dir.resolve()
+            experiment_dir=args.experiment_dir.resolve(),
         )
 
         print("Done!\n", flush=True)
@@ -247,43 +248,46 @@ if __name__ == "__main__":
     sync_mpi_processes(comm)
 
     print("Running sampler:", flush=True)
-    sampler.run(
+    runtime = sampler.run(
         max_runtime=config.sampler.max_runtime,
         verbose=True,
         run_kwargs=config.sampler.run_kwargs,
     )
     sampler.cleanup()
 
-    sync_mpi_processes(comm)
+    # Note: It seems that adding any more `sync_mpi_processes(comm)` calls
+    # after this point will cause the MultiNest sampler to hang indefinitely.
 
-    # If the sampler finished, we can save the results
-    exit_code = 0
+    # Store the runtime of the sampler
+    # We do this only once, on the "root" process, to avoid having multiple
+    # processes write to the same file at the same time
     if rank == 0:
+        sampler.save_runtime(runtime=runtime)
 
-        # If we are not done, exit with code 42 to signal that we need to
-        # hold the job on exit and resubmit it
-        if not sampler.complete:
-            exit_code = 42
+    # Determine the exit code: 42 means "hold and restart the job"
+    exit_code = 0 if sampler.complete else 42
 
-        else:
-            print("Sampling complete!", flush=True)
+    # If we are done, save the results and create a plot
+    # For the case of MultiNest, we only do this on the "root" process
+    if sampler.complete and rank == 0:
 
-            print("Saving results...", end=" ", flush=True)
-            sampler.save_results()
-            print("Done!", flush=True)
+        print("Sampling complete!", flush=True)
+        print("Saving results...", end=" ", flush=True)
+        sampler.save_results()
+        print("Done!", flush=True)
 
-            print("Creating plot...", end=" ", flush=True)
-            create_posterior_plot(
-                points=np.array(sampler.points),
-                weights=np.array(sampler.weights),
-                names=np.array(prior.labels)[infer_mask],
-                file_path=args.experiment_dir / "posterior.pdf",
-                ground_truth=theta_obs[infer_mask],
-            )
-            print("Done!", flush=True)
+        print("Creating plot...", end=" ", flush=True)
+        create_posterior_plot(
+            points=np.array(sampler.points),
+            weights=np.array(sampler.weights),
+            names=np.array(prior.labels)[infer_mask],
+            file_path=args.experiment_dir / "posterior.pdf",
+            ground_truth=theta_obs[infer_mask],
+        )
+        print("Done!", flush=True)
 
-            print("\nAll done!\n", flush=True)
+        print("\nAll done!\n", flush=True)
 
     # Make sure all processes are done before exiting
-    sync_mpi_processes(comm)
+    print(f"Exiting job {rank} with code {exit_code}!", flush=True)
     sys.exit(exit_code)

@@ -19,7 +19,7 @@ class InputFileConfig(BaseModel):
         description=(
             "Path to the input file. This can be either a nested sampling "
             "posterior file, or an HDF result file from FMPE / NPE."
-        )
+        ),
     )
     file_type: Literal["ns", "ml"] = Field(
         ...,

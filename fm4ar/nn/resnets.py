@@ -5,7 +5,7 @@ Defines a dense residual network module.
 import torch
 import torch.nn as nn
 
-from fm4ar.utils.torchutils import get_activation_from_name
+from fm4ar.torchutils.general import get_activation_from_name
 
 
 class InitialLayerForZeroInputs(nn.Module):

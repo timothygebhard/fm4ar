@@ -81,8 +81,11 @@ def get_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--target-index",
         type=int,
-        default=0,
-        help="Index of the target spectrum to use. Default: 0.",
+        default=None,
+        help=(
+            "Index of the target spectrum to use. Default: None = use the "
+            "value specified in the importance_sampling.yaml config file."
+        ),
     )
     args = parser.parse_args()
 
@@ -139,7 +142,7 @@ def prepare_and_launch_dag(
         file_path = create_submission_file(
             htcondor_config=htcondor_config,
             experiment_dir=output_dir,
-            file_name=f"{i}__{stage}.sub"
+            file_name=f"{i}__{stage}.sub",
         )
 
         # Add the job to the DAGMan file
@@ -274,7 +277,8 @@ if __name__ == "__main__":
         target = load_target_spectrum(
             file_path=config.target_spectrum.file_path,
             index=(
-                args.target_index if args.target_index is not None
+                args.target_index
+                if args.target_index is not None
                 else config.target_spectrum.index
             ),
         )
@@ -328,10 +332,10 @@ if __name__ == "__main__":
         print()
 
         # Unpack the results from the parallel map and convert to arrays
-        flux, log_likelihoods, log_prior_values = zip(*results, strict=True)
-        flux = np.array(flux)
-        log_likelihoods = np.array(log_likelihoods).flatten()
-        log_prior_values = np.array(log_prior_values).flatten()
+        _flux, _log_likelihoods, _log_prior_values = zip(*results, strict=True)
+        flux = np.array(_flux)
+        log_likelihoods = np.array(_log_likelihoods).flatten()
+        log_prior_values = np.array(_log_prior_values).flatten()
 
         # Drop anything with NaNs (e.g., failed simulation, prior = 0, ...)
         mask = np.logical_and.reduce(
@@ -376,7 +380,8 @@ if __name__ == "__main__":
         # Merge the results from all simulation jobs
         print("Merging HDF files:")
         merge_hdf_files(
-            target_dir=output_dir, name_pattern="simulations-*.hdf",
+            target_dir=output_dir,
+            name_pattern="simulations-*.hdf",
             output_file_path=output_dir / "simulations.hdf",
             keys=[
                 "flux",

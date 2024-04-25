@@ -4,8 +4,9 @@
 
 dataset:
   file_path: "$FM4AR_DATASETS_DIR/vasist-2023/train/selected.hdf"
-  train_fraction: 0.95
-  n_samples: 17
+  n_train_samples: 15
+  n_valid_samples: 5
+  random_seed: 42
 
 theta_scaler:
   method: "MeanStdScaler"
@@ -20,6 +21,7 @@ model:
 
   # General settings
   model_type: "fmpe"
+  random_seed: 42
   t_theta_with_glu: True
   context_with_glu: False
   sigma_min: 0.0001
@@ -68,19 +70,27 @@ model:
 training:
 
   stage_0:
+    backup_interval: 10
     batch_size: 1024
     data_transforms:
-      - method: "add_noise"
+      - type: "AddNoise"
         kwargs:
           random_seed: 42
           complexity: 0
-          transform: "lambda wlen, error: 0.1257 * error"
-    early_stopping: 100
+          transform: "lambda wlen, error: 0.125754 * error"
+    early_stopping:
+      stage_patience: 100
     epochs: 5
     float32_matmul_precision: "high"
     gradient_clipping:
+      enabled: True
       max_norm: 1.0
-    logprob_epochs: -1
+    logprob_evaluation:
+      interval: null
+      n_samples: 1024
+      ode_solver:
+        method: "dopri5"
+        tolerance: 1.0e-3
     optimizer:
       type: "AdamW"
       kwargs:
@@ -100,15 +110,14 @@ training:
 local:
 
   # Device ("cpu" or "cuda"; or "auto")
-  device: "cpu"
+  device: "auto"
 
-  # Runtime limits (e.g., time for cluster jobs)
-  runtime_limits:
-    max_time_per_run: 36_000
+  # Maximum runtime (in seconds) per cluster job
+  max_runtime: 28_800
 
   # Settings for HTCondor
   htcondor:
-    bid: 25
+    bid: 50
     n_cpus: 8
     n_gpus: 1
     memory_cpus: 200_000

@@ -83,17 +83,17 @@ if __name__ == "__main__":
 
     # Create a backup of the old checkpoint
     if not args.no_backup:
-        print("Creating backup of old checkpoint...", end=" ")
+        print("Creating backup of old checkpoint...", end=" ", flush=True)
         backup_path = file_path.with_suffix(".backup.pt")
         copyfile(file_path, backup_path)
-        print("Done!")
+        print("Done!", flush=True)
     else:
-        print("Skipping backup of old checkpoint!")
+        print("Skipping backup of old checkpoint!", flush=True)
 
     # Update config and save checkpoint
-    print("Updating config in checkpoint...", end=" ")
+    print("Updating config in checkpoint...", end=" ", flush=True)
     checkpoint["config"] = new_config
     torch.save(checkpoint, file_path)
-    print("Done!")
+    print("Done!", flush=True)
 
     print(f"\nThis took {time.time() - script_start_time:.2f} seconds!\n")

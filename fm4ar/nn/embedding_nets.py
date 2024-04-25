@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from fm4ar.nn.resnets import DenseResidualNet
-from fm4ar.utils.torchutils import load_and_or_freeze_model_weights
+from fm4ar.torchutils.weights import load_and_or_freeze_model_weights
 
 
 class SupportsDictInput(ABC):
@@ -71,6 +71,11 @@ def determine_output_shape(
     Returns:
         The shape of the output of the block.
     """
+
+    # We could do the shape inference also using tensors on a `meta` device;
+    # however, that would require to create a deep copy of the `block` first,
+    # which we could then also move to `meta`. (Apparently, moving the `block`
+    # to `meta` and back is not possible.)
 
     # Define an arbitrary batch size
     batch_size = 19

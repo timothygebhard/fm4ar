@@ -6,13 +6,14 @@ import numpy as np
 import pytest
 
 from fm4ar.datasets.data_transforms import (
+    DataTransformConfig,
     AddNoise,
     Subsample,
     get_data_transforms,
 )
 
 
-def test_add_noise() -> None:
+def test__add_noise() -> None:
     """
     Test `fm4ar.datasets.data_transforms.AddNoise`.
     """
@@ -44,7 +45,7 @@ def test_add_noise() -> None:
     assert np.isclose(np.sum(y["flux"]), 0.09608717939064015)
 
 
-def test_subsample() -> None:
+def test__subsample() -> None:
     """
     Test `fm4ar.datasets.data_transforms.Subsample`.
     """
@@ -73,42 +74,45 @@ def test_subsample() -> None:
     assert np.isclose(np.sum(y["wlen"]), 85.86363636363639)
 
 
-def test_get_data_transforms() -> None:
+def test__get_data_transforms() -> None:
     """
     Test `fm4ar.datasets.data_transforms.get_data_transforms`.
     """
 
     # Define the configuration
-    stage_config = {
-        "data_transforms": [
-            {
-                "method": "add_noise",
-                "kwargs": {
-                    "random_seed": 42,
-                    "complexity": 3,
-                    "transform": "lambda wlen, flux_error: flux_error",
-                },
+    data_transform_configs = [
+        DataTransformConfig(
+            type="AddNoise",
+            kwargs={
+                "random_seed": 42,
+                "complexity": 3,
+                "transform": "lambda wlen, flux_error: flux_error",
             },
-            {
-                "method": "subsample",
-                "kwargs": {
-                    "random_seed": 42,
-                    "factor": 0.5,
-                },
+        ),
+        DataTransformConfig(
+            type="Subsample",
+            kwargs={
+                "random_seed": 42,
+                "factor": 0.5,
             },
-        ],
-    }
+        ),
+    ]
 
     # Get the data transforms
-    data_transforms = get_data_transforms(stage_config)
+    data_transforms = get_data_transforms(data_transform_configs)
 
     # Check that the data transforms are as expected
     assert len(data_transforms) == 2
     assert isinstance(data_transforms[0], AddNoise)
     assert isinstance(data_transforms[1], Subsample)
 
-    # Test illegal method
-    stage_config = {"data_transforms": [{"method": "illegal_method"}]}
+    # Test invalid data transform
+    data_transform_configs = [
+        DataTransformConfig(
+            type="ThisMethodDoesNotExist",
+            kwargs={},
+        ),
+    ]
     with pytest.raises(ValueError) as value_error:
-        get_data_transforms(stage_config)
+        get_data_transforms(data_transform_configs)
     assert "Unknown data transform" in str(value_error.value)

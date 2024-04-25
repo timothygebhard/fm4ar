@@ -66,7 +66,9 @@ class FMPEModel(Base):
         t = t * torch.ones(len(theta_t), device=theta_t.device)
 
         return self.network(  # type: ignore
-            t=t, theta=theta_t, context=context
+            t=t,
+            theta=theta_t,
+            context=context,
         )
 
     def initialize_network(self) -> None:
@@ -74,6 +76,12 @@ class FMPEModel(Base):
         Initialize the neural net that parameterizes the vectorfield.
         """
 
+        # Fix the random seed for reproducibility
+        torch.manual_seed(self.random_seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+        # Create the FMPE network
         self.network = create_fmpe_network(model_config=self.config["model"])
 
     @property
@@ -161,7 +169,8 @@ class FMPEModel(Base):
 
         # Sample a time t and some starting parameters theta_0
         t = self.sample_t(
-            num_samples=len(theta), time_prior_exponent=time_prior_exponent
+            num_samples=len(theta),
+            time_prior_exponent=time_prior_exponent,
         )
         theta_0 = self.sample_theta_0(num_samples=len(theta))
 

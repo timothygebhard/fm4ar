@@ -35,8 +35,10 @@ def build_model(
     if file_path is not None:
         checkpoint = torch.load(file_path, map_location=torch.device("cpu"))
         model_type = checkpoint["config"]["model"]["model_type"].lower()
+        random_seed = checkpoint["config"]["model"]["random_seed"]
     elif config is not None:
         model_type = config["model"]["model_type"].lower()
+        random_seed = config["model"]["random_seed"]
     else:
         raise ValueError("Either `file_path` or `config` must be provided!")
 
@@ -47,6 +49,7 @@ def build_model(
                 experiment_dir=experiment_dir,
                 file_path=file_path,
                 config=config,
+                random_seed=random_seed,
                 **kwargs,
             )
         case "npe":
@@ -54,6 +57,7 @@ def build_model(
                 experiment_dir=experiment_dir,
                 file_path=file_path,
                 config=config,
+                random_seed=random_seed,
                 **kwargs,
             )
         case _:

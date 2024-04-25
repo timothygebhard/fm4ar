@@ -35,7 +35,7 @@ def get_likelihood_distribution(
     # Construct the covariance matrix from the given configuration
     # TODO: We need to figure out a way to specify generic covariance matrices
     #   in the configuration file. For now, we just assume that the covariance
-    #   matrix is given as `sigma**2 * np.eye(len(x_obs))`.
+    #   matrix is given as `sigma ** 2 * np.eye(len(x_obs))`.
     cov = config.sigma**2 * np.eye(len(flux_obs))
 
     return multivariate_normal(mean=flux_obs, cov=cov)  # type: ignore

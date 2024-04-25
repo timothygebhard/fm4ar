@@ -60,7 +60,7 @@ def merge_hdf_files(
     name_pattern: str,
     output_file_path: Path,
     keys: list[str] | None = None,
-    singleton_keys: Sequence[str] = ("wlen", ),
+    singleton_keys: Sequence[str] = ("wlen",),
     delete_after_merge: bool = False,
     show_progressbar: bool = False,
 ) -> None:
@@ -127,7 +127,7 @@ def merge_hdf_files(
     for file_path in file_paths:
         with (
             h5py.File(file_path, "r") as src,
-            h5py.File(output_file_path, "a") as dst
+            h5py.File(output_file_path, "a") as dst,
         ):
             for key in keys_shapes_dtypes.keys():
 
@@ -138,7 +138,7 @@ def merge_hdf_files(
 
                 # Otherwise, we can concatenate the arrays
                 dst[key].resize(dst[key].shape[0] + value.shape[0], axis=0)
-                dst[key][-value.shape[0]:] = value
+                dst[key][-value.shape[0] :] = value
 
     # Delete the source HDF file
     if delete_after_merge:

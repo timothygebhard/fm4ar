@@ -2,13 +2,16 @@
 Methods to train (or validate) a given model for one epoch.
 """
 
-from typing import Any, TYPE_CHECKING, Union
+import time
+from typing import TYPE_CHECKING, Union
 
 import torch
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 
-from fm4ar.utils.torchutils import check_for_nans, perform_scheduler_step
+from fm4ar.torchutils.schedulers import perform_scheduler_step
+from fm4ar.torchutils.general import check_for_nans
+from fm4ar.training.stages import StageConfig
 from fm4ar.utils.tracking import LossInfo
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -51,7 +54,7 @@ def move_batch_to_device(
 def train_epoch(
     model: "Base",
     dataloader: DataLoader,
-    stage_config: dict[str, Any],
+    stage_config: StageConfig,
 ) -> float:
     """
     Train the posterior model for one epoch.
@@ -66,13 +69,13 @@ def train_epoch(
     """
 
     # Define shortcuts
-    use_amp = stage_config.get("use_amp", False)
-    gradient_clipping_config = stage_config.get("gradient_clipping", {})
-    loss_kwargs = stage_config.get("loss_kwargs", {})
+    gradient_clipping_config = stage_config.gradient_clipping
 
     # Check if we can use automatic mixed precision
-    if use_amp and model.device == torch.device("cpu"):  # pragma: no cover
-        raise RuntimeError("Don't use automatic mixed precision on CPU!")
+    if stage_config.use_amp and model.device == torch.device("cpu"):
+        raise RuntimeError(  # pragma: no cover
+            "Don't use automatic mixed precision on CPU!"
+        )
 
     # Ensure that the neural net is in training mode
     model.network.train()
@@ -87,7 +90,7 @@ def train_epoch(
     )
 
     # Create scaler for automatic mixed precision
-    scaler = GradScaler(enabled=use_amp)
+    scaler = GradScaler(enabled=stage_config.use_amp)
 
     # Iterate over the batches
     batch: dict[str, torch.Tensor]
@@ -102,39 +105,53 @@ def train_epoch(
         model.optimizer.zero_grad(set_to_none=True)
 
         # No automatic mixed precision
-        if not use_amp:
+        if not stage_config.use_amp:
 
-            loss = model.loss(theta=theta, context=context)
+            # Compute loss and backpropagate
+            loss = model.loss(
+                theta=theta,
+                context=context,
+                **stage_config.loss_kwargs,
+            )
             check_for_nans(loss, "train loss")
-
             loss.backward()  # type: ignore
 
-            if gradient_clipping_config:
+            # Clip gradients if desired
+            if gradient_clipping_config.enabled:
                 torch.nn.utils.clip_grad_norm_(
                     parameters=model.network.parameters(),
-                    **gradient_clipping_config,
+                    max_norm=gradient_clipping_config.max_norm,
+                    norm_type=gradient_clipping_config.norm_type,
                 )
 
+            # Take a step with the optimizer
             model.optimizer.step()
 
         # With automatic mixed precision (default)
         # This cannot be tested at the moment because it requires a GPU
         else:  # pragma: no cover
 
+            # Compute loss and backpropagate
             # Note: Backward passes under autocast are not recommended
             with autocast():
-                loss = model.loss(theta=theta, context=context, **loss_kwargs)
+                loss = model.loss(
+                    theta=theta,
+                    context=context,
+                    **stage_config.loss_kwargs,
+                )
                 check_for_nans(loss, "train loss")
-
             scaler.scale(loss).backward()  # type: ignore
 
-            if gradient_clipping_config:
+            # Clip gradients if desired
+            if gradient_clipping_config.enabled:
                 scaler.unscale_(model.optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     parameters=model.network.parameters(),
-                    **gradient_clipping_config,
+                    max_norm=gradient_clipping_config.max_norm,
+                    norm_type=gradient_clipping_config.norm_type,
                 )
 
+            # Take a step with the optimizer
             scaler.step(model.optimizer)
             scaler.update()
 
@@ -156,7 +173,7 @@ def train_epoch(
 def validate_epoch(
     model: Union["Base", "FMPEModel"],  # required because of log_prob_batch()
     dataloader: DataLoader,
-    stage_config: dict[str, Any],
+    stage_config: StageConfig,
 ) -> tuple[float, float | None]:
     """
     Perform one validation epoch for the given model.
@@ -172,27 +189,16 @@ def validate_epoch(
         (2) The average log probability of the true parameter values.
     """
 
-    # TODO: Maybe we also want to use AMP here to speed up the logprob stuff?
-
     # Ensure that the neural net is in evaluation mode
     model.network.eval()
 
-    # Check the `model` is an FMPE model. We cannot directly use `isinstance`
-    # here, since this would create a circular import.
-    is_fmpe_model = model.__class__.__name__ == "FMPEModel"
+    # -------------------------------------------------------------------------
+    # Compute validation loss
+    # -------------------------------------------------------------------------
 
-    # Set default value for `logprob_epochs`
-    logprob_epochs = stage_config.get("logprob_epochs")
-    logprob_epochs = (
-        (10 if is_fmpe_model else 1) if logprob_epochs is None
-        else logprob_epochs
-    )
-
-    # Get additional keyword arguments for loss function
-    loss_kwargs = stage_config.get("loss_kwargs", {})
-
+    # We first compute only the validation loss
     # We don't need to compute gradients for the validation set
-    with torch.no_grad():
+    with torch.no_grad() and autocast(enabled=stage_config.use_amp):
 
         # Set up a LossInfo object to keep track of the loss and times
         loss_info = LossInfo(
@@ -202,20 +208,6 @@ def validate_epoch(
             mode="Validate",
             print_freq=1,
         )
-
-        # Store average logprob: We only compute this from the first batch,
-        # because it otherwise takes extremely long for flow matching models.
-        avg_logprob = None
-
-        # Additional keyword arguments for log_prob_batch
-        # Background: It seems that the time-inverse ODE required to compute
-        # the log probability of the true parameter value is sometimes stiffer
-        # than the "forward" ODE, so we need to use a different solver.
-        # TODO: Check this again more thoroughly!
-        log_prob_kwargs: dict[str, Any] = dict()
-        if is_fmpe_model:
-            log_prob_kwargs["tolerance"] = 1e-3
-            log_prob_kwargs["method"] = "dopri8"
 
         # Iterate over the batches
         batch: dict[str, torch.Tensor]
@@ -227,34 +219,70 @@ def validate_epoch(
             theta, context = move_batch_to_device(batch, model.device)
 
             # Compute validation loss
-            loss = model.loss(theta=theta, context=context, **loss_kwargs)
+            loss = model.loss(
+                theta=theta,
+                context=context,
+                **stage_config.loss_kwargs,
+            )
             check_for_nans(loss, "validation loss")
-
-            # Define maximum number of samples to use for log probability.
-            # This is to limit the memory usage for batch sizes that cannot
-            # be processed without AMP anymore.
-            # TODO: Maybe there is a cleaner way of handling this?
-            MAX_SAMPLES_FOR_LOGPROB = 1024
-
-            # Compute log probability of true parameter values of first batch
-            if (
-                logprob_epochs > 0
-                and (model.epoch - 1) % logprob_epochs == 0
-                and batch_idx == 0
-            ):
-                logprob = model.log_prob_batch(
-                    theta=theta[:MAX_SAMPLES_FOR_LOGPROB],
-                    context={
-                        key: value[:MAX_SAMPLES_FOR_LOGPROB]
-                        for key, value in context.items()
-                    },
-                    **log_prob_kwargs,  # for FMPE: tolerance, method
-                )
-                avg_logprob = float(logprob.mean().item())
 
             # Update loss for history and logging
             loss_info.update(loss.item(), len(theta))
             loss_info.print_info(batch_idx)
 
-        # Return the average validation loss and log probability
-        return loss_info.get_avg(), avg_logprob
+    # Select the average validation loss
+    avg_loss = loss_info.get_avg()
+
+    # -------------------------------------------------------------------------
+    # Optionally: Compute log prob
+    # -------------------------------------------------------------------------
+
+    # Optionally, we now also compute the average log probability of the true
+    # parameter values. This is relatively expensive for flow matching models,
+    # so we only do this for a subset of a single batch.
+    if (
+        stage_config.logprob_evaluation.interval is not None
+        and (model.epoch - 1) % stage_config.logprob_evaluation.interval == 0
+    ):
+
+        evaluation_start = time.time()
+        print("Evaluating log probability...", end=" ", flush=True)
+
+        # Get the first batch of the dataloader and move it to the device
+        batch = next(iter(dataloader))
+        theta, context = move_batch_to_device(batch, model.device)
+
+        # Check the `model` is an FMPE model and select any additional kwargs
+        # for the ODE solver that we might need. Note: We cannot directly use
+        # `isinstance` here, since this would create a circular import.
+        is_fmpe_model = model.__class__.__name__ == "FMPEModel"
+        extra_kwargs = (
+            {} if not is_fmpe_model
+            else stage_config.logprob_evaluation.ode_solver.dict()
+        )
+
+        # Compute logprob of the first `n_samples` samples of the batch
+        # Note: Trying to speed up this part with AMP has not been successful
+        # so far and has mostly resulted in out-of-memory errors...
+        n_samples = stage_config.logprob_evaluation.n_samples
+        with torch.no_grad():
+            logprob = model.log_prob_batch(
+                theta=theta[:n_samples],
+                context={k: v[:n_samples] for k, v in context.items()},
+                **extra_kwargs,
+            )
+
+        # Compute the average log probability of the samples
+        avg_logprob = float(logprob.mean().item())
+
+        # Print the time it took to compute the log probability
+        evaluation_time = time.time() - evaluation_start
+        print(f"Done! ({evaluation_time:,.2f}s)")
+
+    # If we do not compute the log probability, set it to None (not NaN)
+    # This is to distinguish it from something going wrong in the computation
+    # of the log probability.
+    else:
+        avg_logprob = None
+
+    return avg_loss, avg_logprob

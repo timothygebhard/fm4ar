@@ -16,6 +16,7 @@ from threadpoolctl import threadpool_limits
 from fm4ar.training.args import get_cli_arguments
 from fm4ar.training.preparation import prepare_new, prepare_resume
 from fm4ar.training.stages import train_stages
+from fm4ar.torchutils.general import get_cuda_info
 from fm4ar.utils.config import load_config
 from fm4ar.utils.environment import document_environment
 from fm4ar.utils.git_utils import document_git_status
@@ -78,7 +79,15 @@ if __name__ == "__main__":
 
     else:
 
+        # Print some information about the environment
         print("Running on host:", gethostname(), "\n", flush=True)
+        print("CUDA information:")
+        if not get_cuda_info():
+            print("No CUDA devices found!\n")
+        else:
+            for key, value in get_cuda_info().items():
+                print(f"  {key}: {value}")
+            print()
 
         # Document the status of the git repository and Python environment
         document_git_status(target_dir=args.experiment_dir, verbose=True)

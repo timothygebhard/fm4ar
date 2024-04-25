@@ -13,9 +13,7 @@ def test__load_config() -> None:
 
     # Load the template config
     experiment_dir = (
-        get_experiments_dir()
-        / "templates"
-        / "importance-sampling"
+        get_experiments_dir() / "templates" / "importance-sampling"
     )
     config = load_config(experiment_dir)
 

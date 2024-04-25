@@ -216,7 +216,7 @@ def condor_submit_bid(
 def condor_submit_dag(
     file_path: Path,
     verbose: bool = True,
-    bid: int = 25,
+    bid: int = 50,
 ) -> None:  # pragma: no cover
     """
     Submit a DAGMan file to HTCondor.

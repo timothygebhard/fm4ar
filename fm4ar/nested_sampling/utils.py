@@ -4,6 +4,7 @@ Utility functions for nested sampling.
 
 import logging
 from pathlib import Path
+from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -75,7 +76,7 @@ def get_parameter_masks(
 def create_posterior_plot(
     points: np.ndarray,
     weights: np.ndarray,
-    names: list[str],
+    names: Sequence[str],
     ground_truth: np.ndarray,
     file_path: Path,
 ) -> plt.Figure:
@@ -98,7 +99,7 @@ def create_posterior_plot(
     # samples because the new version of ChainConsumer can't handle them...
     samples = pd.DataFrame(
         data=np.column_stack([points, weights]),
-        columns=list(names) + ["weight"]
+        columns=list(names) + ["weight"],
     )
     samples = samples[samples['weight'] > 0]
 

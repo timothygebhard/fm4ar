@@ -53,7 +53,8 @@ def draw_proposal_samples(
         target_spectrum = load_target_spectrum(
             file_path=config.target_spectrum.file_path,
             index=(
-                args.target_index if args.target_index is not None
+                args.target_index
+                if args.target_index is not None
                 else config.target_spectrum.index
             ),
         )
@@ -66,8 +67,8 @@ def draw_proposal_samples(
         # add the error bars based on the assumed likelihood function
         # TODO: We should think about a more general way to handle this!
         context = {
-            k: torch.from_numpy(v).float().reshape(1, -1) for k, v in
-            target_spectrum.items()
+            k: torch.from_numpy(v).float().reshape(1, -1)
+            for k, v in target_spectrum.items()
         }
         context["error_bars"] = sigma * torch.ones(1, n_bins).float()
 
@@ -159,7 +160,7 @@ def draw_samples_from_ml_model(
 
     # Determine the chunk sizes: Every chunk should have `chunk_size` samples,
     # except for the last one, which may have fewer samples.
-    chunk_sizes = np.diff(np.r_[0: n_samples: chunk_size, n_samples])
+    chunk_sizes = np.diff(np.r_[0:n_samples:chunk_size, n_samples])
 
     # Draw samples from the model posterior ("proposal distribution")
     print("Drawing samples from the model posterior:", flush=True)
@@ -249,7 +250,7 @@ def draw_samples_from_unconditional_flow(
 
     # Determine the chunk sizes: Every chunk should have `chunk_size` samples,
     # except for the last one, which may have fewer samples.
-    chunk_sizes = np.diff(np.r_[0: n_samples: chunk_size, n_samples])
+    chunk_sizes = np.diff(np.r_[0:n_samples:chunk_size, n_samples])
 
     # Draw samples from the unconditional flow model
     print("Drawing samples from unconditional flow:", flush=True)

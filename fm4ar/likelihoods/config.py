@@ -16,7 +16,7 @@ class LikelihoodConfig(BaseModel):
 
     # TODO: We need to figure out a way to specify generic covariance matrices
     #  in the configuration file. For now, we just assume that the covariance
-    #  matrix is given as `sigma * np.eye(len(x_obs))`.
+    #  matrix is given as `sigma ** 2 * np.eye(len(x_obs))`.
 
     sigma: float = Field(
         ...,

@@ -38,6 +38,7 @@ dependencies = [
     "nautilus-sampler~=1.0.0",
     "normflows",
     "numpy",
+    "p_tqdm",
     "pandas",
     "pydantic>=2.0.0",
     "pyyaml",
@@ -55,9 +56,7 @@ dependencies = [
 
 # Development dependencies
 dev = [
-    "black[d]",
     "coverage",
-    "isort",
     "ipython",
     "jupyter",
     "mypy",
@@ -70,9 +69,12 @@ dev = [
 ]
 
 # petitRADTRANS can be tricky to install, so we keep it separate
+# Note: petitRADTRANS 2.7.x seems to give the exact same results in our tests
+# but introduces a weird runtime degradation in our nested sampling code that
+# basically makes it unusable...
 petitRADTRANS = [
     "mpi4py",
-    "petitRADTRANS==2.7.6",
+    "petitRADTRANS==2.6.7",
 ]
 
 # PyMultiNest is also a bit tricky to install (see docs for pre-requisites)
@@ -81,16 +83,10 @@ PyMultiNest = [
     "pymultinest",
 ]
 
+
 # -----------------------------------------------------------------------------
 # TOOL CONFIGURATION
 # -----------------------------------------------------------------------------
-
-[tool.black]
-line-length = 79
-target-version = ['py310']
-
-[tool.isort]
-profile = "black"
 
 [tool.mypy]
 python_version = "3.10"
@@ -104,9 +100,11 @@ disallow_untyped_calls = true
 no_implicit_optional = true
 disallow_untyped_defs = true
 
+
 [tool.pyright]
 pythonVersion = "3.10"
 reportPrivateImportUsage = "none"
+
 
 [tool.pytest.ini_options]
 filterwarnings = [
@@ -120,6 +118,7 @@ markers = [  # deselect tests with -m "not <marker>"
     "slow: unit tests that are slow",
 ]
 
+
 [tool.ruff]
 lint.select = [
     "E",  # pycodestyle rules
@@ -132,6 +131,12 @@ lint.ignore = [
 ]
 line-length = 79
 target-version = "py310"
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 72
+quote-style = "preserve"
+
 
 [tool.setuptools]
 packages = ["fm4ar"]

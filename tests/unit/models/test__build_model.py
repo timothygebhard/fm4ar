@@ -19,7 +19,14 @@ def test__build_model() -> None:
 
     # Case 2: Cannot call with illegal model type
     with pytest.raises(ValueError) as value_error:
-        build_model(config={"model": {"model_type": "invalid"}})
+        build_model(
+            config={
+                "model": {
+                    "model_type": "invalid",
+                    "random_seed": 0,
+                }
+            }
+        )
     assert "is not a valid model type!" in str(value_error)
 
     # All non-trivial use cases are tested in the integration tests!
