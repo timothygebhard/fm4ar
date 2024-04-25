@@ -266,10 +266,7 @@ if __name__ == "__main__":
         # Load the target spectrum
         target = load_target_spectrum(
             file_path=config.target_spectrum.file_path,
-            index=(
-                args.target_index if args.target_index is not None
-                else config.target_spectrum.index
-            ),
+            index=config.target_spectrum.index,
         )
         n_bins = len(target["flux"])
 
