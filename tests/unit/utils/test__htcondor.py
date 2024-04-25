@@ -137,6 +137,7 @@ def test__dagman_file(tmp_path: Path) -> None:
         ("invalid", None),
     ],
 )
+@no_type_check
 def test__get_cuda_capability(
     gpu_type: str | None,
     expected_capability: int | None,
