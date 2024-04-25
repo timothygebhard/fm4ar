@@ -35,8 +35,11 @@ def draw_proposal_samples(
         proposal samples and their respective probabilities.
     """
 
+    # Determine the experiment directory from the working directory
+    experiment_dir = args.working_dir.parent.parent
+
     # Determine the model type: FMPE / NPE or unconditional flow?
-    experiment_config = load_experiment_config(args.experiment_dir)
+    experiment_config = load_experiment_config(experiment_dir)
     model_type = experiment_config["model"]["model_type"]
 
     # Determine the number of samples that the current job should draw
@@ -52,12 +55,14 @@ def draw_proposal_samples(
         # Load the target spectrum
         target_spectrum = load_target_spectrum(
             file_path=config.target_spectrum.file_path,
-            index=(
-                args.target_index
-                if args.target_index is not None
-                else config.target_spectrum.index
-            ),
+            index=config.target_spectrum.index,
         )
+
+        # Save a copy of the target spectrum to the working directory
+        # We only need to do this once, not for every parallel GPU job
+        if args.job == 0:
+            file_path = args.working_dir / "target_spectrum.npz"
+            np.savez(file_path, **target_spectrum)
 
         # Define shortcuts
         n_bins = target_spectrum["flux"].shape[0]
@@ -67,8 +72,8 @@ def draw_proposal_samples(
         # add the error bars based on the assumed likelihood function
         # TODO: We should think about a more general way to handle this!
         context = {
-            k: torch.from_numpy(v).float().reshape(1, -1)
-            for k, v in target_spectrum.items()
+            k: torch.from_numpy(v).float().reshape(1, -1) for k, v in
+            target_spectrum.items()
         }
         context["error_bars"] = sigma * torch.ones(1, n_bins).float()
 
@@ -81,7 +86,7 @@ def draw_proposal_samples(
         print("Running for ML model (FMPE / NPE)!\n")
         theta, log_probs = draw_samples_from_ml_model(
             context=context,
-            experiment_dir=args.experiment_dir,
+            experiment_dir=experiment_dir,
             checkpoint_file_name=config.checkpoint_file_name,
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
@@ -94,7 +99,7 @@ def draw_proposal_samples(
 
         print("Running for unconditional flow model!\n")
         theta, log_probs = draw_samples_from_unconditional_flow(
-            experiment_dir=args.experiment_dir,
+            experiment_dir=experiment_dir,
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
             random_seed=config.random_seed + args.job,
@@ -160,7 +165,7 @@ def draw_samples_from_ml_model(
 
     # Determine the chunk sizes: Every chunk should have `chunk_size` samples,
     # except for the last one, which may have fewer samples.
-    chunk_sizes = np.diff(np.r_[0:n_samples:chunk_size, n_samples])
+    chunk_sizes = np.diff(np.r_[0: n_samples: chunk_size, n_samples])
 
     # Draw samples from the model posterior ("proposal distribution")
     print("Drawing samples from the model posterior:", flush=True)
@@ -250,7 +255,7 @@ def draw_samples_from_unconditional_flow(
 
     # Determine the chunk sizes: Every chunk should have `chunk_size` samples,
     # except for the last one, which may have fewer samples.
-    chunk_sizes = np.diff(np.r_[0:n_samples:chunk_size, n_samples])
+    chunk_sizes = np.diff(np.r_[0: n_samples: chunk_size, n_samples])
 
     # Draw samples from the unconditional flow model
     print("Drawing samples from unconditional flow:", flush=True)

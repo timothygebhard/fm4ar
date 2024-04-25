@@ -8,7 +8,6 @@ import argparse
 import sys
 import time
 from pathlib import Path
-from shutil import copyfile
 
 import numpy as np
 from p_tqdm import p_map
@@ -44,12 +43,6 @@ def get_cli_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--experiment-dir",
-        type=Path,
-        required=True,
-        help="Path to the experiment directory.",
-    )
-    parser.add_argument(
         "--job",
         type=int,
         default=0,
@@ -79,12 +72,16 @@ def get_cli_arguments() -> argparse.Namespace:
         help="If True, create a submission file and launch a job.",
     )
     parser.add_argument(
-        "--target-index",
-        type=int,
-        default=None,
+        "--working-dir",
+        type=Path,
+        required=True,
         help=(
-            "Index of the target spectrum to use. Default: None = use the "
-            "value specified in the importance_sampling.yaml config file."
+            "Path to the directory containing the importance sampling config "
+            "file. We assume that this directory is located at: "
+            "  `<experiment_dir>/importance_sampling/<working_dir>` "
+            "where `<experiment_dir>` is the directory containing the trained "
+            "model. The importance sampling config file is expected to be "
+            "named `importance_sampling.yaml` (to reduce confusion)."
         ),
     )
     args = parser.parse_args()
@@ -95,7 +92,7 @@ def get_cli_arguments() -> argparse.Namespace:
 def prepare_and_launch_dag(
     args: argparse.Namespace,
     config: ImportanceSamplingConfig,
-    output_dir: Path,
+    working_dir: Path,
 ) -> None:
     """
     Prepare and launch the DAGMan file for running the importance
@@ -104,7 +101,7 @@ def prepare_and_launch_dag(
     Args:
         args: The command line arguments.
         config: The importance sampling configuration.
-        output_dir: The output directory for the importance sampling run.
+        working_dir: The working directory for the IS run.
     """
 
     # Initialize a new DAGMan file
@@ -125,7 +122,7 @@ def prepare_and_launch_dag(
         htcondor_config: HTCondorConfig = getattr(config, stage).htcondor
         htcondor_config.arguments = [
             Path(__file__).resolve().as_posix(),
-            f"--experiment-dir {args.experiment_dir}",
+            f"--working-dir {args.working_dir}",
             f"--stage {stage}",
         ]
 
@@ -141,8 +138,8 @@ def prepare_and_launch_dag(
         # Create submission file
         file_path = create_submission_file(
             htcondor_config=htcondor_config,
-            experiment_dir=output_dir,
-            file_name=f"{i}__{stage}.sub",
+            experiment_dir=working_dir,
+            file_name=f"{i}__{stage}.sub"
         )
 
         # Add the job to the DAGMan file
@@ -154,7 +151,7 @@ def prepare_and_launch_dag(
         )
 
     # Save the DAGMan file
-    file_path = output_dir / "0__importance_sampling.dag"
+    file_path = working_dir / "0__importance_sampling.dag"
     dag.save(file_path=file_path)
 
     # Submit the DAGMan file to HTCondor
@@ -170,33 +167,26 @@ if __name__ == "__main__":
     script_start = time.time()
     print("\nRUN IMPORTANCE SAMPLING\n\n")
 
-    # Get the command line arguments and load the importance sampling config
+    # Get the command line arguments and define shortcuts
     args = get_cli_arguments()
-    config = load_config(experiment_dir=args.experiment_dir)
+    working_dir = args.working_dir
 
     # Ensure that we do not run compute-heavy jobs on the login node
     check_if_on_login_node(start_submission=args.start_submission)
 
-    # Define and prepare ouput directory
-    file_stem = config.target_spectrum.file_path.stem
-    file_index = config.target_spectrum.index
-    sigma = config.likelihood.sigma
-    dir_name = f"{file_stem}__{file_index}__{sigma}"
-    output_dir = args.experiment_dir / "importance_sampling" / dir_name
-    output_dir.mkdir(exist_ok=True, parents=True)
-
-    # Backup the config file for importance sampling
-    copyfile(
-        src=args.experiment_dir / "importance_sampling.yaml",
-        dst=output_dir / "importance_sampling.yaml",
-    )
+    # Load the importance sampling config
+    config = load_config(experiment_dir=args.working_dir)
 
     # -------------------------------------------------------------------------
     # If --start-submission: Create DAG file, launch job, and exit
     # -------------------------------------------------------------------------
 
     if args.start_submission:
-        prepare_and_launch_dag(args=args, config=config, output_dir=output_dir)
+        prepare_and_launch_dag(
+            args=args,
+            config=config,
+            working_dir=working_dir,
+        )
         sys.exit(0)
 
     # -------------------------------------------------------------------------
@@ -214,7 +204,7 @@ if __name__ == "__main__":
 
         print("\nSaving results to HDF...", end=" ", flush=True)
         save_to_hdf(
-            file_path=output_dir / f"proposal-samples-{args.job:04d}.hdf",
+            file_path=working_dir / f"proposal-samples-{args.job:04d}.hdf",
             theta=theta,
             log_probs=log_probs,
         )
@@ -232,9 +222,9 @@ if __name__ == "__main__":
 
         print("Merging HDF files:", flush=True)
         merge_hdf_files(
-            target_dir=output_dir,
+            target_dir=working_dir,
             name_pattern="proposal-samples-*.hdf",
-            output_file_path=output_dir / "proposal-samples.hdf",
+            output_file_path=working_dir / "proposal-samples.hdf",
             keys=["theta", "log_probs"],
             singleton_keys=[],
             delete_after_merge=True,
@@ -266,7 +256,7 @@ if __name__ == "__main__":
 
         # Load the theta samples and probabilities and unpack them
         proposal_samples = load_from_hdf(
-            file_path=output_dir / "proposal-samples.hdf",
+            file_path=working_dir / "proposal-samples.hdf",
             keys=["theta", "log_probs"],
             idx=idx,
         )
@@ -277,8 +267,7 @@ if __name__ == "__main__":
         target = load_target_spectrum(
             file_path=config.target_spectrum.file_path,
             index=(
-                args.target_index
-                if args.target_index is not None
+                args.target_index if args.target_index is not None
                 else config.target_spectrum.index
             ),
         )
@@ -358,12 +347,12 @@ if __name__ == "__main__":
         file_name = f"simulations-{args.job:04d}.hdf"
         print("Saving results to HDF...", end=" ", flush=True)
         save_to_hdf(
-            file_path=output_dir / file_name,
+            file_path=working_dir / file_name,
             theta=theta.astype(np.float32),
-            log_probs=log_probs.astype(np.float64),
+            log_probs=log_probs.astype(np.float32),
             flux=flux.astype(np.float32),
-            log_likelihoods=log_likelihoods.astype(np.float64),
-            log_prior_values=log_prior_values.astype(np.float64),
+            log_likelihoods=log_likelihoods.astype(np.float32),
+            log_prior_values=log_prior_values.astype(np.float32),
         )
         print("Done!\n\n")
 
@@ -380,9 +369,8 @@ if __name__ == "__main__":
         # Merge the results from all simulation jobs
         print("Merging HDF files:")
         merge_hdf_files(
-            target_dir=output_dir,
-            name_pattern="simulations-*.hdf",
-            output_file_path=output_dir / "simulations.hdf",
+            target_dir=working_dir, name_pattern="simulations-*.hdf",
+            output_file_path=working_dir / "simulations.hdf",
             keys=[
                 "flux",
                 "log_likelihoods",
@@ -399,7 +387,7 @@ if __name__ == "__main__":
         # Load the merged results
         print("Loading merged results...", end=" ", flush=True)
         merged = load_from_hdf(
-            file_path=output_dir / "simulations.hdf",
+            file_path=working_dir / "simulations.hdf",
             keys=[
                 "flux",
                 "log_probs",
@@ -429,11 +417,11 @@ if __name__ == "__main__":
         # Save the final results: full and minimized
         print("Saving results to HDF...", end=" ")
         save_to_hdf(
-            file_path=output_dir / "importance_sampling_results.hdf",
+            file_path=working_dir / "importance_sampling_results.hdf",
             **merged,
         )
         save_to_hdf(
-            file_path=output_dir / "importance_sampling_results_min.hdf",
+            file_path=working_dir / "importance_sampling_results_min.hdf",
             theta=merged["theta"],
             weights=merged["weights"],
             raw_log_weights=merged["raw_log_weights"],
