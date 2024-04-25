@@ -98,7 +98,7 @@ if __name__ == "__main__":
         config = deepcopy(base_config)
         config.target_spectrum.file_path = args.target_file_path.as_posix()
         config.target_spectrum.index = idx
-        config.likelihood.sigma = float(target_spectrum["snr"])
+        config.likelihood.sigma = float(target_spectrum["sigma"])
 
         # Create the directory for the run
         target_stem = args.target_file_path.stem
