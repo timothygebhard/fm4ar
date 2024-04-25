@@ -78,7 +78,7 @@ class HTCondorConfig(BaseModel):
         description="Number of times top place this job in the queue.",
     )
     bid: int = Field(
-        default=15,
+        default=50,
         ge=15,  # 15 is the current minimum bid on the cluster
         description="Bid to use for the job.",
     )
@@ -190,7 +190,7 @@ def check_if_on_login_node(start_submission: bool) -> None:
 
 def condor_submit_bid(
     file_path: Path,
-    bid: int = 15,
+    bid: int = 50,
     verbose: bool = True,
 ) -> None:  # pragma: no cover
     """
