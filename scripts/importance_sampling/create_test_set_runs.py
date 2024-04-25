@@ -80,7 +80,7 @@ if __name__ == "__main__":
     base_config = load_config(importance_sampling_dir, name=args.base_name)
 
     # Loop over indices
-    for idx in range(args.start_idx, args.end_idx):
+    for idx in range(args.start_idx, args.end_idx + 1):
 
         print(f"Creating config for index {idx}...", end=" ", flush=True)
 
