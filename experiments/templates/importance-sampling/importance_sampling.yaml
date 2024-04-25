@@ -3,13 +3,15 @@
 #
 
 # General settings
-checkpoint_file_name: "model__latest.pt"
+checkpoint_file_name: "model__best.pt"
 random_seed: 42
 model_kwargs: {}
+  # tolerance: 1.0e-4  # tolerance for ODE solver on FMPE models
 
 # Define target spectrum
+# If the model is an unconditional flow, this will be ignored.
 target_spectrum:
-  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/target/target__R-1000__pRT-2.6.7.hdf"
+  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/target/target__R-1000__pRT-2.7.6.hdf"
   index: 0
 
 # Prior settings
@@ -18,7 +20,7 @@ prior:
 
 # Likelihood settings
 likelihood:
-  sigma: 0.1257
+  sigma: 0.125754  # SNR = 10.54 for reference spectrum
 
 # Simulator settings
 simulator:
