@@ -43,7 +43,10 @@ def get_virtual_environment() -> str:
         The virtual environment name.
     """
 
-    return os.environ['VIRTUAL_ENV']
+    try:
+        return os.environ['VIRTUAL_ENV']
+    except KeyError:
+        return "No virtual environment detected"
 
 
 def document_environment(target_dir: Path) -> None:
