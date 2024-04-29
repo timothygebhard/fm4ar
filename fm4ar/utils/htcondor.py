@@ -61,6 +61,13 @@ class HTCondorConfig(BaseModel):
         default="",
         description="(List of) arguments to pass to the executable.",
     )
+    requirements: list[str] = Field(
+        default=[],
+        description=(
+            "Any additional requirements for the job, e.g., constraints "
+            "on the nodes on which the job can run."
+        ),
+    )
     retry_on_exit_code: int | None = Field(
         default=None,
         description=(
@@ -273,21 +280,24 @@ def create_submission_file(
     lines.append(f"request_cpus = {htcondor_config.n_cpus}\n")
     lines.append(f"request_memory = {htcondor_config.memory_cpus}\n")
 
-    # Set GPU requirements (only add this section if GPUs are requested)
+    # Collect general requirements (e.g., constraints on the nodes)
+    requirements = htcondor_config.requirements.copy()
+
+    # Add GPU requirements
     if htcondor_config.n_gpus > 0:
 
         # Request the desired number of GPUs
         lines.append(f"request_gpus = {htcondor_config.n_gpus}\n")
 
         # Construct other requirements: GPU memory and / or type
-        requirements = []
         if (memory_gpus := htcondor_config.memory_gpus) > 0:
             requirements.append(f"TARGET.CUDAGlobalMemoryMb > {memory_gpus}")
         if (gpu_type := htcondor_config.gpu_type) is not None:
             cuda_capability = get_cuda_capability(gpu_type)
             requirements.append(f"TARGET.CUDACapability == {cuda_capability}")
 
-        # Add the requirements to the submission file
+    # Add the combined requirements to the submission file
+    if requirements:
         lines.append(f"requirements = ({' && '.join(requirements)})\n\n")
 
     # Set the arguments
