@@ -55,6 +55,10 @@ def test__draw_proposal_samples__npe(
     experiment_dir = tmp_path / "npe"
     experiment_dir.mkdir()
 
+    # Create the working directory for the importance sampling run
+    working_dir = experiment_dir / "importance_sampling" / "dummy"
+    working_dir.mkdir(parents=True)
+
     # Copy over the template configuration for a NPE model
     template_dir = get_experiments_dir() / "templates" / "npe"
     copyfile(
@@ -76,18 +80,18 @@ def test__draw_proposal_samples__npe(
         experiment_dir=experiment_dir,
         config=npe_config,
     )
-    model.save_model(name="latest", save_training_info=False)
+    model.save_model(name="best", save_training_info=False)
 
     # Copy over the template configuration for an importance sampling run
     template_dir = get_experiments_dir() / "templates" / "importance-sampling"
     copyfile(
         template_dir / "importance_sampling.yaml",
-        experiment_dir / "importance_sampling.yaml",
+        working_dir / "importance_sampling.yaml",
     )
 
     # Create the command-line arguments
     args = Namespace(
-        experiment_dir=experiment_dir,
+        working_dir=working_dir,
         job=0,
         n_jobs=1,
         stage=None,
@@ -95,7 +99,7 @@ def test__draw_proposal_samples__npe(
     )
 
     # Load and adjust the importance sampling configuration
-    is_config = load_is_config(experiment_dir=experiment_dir)
+    is_config = load_is_config(working_dir)
     is_config.target_spectrum.file_path = file_path_to_target_spectrum
     n_samples = is_config.draw_proposal_samples.n_samples
 
@@ -118,6 +122,10 @@ def test__draw_proposal_samples__unconditional_flow(
     # Create a temporary directory for the experiment
     experiment_dir = tmp_path / "npe"
     experiment_dir.mkdir()
+
+    # Create the working directory for the importance sampling run
+    working_dir = experiment_dir / "importance_sampling" / "dummy"
+    working_dir.mkdir(parents=True)
 
     # Copy over the template configuration for a NPE model
     template_dir = get_experiments_dir() / "templates" / "unconditional-flow"
@@ -149,12 +157,12 @@ def test__draw_proposal_samples__unconditional_flow(
     template_dir = get_experiments_dir() / "templates" / "importance-sampling"
     copyfile(
         template_dir / "importance_sampling.yaml",
-        experiment_dir / "importance_sampling.yaml",
+        working_dir / "importance_sampling.yaml",
     )
 
     # Create the command-line arguments
     args = Namespace(
-        experiment_dir=experiment_dir,
+        working_dir=working_dir,
         job=0,
         n_jobs=1,
         stage=None,
@@ -162,7 +170,7 @@ def test__draw_proposal_samples__unconditional_flow(
     )
 
     # Load and adjust the importance sampling configuration
-    is_config = load_is_config(experiment_dir=experiment_dir)
+    is_config = load_is_config(working_dir)
     is_config.target_spectrum.file_path = file_path_to_target_spectrum
     n_samples = is_config.draw_proposal_samples.n_samples
 
