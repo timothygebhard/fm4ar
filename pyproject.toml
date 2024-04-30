@@ -35,7 +35,7 @@ dependencies = [
     "joblib",
     "matplotlib",
     "multiprocess",
-    "nautilus-sampler~=1.0.0",
+    "nautilus-sampler>=1.0.3",
     "normflows",
     "numpy",
     "p_tqdm",
