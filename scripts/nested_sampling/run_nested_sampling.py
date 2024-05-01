@@ -267,6 +267,11 @@ if __name__ == "__main__":
     # Determine the exit code: 42 means "hold and restart the job"
     exit_code = 0 if sampler.complete else 42
 
+    # For MultiNest, we need to synchronise the "complete" flag across all
+    # processes before determining the exit code
+    if config.sampler.library == "multinest" and comm is not None:
+        exit_code = 0 if any(comm.allgather(sampler.complete)) else 42
+
     # If we are done, save the results and create a plot
     # For the case of MultiNest, we only do this on the "root" process
     if sampler.complete and rank == 0:
