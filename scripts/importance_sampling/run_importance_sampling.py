@@ -289,11 +289,13 @@ if __name__ == "__main__":
             """
 
             # Evaluate the prior at theta_i
-            # If the prior is 0, we can skip the rest of the computation
-            # because the weight will be 0 anyway. Otherwise, we compute
-            # the log-prior value.
+            # If the prior is 0, we can skip the rest of the computation since
+            # the weight will be 0 anyway. Otherwise, we compute the log-prior
+            # value. We return -np.inf here, because we do not want to discard
+            # the zero-weight sample, as this would bias the estimate of the
+            # log-evidence.
             if (prior_value := prior.evaluate(theta_i)) <= 0:
-                return np.full(n_bins, np.nan), np.nan, np.nan
+                return np.full(n_bins, np.nan), -np.inf, -np.inf
             log_prior_value = np.log(prior_value)
 
             # Simulate the spectrum that belongs to theta_i
@@ -324,7 +326,7 @@ if __name__ == "__main__":
         log_likelihoods = np.array(_log_likelihoods).flatten()
         log_prior_values = np.array(_log_prior_values).flatten()
 
-        # Drop anything with NaNs (e.g., failed simulation, prior = 0, ...)
+        # Drop anything with NaNs (e.g., failed simulation)
         mask = np.logical_and.reduce(
             (
                 ~np.isnan(flux).any(axis=1),
