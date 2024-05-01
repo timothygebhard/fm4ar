@@ -21,6 +21,7 @@ from fm4ar.importance_sampling.target_spectrum import load_target_spectrum
 from fm4ar.importance_sampling.utils import (
     compute_effective_sample_size,
     compute_is_weights,
+    compute_log_evidence,
 )
 from fm4ar.likelihoods import get_likelihood_distribution
 from fm4ar.priors import get_prior
@@ -402,14 +403,17 @@ if __name__ == "__main__":
             log_prior_values=merged["log_prior_values"],
             log_probs=merged["log_probs"],
         )
-        merged["raw_log_weights"] = raw_log_weights.astype(np.float64)
-        merged["weights"] = weights.astype(np.float64)
+        merged["raw_log_weights"] = raw_log_weights.astype(np.float32)
+        merged["weights"] = weights.astype(np.float32)
         print("Done!\n")
 
-        # Compute the effective sample size and sample efficiency
+        # Compute the effective sample size and sample efficiency as well
+        # as the log-evidence estimate and its standard deviation
         n_eff, sample_efficiency = compute_effective_sample_size(weights)
+        log_Z, log_Z_std = compute_log_evidence(merged["raw_log_weights"])
         print(f"  Effective sample size: {n_eff:.2f}")
         print(f"  Sample efficiency:     {100 * sample_efficiency:.2f}%\n")
+        print(f"  Log-evidence estimate: {log_Z:.2f} +/- {log_Z_std:.2f}\n")
 
         # Save the final results: full and minimized
         print("Saving results to HDF...", end=" ")

@@ -57,7 +57,8 @@ def compute_is_weights(
     log_probs: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Compute the importance sampling weights.
+    Compute the importance sampling weights: both the raw weights in
+    log-space and the normalized weights in "normal" space.
 
     Args:
         log_likelihoods: Log-likelihood values.
@@ -103,3 +104,32 @@ def compute_effective_sample_size(
     sampling_efficiency = float(n_eff / len(weights))
 
     return n_eff, sampling_efficiency
+
+
+def compute_log_evidence(
+    raw_log_weights: np.ndarray,
+) -> tuple[float, float]:
+    """
+    Compute the estimate of the log-evidence and its standard deviation.
+
+    Args:
+        raw_log_weights: Raw log-weights.
+
+    Returns:
+        log_evidence: Log-evidence estimate.
+        log_evidence_std: Standard deviation of the log-evidence.
+    """
+
+    # Normalize the raw log-weights
+    weights = clip_and_normalize_weights(raw_log_weights)
+
+    # Compute the number of samples and the effective sample size
+    N = len(raw_log_weights)
+    N_eff, _ = compute_effective_sample_size(weights)
+
+    # Copmute the log-evidence estimate and its standard deviation
+    # noinspection PyUnresolvedReferences
+    log_evidence = float(logsumexp(raw_log_weights) - np.log(N))
+    log_evidence_std = float(np.sqrt((N - N_eff) / (N * N_eff)))
+
+    return log_evidence, log_evidence_std
