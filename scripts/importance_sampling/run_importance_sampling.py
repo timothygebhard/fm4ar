@@ -201,13 +201,14 @@ if __name__ == "__main__":
         print(80 * "-" + "\n", flush=True)
 
         # Draw samples (this comes with its own progress bar)
-        theta, log_probs = draw_proposal_samples(args=args, config=config)
+        results = draw_proposal_samples(args=args, config=config)
 
         print("\nSaving results to HDF...", end=" ", flush=True)
         save_to_hdf(
             file_path=working_dir / f"proposal-samples-{args.job:04d}.hdf",
-            theta=theta,
-            log_probs=log_probs,
+            samples=results["samples"].astype(np.float32),
+            log_prob_samples=results["log_prob_samples"].astype(np.float32),
+            log_prob_theta_true=results["log_prob_theta_true"],
         )
         print("Done!\n\n")
 
@@ -226,8 +227,8 @@ if __name__ == "__main__":
             target_dir=working_dir,
             name_pattern="proposal-samples-*.hdf",
             output_file_path=working_dir / "proposal-samples.hdf",
-            keys=["theta", "log_probs"],
-            singleton_keys=[],
+            keys=["samples", "log_prob_samples"],
+            singleton_keys=["log_prob_theta_true"],
             delete_after_merge=True,
             show_progressbar=True,
         )
@@ -256,13 +257,14 @@ if __name__ == "__main__":
         print()
 
         # Load the theta samples and probabilities and unpack them
+        # We also load the log-probability of the ground truth theta value
         proposal_samples = load_from_hdf(
             file_path=working_dir / "proposal-samples.hdf",
-            keys=["theta", "log_probs"],
+            keys=["samples", "log_prob_samples", "log_prob_theta_true"],
             idx=idx,
         )
-        theta = proposal_samples["theta"]
-        log_probs = proposal_samples["log_probs"]
+        samples = proposal_samples["samples"]
+        log_prob_samples = proposal_samples["log_prob_samples"]
 
         # Load the target spectrum
         target = load_target_spectrum(
@@ -317,7 +319,7 @@ if __name__ == "__main__":
         # Compute spectra, likelihoods and prior values in parallel
         print("Simulating spectra (in parallel):", flush=True)
         num_cpus = get_number_of_available_cores()
-        results = p_map(process_theta_i, theta, num_cpus=num_cpus, ncols=80)
+        results = p_map(process_theta_i, samples, num_cpus=num_cpus, ncols=80)
         print()
 
         # Unpack the results from the parallel map and convert to arrays
@@ -334,12 +336,12 @@ if __name__ == "__main__":
                 ~np.isnan(log_prior_values),
             )
         )
-        theta = theta[mask]
-        log_probs = log_probs[mask]
+        samples = samples[mask]
+        log_prob_samples = log_prob_samples[mask]
         flux = flux[mask]
         log_likelihoods = log_likelihoods[mask]
         log_prior_values = log_prior_values[mask]
-        n = len(theta)
+        n = len(samples)
         print(f"Dropped {np.sum(~mask):,} invalid samples!")
         print(f"Remaining samples: {n:,} ({100 * n / len(mask):.2f}%)\n")
 
@@ -348,11 +350,12 @@ if __name__ == "__main__":
         print("Saving results to HDF...", end=" ", flush=True)
         save_to_hdf(
             file_path=working_dir / file_name,
-            theta=theta.astype(np.float32),
-            log_probs=log_probs.astype(np.float32),
             flux=flux.astype(np.float32),
             log_likelihoods=log_likelihoods.astype(np.float32),
             log_prior_values=log_prior_values.astype(np.float32),
+            log_prob_samples=log_prob_samples.astype(np.float32),
+            log_prob_theta_true=proposal_samples["log_prob_theta_true"],
+            samples=samples.astype(np.float32),
         )
         print("Done!\n\n")
 
@@ -375,10 +378,10 @@ if __name__ == "__main__":
                 "flux",
                 "log_likelihoods",
                 "log_prior_values",
-                "log_probs",
-                "theta",
+                "log_prob_samples",
+                "samples",
             ],
-            singleton_keys=[],
+            singleton_keys=["log_prob_theta_true"],
             delete_after_merge=True,
             show_progressbar=True,
         )
@@ -390,10 +393,11 @@ if __name__ == "__main__":
             file_path=working_dir / "simulations.hdf",
             keys=[
                 "flux",
-                "log_probs",
                 "log_likelihoods",
                 "log_prior_values",
-                "theta",
+                "log_prob_samples",
+                "log_prob_theta_true",
+                "samples",
             ],
         )
         print("Done!")
@@ -403,7 +407,7 @@ if __name__ == "__main__":
         raw_log_weights, weights = compute_is_weights(
             log_likelihoods=merged["log_likelihoods"],
             log_prior_values=merged["log_prior_values"],
-            log_probs=merged["log_probs"],
+            log_probs=merged["log_prob_samples"],
         )
         merged["raw_log_weights"] = raw_log_weights.astype(np.float32)
         merged["weights"] = weights.astype(np.float32)
@@ -425,9 +429,10 @@ if __name__ == "__main__":
         )
         save_to_hdf(
             file_path=working_dir / "importance_sampling_results_min.hdf",
-            theta=merged["theta"],
-            weights=merged["weights"],
+            log_prob_theta_true=merged["log_prob_theta_true"],
             raw_log_weights=merged["raw_log_weights"],
+            samples=merged["samples"],
+            weights=merged["weights"],
         )
         print("Done!")
 
