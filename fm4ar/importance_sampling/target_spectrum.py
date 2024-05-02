@@ -25,7 +25,7 @@ def load_target_spectrum(
 
     Returns:
         A dictionary containing the wavelength and flux of the target
-        spectrum.
+        spectrum, as well as the ground truth theta.
     """
 
     # TODO: Maybe add support for error bars here, too?
@@ -36,5 +36,6 @@ def load_target_spectrum(
     with h5py.File(file_path, "r") as f:
         target["wlen"] = np.array(f["wlen"], dtype=np.float32)
         target["flux"] = np.array(f["flux"][index], dtype=np.float32)
+        target["theta"] = np.array(f["theta"][index], dtype=np.float32)
 
     return target
