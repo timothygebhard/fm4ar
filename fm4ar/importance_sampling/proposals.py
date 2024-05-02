@@ -22,7 +22,7 @@ from fm4ar.unconditional_flow.config import load_config as load_flow_config
 def draw_proposal_samples(
     args: Namespace,
     config: ImportanceSamplingConfig,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     Draw samples from the proposal distribution.
 
@@ -31,8 +31,12 @@ def draw_proposal_samples(
         config: Configuration for the importance sampling run.
 
     Returns:
-        Tuple of two numpy arrays, '(theta, probs)', containing the
-        proposal samples and their respective probabilities.
+        A dicttionary containing:
+        (1) the log probability of the true theta under the proposal
+            distribution,
+        (2) the samples drawn from the proposal distribution, and
+        (3) the log probability of the samples under the proposal
+            distribution.
     """
 
     # Determine the experiment directory from the working directory
@@ -77,14 +81,9 @@ def draw_proposal_samples(
         }
         context["error_bars"] = sigma * torch.ones(1, n_bins).float()
 
-        # Double-check that all keys are present and have the correct shape
-        if not all(k in context for k in ["wlen", "flux", "error_bars"]):
-            raise ValueError("`context` is missing a mandatory key!")
-        if not all(v.shape == (1, n_bins) for v in context.values()):
-            raise ValueError("`context` entry has the wrong shape!")
-
         print("Running for ML model (FMPE / NPE)!\n")
-        theta, log_probs = draw_samples_from_ml_model(
+        results = draw_samples_from_ml_model(
+            theta_true=target_spectrum["theta"],
             context=context,
             experiment_dir=experiment_dir,
             checkpoint_file_name=config.checkpoint_file_name,
@@ -98,7 +97,7 @@ def draw_proposal_samples(
     elif model_type == "unconditional_flow":
 
         print("Running for unconditional flow model!\n")
-        theta, log_probs = draw_samples_from_unconditional_flow(
+        results = draw_samples_from_unconditional_flow(
             experiment_dir=experiment_dir,
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
@@ -108,10 +107,11 @@ def draw_proposal_samples(
     else:  # pragma: no cover
         raise ValueError(f"Unknown model type: {model_type}!")
 
-    return theta, log_probs
+    return results
 
 
 def draw_samples_from_ml_model(
+    theta_true: np.ndarray | None,
     context: dict[str, torch.Tensor],
     n_samples: int,
     experiment_dir: Path,
@@ -119,11 +119,15 @@ def draw_samples_from_ml_model(
     chunk_size: int = 1024,
     model_kwargs: dict[str, Any] | None = None,
     random_seed: int = 42,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
-    Load a trained ML model (NPE or FMPE) and draw samples from it.
+    Load a trained ML model (NPE or FMPE) and draw samples from it,
+    and also evaluate the log-probability of the true theta.
 
     Args:
+        theta_true: Ground truth theta value for the target spectrum
+            given as the `context`. If None, the log-probability of the
+            true theta is not computed.
         context: Context for the model. This should be a dictionary
             with keys "flux" and "wlen" (and possibly others, such as
             "error_bars").
@@ -163,14 +167,35 @@ def draw_samples_from_ml_model(
     theta_scaler = get_theta_scaler(config=config["theta_scaler"])
     print("Done!\n")
 
+    # If desired, compute the log-probability of the ground truth theta
+    if theta_true is not None:
+        print("Computing log-probability of ground truth theta...", end=" ")
+        with torch.no_grad():
+            log_prob_theta_true = model.log_prob_batch(
+                theta=(
+                    torch.from_numpy(theta_scaler.forward_array(theta_true))
+                    .float()
+                    .reshape(1, -1)
+                    .to(device, non_blocking=True)
+                ),
+                context={
+                    k: v.repeat(1, 1).to(device, non_blocking=True)
+                    for k, v in context.items()
+                },
+                **model_kwargs,
+            ).cpu().numpy().flatten()
+        print("Done!\n")
+    else:
+        log_prob_theta_true = np.full(1, np.nan)
+
     # Determine the chunk sizes: Every chunk should have `chunk_size` samples,
     # except for the last one, which may have fewer samples.
     chunk_sizes = np.diff(np.r_[0: n_samples: chunk_size, n_samples])
 
     # Draw samples from the model posterior ("proposal distribution")
     print("Drawing samples from the model posterior:", flush=True)
-    theta_chunks = []
-    log_probs_chunks = []
+    samples_chunks = []
+    log_prob_chunks = []
     with torch.no_grad():
         for n in tqdm(chunk_sizes, ncols=80):
 
@@ -182,22 +207,26 @@ def draw_samples_from_ml_model(
             }
 
             # Draw samples and corresponding log-probs from the model
-            theta_chunk, log_probs_chunk = model.sample_and_log_prob_batch(
+            chunk = model.sample_and_log_prob_batch(
                 context=chunk_context,
                 **model_kwargs,
             )
 
             # Inverse-transform the theta samples and store the chunks
-            theta_chunks.append(theta_scaler.inverse_tensor(theta_chunk.cpu()))
-            log_probs_chunks.append(log_probs_chunk.cpu())
+            samples_chunks.append(theta_scaler.inverse_tensor(chunk[0].cpu()))
+            log_prob_chunks.append(chunk[1].cpu())
 
     print(flush=True)
 
     # Combine all chunks into a single array
-    theta = torch.cat(theta_chunks, dim=0).numpy()
-    log_probs = torch.cat(log_probs_chunks, dim=0).numpy().flatten()
+    samples = torch.cat(samples_chunks, dim=0).numpy()
+    log_prob_samples = torch.cat(log_prob_chunks, dim=0).numpy().flatten()
 
-    return theta, log_probs
+    return {
+        "samples": samples,
+        "log_prob_samples": log_prob_samples,
+        "log_prob_theta_true": log_prob_theta_true,
+    }
 
 
 def draw_samples_from_unconditional_flow(
@@ -205,7 +234,7 @@ def draw_samples_from_unconditional_flow(
     n_samples: int,
     chunk_size: int = 4096,
     random_seed: int = 42,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     Load a trained unconditional flow model and draw samples from it.
 
@@ -259,23 +288,24 @@ def draw_samples_from_unconditional_flow(
 
     # Draw samples from the unconditional flow model
     print("Drawing samples from unconditional flow:", flush=True)
-    theta_chunks = []
-    log_probs_chunks = []
+    samples_chunks = []
+    log_prob_chunks = []
     with torch.no_grad():
 
         # Draw samples in chunks and inverse-transform them
         for n in tqdm(chunk_sizes, ncols=80):
-            theta_chunk, log_prob_chunk = model.sample_and_log_prob(
-                context=None,
-                num_samples=n,
-            )
-            theta_chunks.append(theta_scaler.inverse_tensor(theta_chunk.cpu()))
-            log_probs_chunks.append(log_prob_chunk.cpu())
+            chunk = model.sample_and_log_prob(context=None, num_samples=n)
+            samples_chunks.append(theta_scaler.inverse_tensor(chunk[0].cpu()))
+            log_prob_chunks.append(chunk[1].cpu())
 
         # Combine all chunks into a single array
-        theta = torch.cat(theta_chunks, dim=0).numpy()
-        log_probs = torch.cat(log_probs_chunks, dim=0).numpy().flatten()
+        samples = torch.cat(samples_chunks, dim=0).numpy()
+        log_prob_samples = torch.cat(log_prob_chunks, dim=0).numpy().flatten()
 
     print("Done!\n")
 
-    return theta, log_probs
+    return {
+        "samples": samples,
+        "log_prob_samples": log_prob_samples,
+        "log_prob_theta_true": np.full(1, np.nan),  # not supported for now
+    }

@@ -39,6 +39,11 @@ def file_path_to_target_spectrum(tmp_path: Path) -> Path:
             data=np.random.normal(0, 1, (1, 947)) ** 2,
             dtype=np.float32,
         )
+        f.create_dataset(
+            name="theta",
+            data=np.random.normal(0, 1, 16),
+            dtype=np.float32,
+        )
 
     return file_path
 
@@ -104,11 +109,12 @@ def test__draw_proposal_samples__npe(
     n_samples = is_config.draw_proposal_samples.n_samples
 
     # Draw proposal samples
-    theta, log_probs = draw_proposal_samples(args=args, config=is_config)
+    results = draw_proposal_samples(args=args, config=is_config)
 
     # Basic sanity checks
-    assert theta.shape == (n_samples, dim_theta)
-    assert log_probs.shape == (n_samples,)
+    assert results["samples"].shape == (n_samples, dim_theta)
+    assert results["log_prob_samples"].shape == (n_samples,)
+    assert results["log_prob_theta"].shape == (1,)
 
 
 def test__draw_proposal_samples__unconditional_flow(
@@ -175,8 +181,9 @@ def test__draw_proposal_samples__unconditional_flow(
     n_samples = is_config.draw_proposal_samples.n_samples
 
     # Draw proposal samples
-    theta, log_probs = draw_proposal_samples(args=args, config=is_config)
+    results = draw_proposal_samples(args=args, config=is_config)
 
     # Basic sanity checks
-    assert theta.shape == (n_samples, dim_theta)
-    assert log_probs.shape == (n_samples,)
+    assert results["samples"].shape == (n_samples, dim_theta)
+    assert results["log_prob_samples"].shape == (n_samples,)
+    assert results["log_prob_theta"].shape == (1,)
