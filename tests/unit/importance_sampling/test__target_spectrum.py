@@ -22,6 +22,7 @@ def path_to_target_spectrum(tmp_path: Path) -> Path:
         file_path=file_path,
         wlen=np.array([1, 2, 3]),
         flux=np.array([[4, 5, 6], [7, 8, 9]]),
+        theta=np.array([[0, 0, 0], [1, 1, 1]])
     )
     return file_path
 
@@ -34,7 +35,9 @@ def test__load_target_spectrum(path_to_target_spectrum: Path) -> None:
     target = load_target_spectrum(file_path=path_to_target_spectrum, index=0)
     assert np.allclose(target["wlen"], [1, 2, 3])
     assert np.allclose(target["flux"], [4, 5, 6])
+    assert np.allclose(target["theta"], [0, 0, 0])
 
     target = load_target_spectrum(file_path=path_to_target_spectrum, index=1)
     assert np.allclose(target["wlen"], [1, 2, 3])
     assert np.allclose(target["flux"], [7, 8, 9])
+    assert np.allclose(target["theta"], [1, 1, 1])

@@ -3,14 +3,18 @@ Integration tests for `fm4ar.nested_sampling.samplers`.
 """
 
 from pathlib import Path
+from shutil import copyfile
 from typing import Any
+from yaml import safe_dump
 
 import numpy as np
 import pytest
 
+from fm4ar.nested_sampling.config import load_config
 from fm4ar.nested_sampling.posteriors import load_posterior
 from fm4ar.nested_sampling.samplers import get_sampler
 from fm4ar.nested_sampling.utils import create_posterior_plot
+from fm4ar.utils.paths import get_experiments_dir
 
 
 @pytest.mark.slow
@@ -40,6 +44,24 @@ def test__samplers(
 
     experiment_dir = tmp_path / library
     experiment_dir.mkdir()
+
+    # Copy over the template configuration
+    template_dir = get_experiments_dir() / "templates" / "nested-sampling"
+    copyfile(
+        template_dir / "config.yaml",
+        experiment_dir / "config.yaml",
+    )
+
+    # Update the configuration
+    config = load_config(experiment_dir)
+    config.sampler.library = library  # type: ignore
+    with open(experiment_dir / "config.yaml", "w") as yaml_file:
+        safe_dump(
+            config.dict(),
+            yaml_file,
+            default_flow_style=False,
+            sort_keys=False,
+        )
 
     def prior_transform(u: np.ndarray) -> np.ndarray:
         return 10 * (u - 0.5)
