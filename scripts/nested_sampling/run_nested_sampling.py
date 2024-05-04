@@ -69,7 +69,7 @@ if __name__ == "__main__":
     check_if_on_login_node(args.start_submission)
 
     # Collect arguments for submission file
-    if config.sampler.library == "multinest":
+    if config.sampler.library in ("multinest", "ultranest"):
         executable = "/usr/mpi/current/bin/mpiexec"
         job_arguments = [
             f"-n {config.htcondor.n_cpus}",
@@ -140,8 +140,8 @@ if __name__ == "__main__":
     os.environ["OMP_NUM_THREADS"] = "1"
     np.random.seed(config.sampler.random_seed)
 
-    # Handle MPI communication for MultiNest
-    if config.sampler.library == "multinest":
+    # Handle MPI communication for MultiNest and UltraNest
+    if config.sampler.library in ("multinest", "ultranest"):
         from mpi4py import MPI
 
         comm = MPI.COMM_WORLD

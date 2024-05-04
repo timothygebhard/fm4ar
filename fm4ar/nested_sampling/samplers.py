@@ -530,6 +530,96 @@ class MultiNestSampler(Sampler):
         return self._weights
 
 
+class UltraNestSampler(Sampler):
+    """
+    Wrapper around the sampler provided by the `ultranest` package.
+    """
+
+    def __init__(
+        self,
+        run_dir: Path,
+        prior_transform: Callable[[np.ndarray], np.ndarray],
+        log_likelihood: Callable[[np.ndarray], float],
+        n_dim: int,
+        n_livepoints: int,
+        inferred_parameters: list[str],
+        random_seed: int = 42,
+    ) -> None:
+        """
+        For default parameters, see documentation of `Sampler`.
+        """
+
+        super().__init__(
+            run_dir=run_dir,
+            prior_transform=prior_transform,
+            log_likelihood=log_likelihood,
+            n_dim=n_dim,
+            n_livepoints=n_livepoints,
+            inferred_parameters=inferred_parameters,
+            random_seed=random_seed,
+        )
+
+        # Import this here to reduce dependencies
+        from ultranest import ReactiveNestedSampler as _UltraNestSampler
+
+        # Create the sampler
+        # noinspection PyTypeChecker
+        self.sampler = _UltraNestSampler(
+            param_names=inferred_parameters,
+            loglike=log_likelihood,
+            transform=prior_transform,
+            log_dir=run_dir.as_posix(),
+            resume="resume",
+            vectorized=False,
+            storage_backend="hdf5",
+        )
+
+    def run(
+        self,
+        max_runtime: int,
+        verbose: bool = True,
+        run_kwargs: dict[str, Any] | None = None,
+    ) -> float:
+        """
+        Run the ultranest sampler.
+        """
+
+        start_time = time.time()
+        run_kwargs = run_kwargs if run_kwargs is not None else {}
+
+        # FIXME: We still need to find a way to limit the runtime properly!
+        self.sampler.run(
+            min_num_live_points=self.n_livepoints,
+            show_status=verbose,
+            **run_kwargs,
+        )
+        self.complete = True
+
+        if not self.complete:
+            print("\nTimeout reached, stopping sampler!\n")
+
+        return time.time() - start_time
+
+    def cleanup(self) -> None:
+        pass
+
+    def save_results(self) -> None:
+        file_path = self.run_dir / "posterior.npz"
+        np.savez(
+            file_path,
+            points=self.points,
+            weights=self.weights,
+        )
+
+    @property
+    def points(self) -> np.ndarray:
+        return np.array(self.sampler.results["weighted_samples"]["points"])
+
+    @property
+    def weights(self) -> np.ndarray:
+        return np.array(self.sampler.results["weighted_samples"]["weights"])
+
+
 # noinspection PyUnresolvedReferences
 def get_pool() -> multiprocess.Pool:
     """
@@ -552,5 +642,7 @@ def get_sampler(name: str) -> Type[Sampler]:
             return DynestySampler
         case "multinest":
             return MultiNestSampler
+        case "ultranest":
+            return UltraNestSampler
         case _:  # pragma: no cover
             raise ValueError(f"Sampler `{name}` not supported!")

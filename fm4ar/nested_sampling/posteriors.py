@@ -46,6 +46,13 @@ def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
         samples = np.array(analyzer.get_equal_weighted_posterior()[:, :-1])
         weights = np.ones(len(samples))
 
+    # ultranest stores the posterior in a .npz file
+    elif config.sampler.library == "ultranest":
+        file_path = experiment_dir / "posterior.npz"
+        data = np.load(file_path)
+        samples = data["points"]
+        weights = data["weights"]
+
     # This should never happen; but the linter complains otherwise...
     else:  # pragma: no cover
         raise RuntimeError("Could not determine the sampler type!")
