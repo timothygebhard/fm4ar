@@ -114,7 +114,7 @@ def test__draw_proposal_samples__npe(
     # Basic sanity checks
     assert results["samples"].shape == (n_samples, dim_theta)
     assert results["log_prob_samples"].shape == (n_samples,)
-    assert results["log_prob_theta"].shape == (1,)
+    assert results["log_prob_theta_true"].shape == (1,)
 
 
 def test__draw_proposal_samples__unconditional_flow(
@@ -186,4 +186,4 @@ def test__draw_proposal_samples__unconditional_flow(
     # Basic sanity checks
     assert results["samples"].shape == (n_samples, dim_theta)
     assert results["log_prob_samples"].shape == (n_samples,)
-    assert results["log_prob_theta"].shape == (1,)
+    assert results["log_prob_theta_true"].shape == (1,)
