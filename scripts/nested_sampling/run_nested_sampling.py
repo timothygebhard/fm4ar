@@ -108,7 +108,7 @@ if __name__ == "__main__":
         htcondor_config.log_file_name = "log.$$([NumJobStarts])"
         htcondor_config.extra_kwargs = (
             {}
-            if config.sampler.library != "multinest"
+            if config.sampler.library not in ("multinest", "ultranest")
             else {"transfer_executable": "False"}
         )
 
