@@ -589,8 +589,12 @@ class UltraNestSampler(Sampler):
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         # Define a magic number of likelihood evaluations to run
-        # We still need to figure out a good value for this...
-        MAGIC_NUMBER = 256
+        # Crude estimate:
+        #   96 cores, ~2 sec per likelihood call -> ~48 calls / sec on avg.
+        # The total runtime should be within +/- 5 minutes of the max_runtime.
+        #   300 sec * 48 calls / sec = 14_400 calls
+        # Let's set this number to 10k for now and see how it goes...
+        MAGIC_NUMBER = 10_000
 
         # Run the sampler with the given time limit
         while True:
