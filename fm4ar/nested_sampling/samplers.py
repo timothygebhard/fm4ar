@@ -588,23 +588,32 @@ class UltraNestSampler(Sampler):
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         # Run the sampler with the given time limit
-        # This approach is a bit naive, because it might stop the sampler
-        # when it is saving a checkpoint file (which can corrupt the file),
-        # but it is by far the easiest solution so let's see if it works...
-        try:
-            print("Starting / resuming run!")
-            print(f"Maximum runtime: {max_runtime} seconds.\n", flush=True)
-            with timelimit(max_runtime):
-                self.sampler.run(
-                    min_num_live_points=self.n_livepoints,
-                    show_status=verbose,
-                    **run_kwargs,
-                )
-        except TimeoutException:
-            print("\nTimeout reached, stopping sampler!\n")
-            return time.time() - start_time
+        # It seems that because we are parallelizing this using MPI, we need
+        # the same workaround as for MultiNest to limit the runtime of the
+        # sampler (i.e., a simple `timelimit` context is not sufficient).
+        # Note: This is still a rather naive solution, because it might stop
+        # the process while it is saving a checkpoint, which could lead to a
+        # corrupted checkpoint file. Let's see how it goes...
+        #
+        # noinspection PyUnresolvedReferences
+        process = multiprocess.Process(
+            target=partial(
+                self.sampler.run,
+                min_num_live_points=self.n_livepoints,
+                show_status=verbose,
+                **run_kwargs,
+            ),
+        )
+        process.start()
+        process.join(timeout=max_runtime)
 
-        self.complete = True
+        if process.is_alive():
+            process.terminate()
+            print("Timeout reached, stopping sampler!")
+        else:
+            self.complete = True
+
+        # Return the actual runtime
         return time.time() - start_time
 
     def cleanup(self) -> None:
