@@ -613,6 +613,12 @@ class UltraNestSampler(Sampler):
         else:
             self.complete = True
 
+        # Store tree and flush and close the PointStore object
+        # Perhaps this can help to avoid some issues with the HDF5 file?
+        self.sampler.store_tree()
+        self.sampler.pointstore.flush()
+        self.sampler.pointstore.close()
+
         # Return the actual runtime
         return time.time() - start_time
 
