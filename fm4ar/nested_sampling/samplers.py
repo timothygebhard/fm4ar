@@ -592,6 +592,8 @@ class UltraNestSampler(Sampler):
         # when it is saving a checkpoint file (which can corrupt the file),
         # but it is by far the easiest solution so let's see if it works...
         try:
+            print("Starting / resuming run!")
+            print(f"Maximum runtime: {max_runtime} seconds.\n", flush=True)
             with timelimit(max_runtime):
                 self.sampler.run(
                     min_num_live_points=self.n_livepoints,
