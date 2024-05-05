@@ -590,7 +590,7 @@ class UltraNestSampler(Sampler):
 
         # Define a magic number of likelihood evaluations to run
         # We still need to figure out a good value for this...
-        MAGIC_NUMBER = 1000
+        MAGIC_NUMBER = 256
 
         # Run the sampler with the given time limit
         while True:
