@@ -7,6 +7,7 @@ import json
 import time
 import warnings
 from abc import ABC, abstractmethod
+from copy import copy
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Literal, Type
@@ -587,40 +588,29 @@ class UltraNestSampler(Sampler):
         start_time = time.time()
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
+        # Define a magic number of likelihood evaluations to run
+        # We still need to figure out a good value for this...
+        MAGIC_NUMBER = 1000
+
         # Run the sampler with the given time limit
-        # It seems that because we are parallelizing this using MPI, we need
-        # the same workaround as for MultiNest to limit the runtime of the
-        # sampler (i.e., a simple `timelimit` context is not sufficient).
-        # Note: This is still a rather naive solution, because it might stop
-        # the process while it is saving a checkpoint, which could lead to a
-        # corrupted checkpoint file. Let's see how it goes...
-        #
-        # noinspection PyUnresolvedReferences
-        process = multiprocess.Process(
-            target=partial(
-                self.sampler.run,
-                min_num_live_points=self.n_livepoints,
-                show_status=verbose,
+        while True:
+
+            # Run for a given number of likelihood evaluations
+            n_call_before = copy(self.sampler.ncall)
+            self.sampler.run(
+                max_ncalls=n_call_before + MAGIC_NUMBER,
                 **run_kwargs,
-            ),
-        )
-        process.start()
-        process.join(timeout=max_runtime)
+            )
 
-        if process.is_alive():
-            process.terminate()
-            print("Timeout reached, stopping sampler!")
-        else:
-            self.complete = True
+            # Check if we have converged
+            if self.sampler.ncall == n_call_before:
+                self.complete = True
+                return time.time() - start_time
 
-        # Store tree and flush and close the PointStore object
-        # Perhaps this can help to avoid some issues with the HDF5 file?
-        self.sampler.store_tree()
-        self.sampler.pointstore.flush()
-        self.sampler.pointstore.close()
-
-        # Return the actual runtime
-        return time.time() - start_time
+            # Check if the timeout is reached
+            if time.time() - start_time > max_runtime:
+                print("Timeout reached, stopping sampler!")
+                return time.time() - start_time
 
     def cleanup(self) -> None:
         pass
