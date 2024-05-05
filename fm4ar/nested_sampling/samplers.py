@@ -587,17 +587,22 @@ class UltraNestSampler(Sampler):
         start_time = time.time()
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
-        # FIXME: We still need to find a way to limit the runtime properly!
-        self.sampler.run(
-            min_num_live_points=self.n_livepoints,
-            show_status=verbose,
-            **run_kwargs,
-        )
-        self.complete = True
-
-        if not self.complete:
+        # Run the sampler with the given time limit
+        # This approach is a bit naive, because it might stop the sampler
+        # when it is saving a checkpoint file (which can corrupt the file),
+        # but it is by far the easiest solution so let's see if it works...
+        try:
+            with timelimit(max_runtime):
+                self.sampler.run(
+                    min_num_live_points=self.n_livepoints,
+                    show_status=verbose,
+                    **run_kwargs,
+                )
+        except TimeoutException:
             print("\nTimeout reached, stopping sampler!\n")
+            return time.time() - start_time
 
+        self.complete = True
         return time.time() - start_time
 
     def cleanup(self) -> None:
