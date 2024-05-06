@@ -15,6 +15,7 @@ from typing import Any, Callable, Literal, Type
 import dill
 import multiprocess
 import numpy as np
+import ultranest.mlfriends
 
 from fm4ar.utils.multiproc import get_number_of_available_cores
 from fm4ar.utils.timeout import TimeoutException, timelimit
@@ -621,6 +622,7 @@ class UltraNestSampler(Sampler):
             self.sampler.run(
                 max_ncalls=n_call_before + MAGIC_NUMBER,
                 min_num_live_points=self.n_livepoints,
+                region_class=ultranest.mlfriends.RobustEllipsoidRegion,
                 **run_kwargs,
             )
 
