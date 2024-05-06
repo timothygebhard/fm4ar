@@ -397,11 +397,11 @@ class DynestySampler(Sampler):
 
     @property
     def points(self) -> np.ndarray:
-        return np.array(self.sampler.results["samples"])
+        return np.array(self.sampler.results.samples_equal())
 
     @property
     def weights(self) -> np.ndarray:
-        return np.array(self.sampler.results.importance_weights())
+        return np.ones(len(self.points))
 
 
 class MultiNestSampler(Sampler):
