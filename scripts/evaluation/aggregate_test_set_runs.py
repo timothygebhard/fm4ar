@@ -194,7 +194,7 @@ if __name__ == "__main__":
     print("\nSaving results to HDF...", end=" ", flush=True)
 
     # Save the results to an HDF file
-    file_name = "aggregated__" + args.name_pattern.replace("*", "X")
+    file_name = "aggregated__" + args.name_pattern.replace("*", "X") + ".hdf"
     file_path = important_sampling_dir / file_name
     with h5py.File(file_path, "w") as f:
         for key, value in results.items():
