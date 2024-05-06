@@ -401,7 +401,7 @@ class DynestySampler(Sampler):
 
     @property
     def weights(self) -> np.ndarray:
-        return np.array(np.exp(self.sampler.results["logwt"]))
+        return np.array(self.sampler.results.importance_weights())
 
 
 class MultiNestSampler(Sampler):
