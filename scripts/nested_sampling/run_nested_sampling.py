@@ -146,38 +146,29 @@ if __name__ == "__main__":
 
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
-        print(f"MPI rank: {rank}", flush=True)
         sync_mpi_processes(comm)
 
-    print("Creating prior distribution...", end=" ", flush=True)
     prior = get_prior(config=config.prior)
-    print("Done!", flush=True)
+    print(f"[{rank:2d}] Created prior distribution!", flush=True)
 
-    print("Creating simulator...", end=" ", flush=True)
     simulator = get_simulator(config=config.simulator)
-    print("Done!", flush=True)
+    print(f"[{rank:2d}] Created simulator!", flush=True)
 
     sync_mpi_processes(comm)
 
-    # TODO: Maybe this could be extended to work also with actual observations,
-    #   that is, load the spectrum from a file and use it?
-    print("Simulating ground truth spectrum...", end=" ", flush=True)
     theta_obs = np.array([config.ground_truth[n] for n in prior.names])
     if (result := simulator(theta_obs)) is None:
-        raise RuntimeError("Failed to simulate ground truth!")
+        raise RuntimeError(f"[{rank:2d}] Failed to simulate ground truth!")
     _, flux_obs = result
-    print("Done!", flush=True)
+    print(f"[{rank:2d}] Simulated ground truth!", flush=True)
 
     sync_mpi_processes(comm)
 
-    print("Creating likelihood distribution...", end=" ", flush=True)
     likelihood_distribution = get_likelihood_distribution(
         flux_obs=flux_obs,
         config=config.likelihood,
     )
-    print("Done!", flush=True)
-
-    print("Preparing log_likelihood function...", end=" ", flush=True)
+    print(f"[{rank:2d}] Created likelihood distribution!", flush=True)
 
     # Create masks that indicate which parameters are being inferred, which are
     # being marginalized over, and which are being conditioned on (= fixed)
@@ -228,11 +219,11 @@ if __name__ == "__main__":
         # Otherwise, return the log-likelihood
         return float(likelihood_distribution.logpdf(x))
 
-    print("Done!", flush=True)
+    print(f"[{rank:2d}] Prepared log-likelihood function!", flush=True)
 
     sync_mpi_processes(comm)
 
-    print("Creating sampler...", end=" ", flush=True)
+    # Create a new sampler instance
     sampler = get_sampler(config.sampler.library)(
         run_dir=args.experiment_dir,
         prior_transform=partial(prior.transform, mask=infer_mask),
@@ -243,11 +234,13 @@ if __name__ == "__main__":
         random_seed=config.sampler.random_seed,
         **config.sampler.sampler_kwargs,
     )
-    print("Done!\n", flush=True)
+    print(f"[{rank:2d}] Instantiated new sampler!", flush=True)
 
     sync_mpi_processes(comm)
 
-    print("Running sampler:", flush=True)
+    # Run the sampler until the maximum runtime is reached
+    if rank == 0:
+        print("\n\nRunning sampler:\n", flush=True)
     runtime = sampler.run(
         max_runtime=config.sampler.max_runtime,
         verbose=True,
@@ -273,7 +266,7 @@ if __name__ == "__main__":
     # For the case of MultiNest, we only do this on the "root" process
     if sampler.complete and rank == 0:
 
-        print("Sampling complete!", flush=True)
+        print("\n\nSampling complete!", flush=True)
         print("Saving results...", end=" ", flush=True)
         sampler.save_results()
         print("Done!", flush=True)
@@ -288,7 +281,7 @@ if __name__ == "__main__":
         )
         print("Done!", flush=True)
 
-        print("\nAll done!\n", flush=True)
+        print("\nAll done!\n\n\n", flush=True)
 
     # Make sure all processes are done before exiting
     print(f"Exiting job {rank} with code {exit_code}!", flush=True)
