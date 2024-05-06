@@ -608,6 +608,7 @@ class UltraNestSampler(Sampler):
             n_call_before = copy(self.sampler.ncall)
             self.sampler.run(
                 max_ncalls=n_call_before + MAGIC_NUMBER,
+                min_num_live_points=self.n_livepoints,
                 **run_kwargs,
             )
 
