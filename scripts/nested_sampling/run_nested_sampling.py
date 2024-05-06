@@ -276,6 +276,10 @@ if __name__ == "__main__":
             points=np.array(sampler.points),
             weights=np.array(sampler.weights),
             names=np.array(prior.labels)[infer_mask],
+            extents=(
+                np.array(prior.distribution.support()[0][infer_mask]),
+                np.array(prior.distribution.support()[1][infer_mask]),
+            ),
             file_path=args.experiment_dir / "posterior.pdf",
             ground_truth=theta_obs[infer_mask],
         )

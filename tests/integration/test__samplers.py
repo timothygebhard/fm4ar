@@ -121,6 +121,7 @@ def test__samplers(
         points=points,
         weights=weights,
         names=["x", "y"],
+        extents=(np.array([-5, -5]), np.array([5, 5])),
         file_path=experiment_dir / "posterior.pdf",
         ground_truth=np.array([0, 0]),
     )
