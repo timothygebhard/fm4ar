@@ -62,6 +62,7 @@ if __name__ == "__main__":
         file_path=file_path,
         wlen=wlen.reshape(1, -1),
         flux=flux.reshape(1, -1),
+        theta=THETA_0.reshape(1, -1),
     )
     print("Done!")
 
