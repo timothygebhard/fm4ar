@@ -180,7 +180,7 @@ if __name__ == "__main__":
             )
 
         # Store the quantiles
-        run_dirs.append(run_dir)
+        results["run_dir"].append(run_dir)
         results["log_evidence"].append(log_evidence)
         results["log_evidence_std"].append(log_evidence_std)
         results["theta"].append(theta)
