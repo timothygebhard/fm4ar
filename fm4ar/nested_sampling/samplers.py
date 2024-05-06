@@ -585,6 +585,12 @@ class UltraNestSampler(Sampler):
         Run the ultranest sampler.
         """
 
+        # Get the rank of the current process
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+
+        # Start the timer
         start_time = time.time()
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
@@ -604,8 +610,14 @@ class UltraNestSampler(Sampler):
         # Run the sampler with the given time limit
         while True:
 
-            # Run for a given number of likelihood evaluations
             n_call_before = copy(self.sampler.ncall)
+
+            if rank == 0:
+                print("\n\n" + 80 * "-")
+                print(f"Calling run() at ncall={n_call_before:,}")
+                print(80 * "-" + "\n\n")
+
+            # Run for a given number of likelihood evaluations
             self.sampler.run(
                 max_ncalls=n_call_before + MAGIC_NUMBER,
                 min_num_live_points=self.n_livepoints,
