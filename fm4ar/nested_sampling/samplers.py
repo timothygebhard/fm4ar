@@ -588,6 +588,11 @@ class UltraNestSampler(Sampler):
         start_time = time.time()
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
+        # It looks like UltraNest does not accept a random seed argument,
+        # so fixing the global random seed might be our best bet at achieving
+        # some sort of reproducibility...
+        np.random.seed(self.random_seed)
+
         # Define a magic number of likelihood evaluations to run
         # Crude estimate:
         #   96 cores, ~2 sec per likelihood call -> ~48 calls / sec on avg.
