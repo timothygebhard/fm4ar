@@ -9,13 +9,13 @@ import warnings
 from abc import ABC, abstractmethod
 from copy import copy
 from functools import partial
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Callable, Literal, Type
 
 import dill
 import multiprocess
 import numpy as np
-import ultranest.mlfriends
 
 from fm4ar.utils.multiproc import get_number_of_available_cores
 from fm4ar.utils.timeout import TimeoutException, timelimit
@@ -591,9 +591,26 @@ class UltraNestSampler(Sampler):
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
 
+        # Convert the `run_kwargs` to a dictionary if it is `None`
+        run_kwargs = run_kwargs if run_kwargs is not None else {}
+
+        # Handle the `region_class` argument
+        # The default region class is `ultranest.mlfriends.MLFriends`, but we
+        # can also pass another choice (like `RobustEllipsoidRegion`) as a
+        # string argument in the `run_kwargs()` dictionary, which will be
+        # converted to the required class object here.
+        region_class_name = run_kwargs.pop("region_class", None)
+        if region_class_name is not None:
+            region_class = getattr(
+                import_module("ultranest.mlfriends"),
+                str(region_class_name)
+            )
+        else:
+            from ultranest.mlfriends import MLFriends
+            region_class = MLFriends
+
         # Start the timer
         start_time = time.time()
-        run_kwargs = run_kwargs if run_kwargs is not None else {}
 
         # It looks like UltraNest does not accept a random seed argument,
         # so fixing the global random seed might be our best bet at achieving
@@ -622,7 +639,7 @@ class UltraNestSampler(Sampler):
             self.sampler.run(
                 max_ncalls=n_call_before + MAGIC_NUMBER,
                 min_num_live_points=self.n_livepoints,
-                region_class=ultranest.mlfriends.RobustEllipsoidRegion,
+                region_class=region_class,
                 **run_kwargs,
             )
 
