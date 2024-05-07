@@ -7,11 +7,11 @@ import json
 import time
 import warnings
 from abc import ABC, abstractmethod
-from copy import copy
+from copy import copy, deepcopy
 from functools import partial
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Callable, Literal, Type
+from typing import Any, Callable, Type
 
 import dill
 import multiprocess
@@ -38,7 +38,7 @@ class Sampler(ABC):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
-        **_: Any,
+        sampler_kwargs: dict[str, Any] | None = None
     ) -> None:
         """
         Initialize the class instance.
@@ -58,10 +58,13 @@ class Sampler(ABC):
                 `multinest`, but we require it for all samplers for
                 consistency.
             random_seed: Random seed to use for reproducibility.
-            **_: Allow classes that inherit from `Sampler` to accept
-                additional keyword arguments.
+            sampler_kwargs: Any additional keyword arguments that should
+                be passed to the sampler. Depending on the sampler, this
+                might require additional pre-processing, like converting
+                a string to a class object.
         """
 
+        # Store the construct arguments
         self.run_dir = run_dir
         self.prior_transform = prior_transform
         self.log_likelihood = log_likelihood
@@ -69,7 +72,9 @@ class Sampler(ABC):
         self.n_livepoints = n_livepoints
         self.inferred_parameters = inferred_parameters
         self.random_seed = random_seed
+        self.sampler_kwargs = sampler_kwargs
 
+        # Initialize attributes
         self.complete = False
 
         # Save the parameters to a JSON file
@@ -77,6 +82,22 @@ class Sampler(ABC):
         # do it for all samplers for consistency.
         with open(run_dir / "params.json", "w") as json_file:
             json.dump(inferred_parameters, json_file, indent=2)
+
+    @staticmethod
+    def _prepare_sampler_kwargs(
+        sampler_kwargs: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """
+        Small utility function to convert the `sampler_kwargs` to a
+        dictionary if it is `None`. The `deepcopy()` is required so that
+        we can `pop()` the "special" keys without modifying the original
+        dictionary.
+        """
+
+        return (
+            deepcopy(sampler_kwargs) if sampler_kwargs is not None
+            else {}
+        )
 
     @abstractmethod
     def run(
@@ -147,8 +168,18 @@ class NautilusSampler(Sampler):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
-        use_pool: bool = True,
+        sampler_kwargs: dict[str, Any] | None = None
     ) -> None:
+        """
+        Create a new `NautilusSampler` instance.
+
+        The "special" `sampler_kwargs` (i.e., keyword arguments that
+        will be popped and pre-processed instead of being passed to the
+        constructor of the sampler directly) are:
+
+            use_pool: A boolean that specifies whether to use a pool
+                for parallelization. Default is `True`.
+        """
 
         super().__init__(
             run_dir=run_dir,
@@ -157,9 +188,14 @@ class NautilusSampler(Sampler):
             n_dim=n_dim,
             n_livepoints=n_livepoints,
             inferred_parameters=inferred_parameters,
+            sampler_kwargs=sampler_kwargs,
             random_seed=random_seed,
         )
 
+        # Convert the `sampler_kwargs` to a dictionary if it is `None`
+        sampler_kwargs = self._prepare_sampler_kwargs(sampler_kwargs)
+
+        # Define the path for the checkpoint file
         self.checkpoint_path = self.run_dir / "checkpoint.hdf5"
 
         # Import this here to reduce dependencies
@@ -171,6 +207,7 @@ class NautilusSampler(Sampler):
         # one from `multiprocessing` that we get if we pass an integer value
         # to the `pool` argument) # because we need the `dill` serializer to
         # send the `log_likelihood` to the worker processes.
+        use_pool = sampler_kwargs.pop("use_pool", True)
         self.pool = get_pool() if use_pool else None
 
         # Note: The argument of `NautilusSampler` is called `likelihood`, but
@@ -187,6 +224,7 @@ class NautilusSampler(Sampler):
             pool=self.pool,
             filepath=self.checkpoint_path,
             seed=self.random_seed,
+            **sampler_kwargs,
         )
 
     def run(
@@ -251,13 +289,15 @@ class DynestySampler(Sampler):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
-        sampling_mode: Literal["standard", "dynamic"] = "standard",
-        use_pool: dict[str, bool] | None = None,
+        sampler_kwargs: dict[str, Any] | None = None
     ) -> None:
         """
-        For default parameters, see documentation of `Sampler`.
+        Create a new `DynestySampler` instance.
 
-        Args:
+        The "special" `sampler_kwargs` (i.e., keyword arguments that
+        will be popped and pre-processed instead of being passed to the
+        constructor of the sampler directly) are:
+
             sampling_mode: This can be either 'standard' to use a
                 `dynesty.NestedSampler` or 'dynamic' to use a
                 `dynesty.DynamicNestedSampler`. See `dynesty` docs
@@ -280,21 +320,24 @@ class DynestySampler(Sampler):
             n_dim=n_dim,
             n_livepoints=n_livepoints,
             inferred_parameters=inferred_parameters,
+            sampler_kwargs=sampler_kwargs,
             random_seed=random_seed,
         )
+
+        # Convert the `sampler_kwargs` to a dictionary if it is `None`
+        sampler_kwargs = self._prepare_sampler_kwargs(sampler_kwargs)
 
         # Import this here to reduce dependencies
         import dynesty.utils
 
+        # Handle the `sampling_mode` argument
+        sampling_mode = sampler_kwargs.pop("sampling_mode", "standard")
         if sampling_mode == "standard":
             from dynesty import NestedSampler as _DynestySampler
         elif sampling_mode == "dynamic":
             from dynesty import DynamicNestedSampler as _DynestySampler
         else:  # pragma: no cover
-            raise ValueError(
-                "`sampling_mode` must be 'standard' or 'dynamic', "
-                f"not '{sampling_mode}'!"
-            )
+            raise ValueError(f"{sampling_mode=} is not a valid choice!")
 
         # Use `dill` instead of `pickle` for serialization; this seems to fix
         # an issue with the `DynestySampler` that pops up when the sampler is
@@ -304,13 +347,17 @@ class DynestySampler(Sampler):
         dynesty.utils.pickle_module = dill
         self.pool = get_pool()
 
-        # Set up the default pool options: Depending on the exact retrieval
-        # that one is running, it can make sense to enable to disable some of
-        # these options. For example, the toy example seems to run the fastest
-        # if only the `loglikelihood` retrieval is parallelized; however, for
-        # the petitRADTRANS retrievals, we want also want to enable the option
-        # for `propose_point`. More experiments might be required to understand
-        # what are the best options here.
+        # Set up the default pool options:
+        # In principle, we could simply pass the `use_pool` dictionary from the
+        # `sampler_kwargs` directly to the constructor of the sampler, but this
+        # bit of code allows us to overwrite the default settings.
+        # Depending on the exact retrieval that one is running, it can make
+        # sense to enable to disable some of these options. For example, the
+        # toy example seems to run the fastest if only the `loglikelihood`
+        # is parallelized; however, for the petitRADTRANS retrievals, we want
+        # also want to enable the option for `propose_point`. More experiments
+        # might be required to understand what are the best options here.
+        use_pool = sampler_kwargs.pop("use_pool", None)
         self.use_pool = (
             use_pool
             if use_pool is not None
@@ -343,6 +390,7 @@ class DynestySampler(Sampler):
                 use_pool=self.use_pool,
                 queue_size=get_number_of_available_cores(),
                 rstate=np.random.Generator(np.random.PCG64(self.random_seed)),
+                **sampler_kwargs,
             )
 
     def run(
@@ -397,11 +445,11 @@ class DynestySampler(Sampler):
 
     @property
     def points(self) -> np.ndarray:
-        return np.array(self.sampler.results.samples_equal())
+        return np.array(self.sampler.results.samples)
 
     @property
     def weights(self) -> np.ndarray:
-        return np.ones(len(self.points))
+        return np.array(self.sampler.results.importance_weights())
 
 
 class MultiNestSampler(Sampler):
@@ -418,7 +466,16 @@ class MultiNestSampler(Sampler):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
+        sampler_kwargs: dict[str, Any] | None = None,
     ) -> None:
+        """
+        Create a new `DynestySampler` instance.
+
+        Given that the MultiNest sampler does not construct a `sampler`
+        object, any `sampler_kwargs` will effectively be ignored. The
+        behavior of the MultiNest sampler is controlled by the arguments
+        passed to the `run()` method, i.e., the `run_kwargs`.
+        """
 
         super().__init__(
             run_dir=run_dir,
@@ -427,6 +484,7 @@ class MultiNestSampler(Sampler):
             n_dim=n_dim,
             n_livepoints=n_livepoints,
             inferred_parameters=inferred_parameters,
+            sampler_kwargs=sampler_kwargs,
             random_seed=random_seed,
         )
 
@@ -546,9 +604,15 @@ class UltraNestSampler(Sampler):
         n_livepoints: int,
         inferred_parameters: list[str],
         random_seed: int = 42,
+        sampler_kwargs: dict[str, Any] | None = None,
     ) -> None:
         """
-        For default parameters, see documentation of `Sampler`.
+        Create a new `UltraNestSampler` instance.
+
+        Currently, this sampler does not implement any "special"
+        `sampler_kwargs` (i.e., keyword arguments that will be popped
+        and pre-processed instead of being passed to the constructor
+        of the sampler directly).
         """
 
         super().__init__(
@@ -560,6 +624,9 @@ class UltraNestSampler(Sampler):
             inferred_parameters=inferred_parameters,
             random_seed=random_seed,
         )
+
+        # Convert the `sampler_kwargs` to a dictionary if it is `None`
+        sampler_kwargs = self._prepare_sampler_kwargs(sampler_kwargs)
 
         # Import this here to reduce dependencies
         from ultranest import ReactiveNestedSampler as _UltraNestSampler
@@ -574,6 +641,7 @@ class UltraNestSampler(Sampler):
             resume="resume",
             vectorized=False,
             storage_backend="hdf5",
+            **sampler_kwargs,
         )
 
     def run(
@@ -617,13 +685,16 @@ class UltraNestSampler(Sampler):
         # some sort of reproducibility...
         np.random.seed(self.random_seed)
 
-        # Define a magic number of likelihood evaluations to run
-        # Crude estimate:
+        # Get the number of likelihood evaluations to run between checking
+        # the timeout condition. This is a bit of a "magic number", and the
+        # default value is based on the folllowing crude estimate:
         #   96 cores, ~2 sec per likelihood call -> ~48 calls / sec on avg.
         # The total runtime should be within +/- 5 minutes of the max_runtime.
         #   300 sec * 48 calls / sec = 14_400 calls
-        # Let's set this number to 10k for now and see how it goes...
-        MAGIC_NUMBER = 10_000
+        # Let's set this number to 10k for now to account for overhead.
+        n_calls_between_timeout_checks = run_kwargs.pop(
+            "n_calls_between_timeout_checks", 10_000
+        )
 
         # Run the sampler with the given time limit
         while True:
@@ -637,7 +708,7 @@ class UltraNestSampler(Sampler):
 
             # Run for a given number of likelihood evaluations
             self.sampler.run(
-                max_ncalls=n_call_before + MAGIC_NUMBER,
+                max_ncalls=n_call_before + n_calls_between_timeout_checks,
                 min_num_live_points=self.n_livepoints,
                 region_class=region_class,
                 **run_kwargs,
