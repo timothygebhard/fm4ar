@@ -6,6 +6,7 @@ import os
 import time
 from pathlib import Path
 from shutil import copyfile
+from typing import Any
 from yaml import safe_dump
 
 import numpy as np
@@ -18,17 +19,28 @@ from fm4ar.utils.paths import get_experiments_dir
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
-    "library",
+    "library, run_kwargs",
     [
-        "nautilus",
-        "dynesty",
-        "multinest",
-        "ultranest",
+        ("nautilus", {}),
+        ("dynesty", {}),
+        ("multinest", {}),
+        (
+            "ultranest",
+            {"n_calls_between_timeout_checks": 100},
+        ),
+        (
+            "ultranest",
+            {
+                "n_calls_between_timeout_checks": 100,
+                "region_class": "RobustEllipsoidRegion",
+            },
+        ),
     ],
 )
 @pytest.mark.filterwarnings(r"ignore:(?s).*Found Intel OpenMP")
 def test__sampler_timeout(
     library: str,
+    run_kwargs: dict[str, Any],
     tmp_path: Path,
     capsys: pytest.CaptureFixture,
 ) -> None:
@@ -82,13 +94,6 @@ def test__sampler_timeout(
         random_seed=42,
     )
 
-    # Define run_kwargs: Basically, we need to reduce the "magic number" for
-    # UltraNest because the default (10k) is too much without parallelization
-    run_kwargs = (
-        {} if library != "ultranest"
-        else {"n_calls_between_timeout_checks": 100}
-    )
-
     # Run the sampler and save the results
     max_runtime = 10
     runtime = sampler.run(
@@ -97,6 +102,7 @@ def test__sampler_timeout(
         run_kwargs=run_kwargs,
     )
     sampler.cleanup()
+    sampler.save_runtime(runtime=runtime)
     captured = capsys.readouterr()
     assert "stopping sampler!" in captured.out
 

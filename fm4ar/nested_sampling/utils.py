@@ -119,7 +119,10 @@ def create_posterior_plot(
 
         # TODO: If we ever need to handle infite supports (e.g., Gaussian
         #  priors), we might need to truncate things to some reasonable range.
-        if any(np.isinf(extents[0])) or any(np.isinf(extents[1])):
+        if (  # pragma: no cover
+            np.isinf(extents[0]).any()
+            or np.isinf(extents[1]).any()
+        ):
             raise ValueError("Infinite supports are currently not supported!")
 
         # Unpack the extents and set them in the plot config
