@@ -86,11 +86,12 @@ if __name__ == "__main__":
         if config.sampler.library in ("multinest", "ultranest"):
             executable = "/usr/mpi/current/bin/mpiexec"
             job_arguments = [
-                f"-n {config.htcondor.n_cpus}",
+                f"-np {config.htcondor.n_cpus}",
                 "--bind-to core:overload-allowed",
                 "--mca coll ^hcoll",
                 "--mca pml ob1",
                 "--mca btl self,vader,tcp",
+                "--verbose",
                 sys.executable,
                 Path(__file__).resolve().as_posix(),
                 f"--experiment-dir {args.experiment_dir}",
