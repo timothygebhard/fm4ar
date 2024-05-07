@@ -31,9 +31,9 @@ def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
     # dynesty stores the posterior in a .pickle file
     elif config.sampler.library == "dynesty":
         file_path = experiment_dir / "posterior.pickle"
-        data = pd.read_pickle(file_path)
-        samples = np.array(data.samples)
-        weights = np.exp(data.logwt)
+        results = pd.read_pickle(file_path)
+        samples = np.array(results.samples)
+        weights = np.array(results.importance_weights())
 
     # multinest stores the posterior in a .dat file
     elif config.sampler.library == "multinest":
