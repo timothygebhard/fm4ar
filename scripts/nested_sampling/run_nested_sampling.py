@@ -231,8 +231,8 @@ if __name__ == "__main__":
         n_dim=sum(infer_mask),
         n_livepoints=config.sampler.n_livepoints,
         inferred_parameters=np.array(prior.names)[infer_mask].tolist(),
+        sampler_kwargs=config.sampler.sampler_kwargs,
         random_seed=config.sampler.random_seed,
-        **config.sampler.sampler_kwargs,
     )
     print(f"[{rank:2d}] Instantiated new sampler!", flush=True)
 
