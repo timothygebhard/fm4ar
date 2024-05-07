@@ -23,6 +23,7 @@ from fm4ar.utils.paths import get_experiments_dir
         "nautilus",
         "dynesty",
         "multinest",
+        "ultranest",
     ],
 )
 @pytest.mark.filterwarnings(r"ignore:(?s).*Found Intel OpenMP")
@@ -64,11 +65,11 @@ def test__sampler_timeout(
         )
 
     def prior_transform(u: np.ndarray) -> np.ndarray:
-        return u
+        return 10 * (u - 0.5)
 
-    def log_likelihood(_: np.ndarray) -> float:
+    def log_likelihood(x: np.ndarray) -> float:
         time.sleep(0.1)
-        return 10 + np.random.normal(0, 1)  # dynesty breaks if all are equal
+        return float(-0.5 * np.sum(x ** 2))
 
     # Set up the sampler
     sampler = get_sampler(library)(
@@ -81,9 +82,20 @@ def test__sampler_timeout(
         random_seed=42,
     )
 
+    # Define run_kwargs: Basically, we need to reduce the "magic number" for
+    # UltraNest because the default (10k) is too much without parallelization
+    run_kwargs = (
+        {} if library != "ultranest"
+        else {"n_calls_between_timeout_checks": 100}
+    )
+
     # Run the sampler and save the results
     max_runtime = 10
-    runtime = sampler.run(max_runtime=max_runtime, verbose=True)
+    runtime = sampler.run(
+        max_runtime=max_runtime,
+        verbose=True,
+        run_kwargs=run_kwargs,
+    )
     sampler.cleanup()
     captured = capsys.readouterr()
     assert "stopping sampler!" in captured.out

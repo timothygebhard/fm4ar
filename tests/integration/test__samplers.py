@@ -25,6 +25,7 @@ from fm4ar.utils.paths import get_experiments_dir
         ("dynesty", {"sampling_mode": "standard"}, -0.01342119680650299),
         ("dynesty", {"sampling_mode": "dynamic"}, -0.010379853604532594),
         ("multinest", {}, 0.015017932514734234),
+        ("ultranest", {}, 0.0029731808457366285),
     ],
 )
 @pytest.mark.filterwarnings(r"ignore:(?s).*Found Intel OpenMP")
@@ -85,8 +86,8 @@ def test__samplers(
         n_dim=2,
         n_livepoints=100,
         inferred_parameters=["x", "y"],
+        sampler_kwargs=sampler_kwargs,
         random_seed=42,
-        **sampler_kwargs,
     )
 
     # Run the sampler and save the results
@@ -145,8 +146,8 @@ def test__samplers(
         n_dim=2,
         n_livepoints=100,
         inferred_parameters=["x", "y"],
+        sampler_kwargs=sampler_kwargs,
         random_seed=42,
-        **sampler_kwargs,
     )
     sampler.run(max_runtime=60, verbose=True)
     sampler.cleanup()
