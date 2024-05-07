@@ -54,7 +54,11 @@ def get_cli_arguments() -> argparse.Namespace:
 
 def sync_mpi_processes(comm: Any) -> None:
     if comm is not None:
+        if comm.Get_rank() == 0:
+            print("Synchronizing MPI processes...", end=" ", flush=True)
         comm.Barrier()
+        if comm.Get_rank() == 0:
+            print("Done!", flush=True)
 
 
 if __name__ == "__main__":
@@ -72,7 +76,7 @@ if __name__ == "__main__":
 
     if args.start_submission:
 
-        print("\nRUN NESTED SAMPLING RETRIEVAL\n", flush=True)
+        print("\nPREPARE NESTED SAMPLING RETRIEVAL\n", flush=True)
 
         # Document the git status and the Python environment
         document_git_status(target_dir=args.experiment_dir, verbose=True)
@@ -141,8 +145,6 @@ if __name__ == "__main__":
         if rank == 0:
             print(*args, **kwargs, flush=True)
 
-    log("\nRUN NESTED SAMPLING RETRIEVAL\n")
-
     # Treat warnings as errors
     warnings.filterwarnings("error")
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -155,6 +157,8 @@ if __name__ == "__main__":
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         sync_mpi_processes(comm)
+
+    log("\nRUN NESTED SAMPLING RETRIEVAL\n")
 
     log("Creating prior distribution...", end=" ")
     prior = get_prior(config=config.prior)
@@ -179,7 +183,7 @@ if __name__ == "__main__":
     )
     log("Done!")
 
-    log("Creating log-likelihood function...")
+    log("Creating log-likelihood function...", end=" ")
 
     # Create masks that indicate which parameters are being inferred, which are
     # being marginalized over, and which are being conditioned on (= fixed)
