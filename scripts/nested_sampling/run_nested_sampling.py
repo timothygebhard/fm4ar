@@ -59,8 +59,6 @@ def sync_mpi_processes(comm: Any) -> None:
 
 if __name__ == "__main__":
 
-    print("\nRUN NESTED SAMPLING RETRIEVAL\n", flush=True)
-
     # Load command line arguments and configuration file
     args = get_cli_arguments()
     config = load_config(experiment_dir=args.experiment_dir)
@@ -68,35 +66,37 @@ if __name__ == "__main__":
     # Make sure we do not run nested sampling on the login node
     check_if_on_login_node(args.start_submission)
 
-    # Collect arguments for submission file
-    if config.sampler.library in ("multinest", "ultranest"):
-        executable = "/usr/mpi/current/bin/mpiexec"
-        job_arguments = [
-            f"-n {config.htcondor.n_cpus}",
-            "--bind-to core:overload-allowed",
-            "--mca coll ^hcoll",
-            "--mca pml ob1",
-            "--mca btl self,vader,tcp",
-            sys.executable,
-            Path(__file__).resolve().as_posix(),
-            f"--experiment-dir {args.experiment_dir}",
-        ]
-    else:
-        executable = sys.executable
-        job_arguments = [
-            Path(__file__).resolve().as_posix(),
-            f"--experiment-dir {args.experiment_dir.resolve()}",
-        ]
-
     # -------------------------------------------------------------------------
     # Either prepare first submission...
     # -------------------------------------------------------------------------
 
     if args.start_submission:
 
+        print("\nRUN NESTED SAMPLING RETRIEVAL\n", flush=True)
+
         # Document the git status and the Python environment
         document_git_status(target_dir=args.experiment_dir, verbose=True)
         document_environment(target_dir=args.experiment_dir)
+
+        # Collect arguments for submission file
+        if config.sampler.library in ("multinest", "ultranest"):
+            executable = "/usr/mpi/current/bin/mpiexec"
+            job_arguments = [
+                f"-n {config.htcondor.n_cpus}",
+                "--bind-to core:overload-allowed",
+                "--mca coll ^hcoll",
+                "--mca pml ob1",
+                "--mca btl self,vader,tcp",
+                sys.executable,
+                Path(__file__).resolve().as_posix(),
+                f"--experiment-dir {args.experiment_dir}",
+            ]
+        else:
+            executable = sys.executable
+            job_arguments = [
+                Path(__file__).resolve().as_posix(),
+                f"--experiment-dir {args.experiment_dir.resolve()}",
+            ]
 
         print("Creating submission file...", end=" ", flush=True)
 
@@ -135,6 +135,14 @@ if __name__ == "__main__":
     comm = None
     rank = 0
 
+    # Define a simple overloaded print function that flushes the output and
+    # limits the output to the root process (rank 0) in case of MPI
+    def log(*args: Any, **kwargs: Any) -> None:
+        if rank == 0:
+            print(*args, **kwargs, flush=True)
+
+    log("\nRUN NESTED SAMPLING RETRIEVAL\n")
+
     # Treat warnings as errors
     warnings.filterwarnings("error")
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -148,27 +156,30 @@ if __name__ == "__main__":
         rank = comm.Get_rank()
         sync_mpi_processes(comm)
 
+    log("Creating prior distribution...", end=" ")
     prior = get_prior(config=config.prior)
-    print(f"[{rank:2d}] Created prior distribution!", flush=True)
+    log("Done!")
 
+    log("Creating simulator...", end=" ")
     simulator = get_simulator(config=config.simulator)
-    print(f"[{rank:2d}] Created simulator!", flush=True)
+    log("Done!")
 
-    sync_mpi_processes(comm)
-
+    log("Simulating ground truth...", end=" ")
     theta_obs = np.array([config.ground_truth[n] for n in prior.names])
     if (result := simulator(theta_obs)) is None:
+        log("Failed!")
         raise RuntimeError(f"[{rank:2d}] Failed to simulate ground truth!")
     _, flux_obs = result
-    print(f"[{rank:2d}] Simulated ground truth!", flush=True)
+    log("Done!")
 
-    sync_mpi_processes(comm)
-
+    log("Creating likelihood distribution...", end=" ")
     likelihood_distribution = get_likelihood_distribution(
         flux_obs=flux_obs,
         config=config.likelihood,
     )
-    print(f"[{rank:2d}] Created likelihood distribution!", flush=True)
+    log("Done!")
+
+    log("Creating log-likelihood function...")
 
     # Create masks that indicate which parameters are being inferred, which are
     # being marginalized over, and which are being conditioned on (= fixed)
@@ -219,11 +230,9 @@ if __name__ == "__main__":
         # Otherwise, return the log-likelihood
         return float(likelihood_distribution.logpdf(x))
 
-    print(f"[{rank:2d}] Prepared log-likelihood function!", flush=True)
+    log("Done!")
 
-    sync_mpi_processes(comm)
-
-    # Create a new sampler instance
+    log("Instantiating sampler...", end=" ")
     sampler = get_sampler(config.sampler.library)(
         run_dir=args.experiment_dir,
         prior_transform=partial(prior.transform, mask=infer_mask),
@@ -234,13 +243,13 @@ if __name__ == "__main__":
         sampler_kwargs=config.sampler.sampler_kwargs,
         random_seed=config.sampler.random_seed,
     )
-    print(f"[{rank:2d}] Instantiated new sampler!", flush=True)
+    log("Done!")
 
+    # Synchronize all processes before running the sampler
     sync_mpi_processes(comm)
 
     # Run the sampler until the maximum runtime is reached
-    if rank == 0:
-        print("\n\nRunning sampler:\n", flush=True)
+    log("\n\nRunning sampler:\n")
     runtime = sampler.run(
         max_runtime=config.sampler.max_runtime,
         verbose=True,
@@ -266,12 +275,12 @@ if __name__ == "__main__":
     # For the case of MultiNest, we only do this on the "root" process
     if sampler.complete and rank == 0:
 
-        print("\n\nSampling complete!", flush=True)
-        print("Saving results...", end=" ", flush=True)
+        log("\n\nSampling complete!")
+        log("Saving results...", end=" ")
         sampler.save_results()
-        print("Done!", flush=True)
+        log("Done!")
 
-        print("Creating plot...", end=" ", flush=True)
+        log("Creating plot...", end=" ")
         create_posterior_plot(
             points=np.array(sampler.points),
             weights=np.array(sampler.weights),
@@ -283,9 +292,9 @@ if __name__ == "__main__":
             file_path=args.experiment_dir / "posterior.pdf",
             ground_truth=theta_obs[infer_mask],
         )
-        print("Done!", flush=True)
+        log("Done!")
 
-        print("\nAll done!\n\n\n", flush=True)
+        log("\nAll done!\n\n\n")
 
     # Make sure all processes are done before exiting
     print(f"Exiting job {rank} with code {exit_code}!", flush=True)
