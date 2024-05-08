@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from fm4ar.nested_sampling.config import load_config
+from fm4ar.utils.misc import suppress_output
 
 
 def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -39,12 +40,13 @@ def load_posterior(experiment_dir: Path) -> tuple[np.ndarray, np.ndarray]:
     elif config.sampler.library == "multinest":
         from pymultinest.analyse import Analyzer
 
-        analyzer = Analyzer(
-            n_params=len(pd.read_json(experiment_dir / "params.json")),
-            outputfiles_basename=(experiment_dir / "run").as_posix(),
-        )
-        samples = np.array(analyzer.get_equal_weighted_posterior()[:, :-1])
-        weights = np.ones(len(samples))
+        with suppress_output():
+            analyzer = Analyzer(
+                n_params=len(pd.read_json(experiment_dir / "params.json")),
+                outputfiles_basename=(experiment_dir / "run").as_posix(),
+            )
+            samples = np.array(analyzer.get_equal_weighted_posterior()[:, :-1])
+            weights = np.ones(len(samples))
 
     # ultranest stores the posterior in a .npz file
     elif config.sampler.library == "ultranest":
