@@ -709,8 +709,10 @@ class UltraNestSampler(Sampler):
 
             # Check if the timeout is reached
             if time.time() - start_time > max_runtime:
-                print("Timeout reached, stopping sampler!")
+                print("Timeout reached, stopping sampler!", flush=True)
                 return time.time() - start_time
+
+            print("\nNot converged and not timed out, continuing!", flush=True)
 
     def cleanup(self) -> None:
         pass
