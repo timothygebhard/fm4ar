@@ -712,7 +712,11 @@ class UltraNestSampler(Sampler):
                 print("Timeout reached, stopping sampler!", flush=True)
                 return time.time() - start_time
 
-            print("\nNot converged and not timed out, continuing!", flush=True)
+            if rank == 0:
+                print(
+                    "\nDid not reach stopping criterion, continuing...",
+                    flush=True
+                )
 
     def cleanup(self) -> None:
         pass
