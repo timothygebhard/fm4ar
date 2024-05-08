@@ -654,6 +654,11 @@ class UltraNestSampler(Sampler):
         Run the ultranest sampler.
         """
 
+        # IMPORTANT: Do *NOT* fix the random seed of numpy's global RNG here,
+        # at least not without using the `rank` as a seed offset. If you do,
+        # this will result in all processes generating the same random numbers
+        # (in particular: the same live points), which breaks the sampler!
+
         # Get the rank of the current process
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
@@ -679,11 +684,6 @@ class UltraNestSampler(Sampler):
 
         # Start the timer
         start_time = time.time()
-
-        # It looks like UltraNest does not accept a random seed argument,
-        # so fixing the global random seed might be our best bet at achieving
-        # some sort of reproducibility...
-        np.random.seed(self.random_seed)
 
         # Get the number of likelihood evaluations to run between checking
         # the timeout condition. This is a bit of a "magic number", and the
