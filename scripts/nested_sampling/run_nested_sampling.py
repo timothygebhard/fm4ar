@@ -225,11 +225,13 @@ if __name__ == "__main__":
 
         # If the simulation timed out, return "-inf"
         if result is None:
+            print("Simulation timed out!", file=sys.stderr)
             return -1e300
 
         # If there are NaNs, return "-inf"
         _, x = result
         if np.isnan(x).any():
+            print("Simulation result contains NaNs!", file=sys.stderr)
             return -1e300
 
         # Otherwise, return the log-likelihood
