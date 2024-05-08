@@ -702,6 +702,9 @@ class UltraNestSampler(Sampler):
                 **run_kwargs,
             )
 
+            # Sync all processes
+            comm.Barrier()
+
             # Check if we have converged
             if self.sampler.ncall == n_call_before:
                 self.complete = True
