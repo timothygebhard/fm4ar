@@ -2,7 +2,6 @@
 Define abstractions for the different nested sampling implementations.
 """
 
-import contextlib
 import json
 import time
 import warnings
@@ -17,6 +16,7 @@ import dill
 import multiprocess
 import numpy as np
 
+from fm4ar.nested_sampling.posteriors import load_posterior
 from fm4ar.utils.multiproc import get_number_of_available_cores
 from fm4ar.utils.timeout import TimeoutException, timelimit
 
@@ -563,20 +563,8 @@ class MultiNestSampler(Sampler):
         if self._points_and_weights_loaded:
             return
 
-        # Import this here to reduce dependencies
-        from pymultinest.analyse import Analyzer
-
-        # Load the posterior samples from the MultiNest output files
-        # We locally redirect stdout to /dev/null to suppress the output
-        with contextlib.redirect_stdout(None):
-            analyzer = Analyzer(
-                n_params=self.n_dim,
-                outputfiles_basename=self.outputfiles_basename,
-            )
-            posterior_samples = analyzer.get_equal_weighted_posterior()[:, :-1]
-
-        self._points = np.array(posterior_samples)
-        self._weights = np.ones(len(posterior_samples))
+        # Load the points and weights from the MultiNest output files
+        self._points, self._weights = load_posterior(self.run_dir)
         self._points_and_weights_loaded = True
 
     @property
