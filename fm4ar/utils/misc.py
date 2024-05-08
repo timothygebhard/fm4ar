@@ -2,8 +2,10 @@
 Miscellaneous functions that don't fit anywhere else.
 """
 
+import os
+from contextlib import redirect_stdout, contextmanager
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Generator
 
 from frozendict import frozendict
 
@@ -31,3 +33,10 @@ def freeze_args(func: Callable) -> Callable:
         return func(*args, **kwargs)
 
     return wrapped
+
+
+@contextmanager
+def suppress_output() -> Generator[None, None, None]:
+    with open(os.devnull, "w") as null:
+        with redirect_stdout(null):
+            yield
