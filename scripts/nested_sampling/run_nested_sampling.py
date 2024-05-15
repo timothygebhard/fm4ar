@@ -162,6 +162,7 @@ if __name__ == "__main__":
     log("\nRUN NESTED SAMPLING RETRIEVAL\n")
 
     log("Creating prior distribution...", end=" ")
+    config.prior.random_seed += rank
     prior = get_prior(config=config.prior)
     log("Done!")
 
