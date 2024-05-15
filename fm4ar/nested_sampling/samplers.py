@@ -613,8 +613,10 @@ class UltraNestSampler(Sampler):
             random_seed=random_seed,
         )
 
-        # Convert the `sampler_kwargs` to a dictionary if it is `None`
+        # Convert the `sampler_kwargs` to a dictionary if it is `None` and
+        # pop the (optional) special kwargs for the stepsampler
         sampler_kwargs = self._prepare_sampler_kwargs(sampler_kwargs)
+        stepsampler_config = sampler_kwargs.pop("stepsampler", {})
 
         # Import this here to reduce dependencies
         from ultranest import ReactiveNestedSampler as _UltraNestSampler
@@ -631,6 +633,25 @@ class UltraNestSampler(Sampler):
             storage_backend="hdf5",
             **sampler_kwargs,
         )
+
+        # Optional: Add step sampler (for now, we only support `SliceSampler`)
+        # For more details about step samplers and settings, see:
+        # https://arxiv.org/pdf/2211.09426
+        if stepsampler_config:
+
+            import ultranest.stepsampler as stepsampler
+
+            # Convert the `generate_direction` argument to a function object
+            generate_direction = getattr(
+                import_module("ultranest.stepsampler"),
+                stepsampler_config.pop("generate_direction")
+            )
+
+            # Create the slice sampler
+            self.sampler.stepsampler = stepsampler.SliceSampler(
+                generate_direction=generate_direction,
+                **stepsampler_config,
+            )
 
     def run(
         self,
