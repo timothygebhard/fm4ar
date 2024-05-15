@@ -218,22 +218,28 @@ if __name__ == "__main__":
 
         # If anything goes wrong, return an approximation for "-inf"
         # (MultiNest can't seem to handle proper -inf values and will complain)
+        # Note: We return different numbers for the three cases so that in case
+        # they ever show up in the output, we can distinguish them.
         try:
             result = simulator(theta)
         except Exception as e:
-            print(f"{e.__class__.__name__}: {str(e)}", file=sys.stderr)
-            return -1e300
+            print(
+                f"\n\n{e.__class__.__name__}: {str(e)}\n",
+                file=sys.stderr,
+                flush=True,
+            )
+            return -1e299
 
         # If the simulation timed out, return "-inf"
         if result is None:
-            print("Simulation timed out!", file=sys.stderr)
-            return -1e300
+            print("\n\nSimulation timed out!\n", file=sys.stderr)
+            return -1e298
 
         # If there are NaNs, return "-inf"
         _, x = result
         if np.isnan(x).any():
-            print("Simulation result contains NaNs!", file=sys.stderr)
-            return -1e300
+            print("\n\nSimulation result contains NaNs!\n", file=sys.stderr)
+            return -1e297
 
         # Otherwise, return the log-likelihood
         return float(likelihood_distribution.logpdf(x))
