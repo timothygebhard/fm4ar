@@ -6,7 +6,7 @@ import json
 import time
 import warnings
 from abc import ABC, abstractmethod
-from copy import copy, deepcopy
+from copy import deepcopy
 from functools import partial
 from importlib import import_module
 from pathlib import Path
@@ -647,11 +647,6 @@ class UltraNestSampler(Sampler):
         # this will result in all processes generating the same random numbers
         # (in particular: the same live points), which breaks the sampler!
 
-        # Get the rank of the current process
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
-
         # Convert the `run_kwargs` to a dictionary if it is `None`
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
@@ -675,7 +670,7 @@ class UltraNestSampler(Sampler):
 
         # Get the number of likelihood evaluations to run between checking
         # the timeout condition. This is a bit of a "magic number", and the
-        # default value is based on the folllowing crude estimate:
+        # default value is based on the following crude estimate:
         #   96 cores, ~2 sec per likelihood call -> ~48 calls / sec on avg.
         # The total runtime should be within +/- 5 minutes of the max_runtime.
         #   300 sec * 48 calls / sec = 14_400 calls
@@ -687,9 +682,9 @@ class UltraNestSampler(Sampler):
         # Run the sampler with the given time limit
         while True:
 
-            n_call_before = copy(self.sampler.ncall)
+            n_call_before = deepcopy(self.sampler.ncall)
 
-            if rank == 0:
+            if self.sampler.mpi_rank == 0:
                 print("\n\n" + 80 * "-")
                 print(f"Calling run() at ncall={n_call_before:,}")
                 print(80 * "-" + "\n\n")
@@ -702,9 +697,6 @@ class UltraNestSampler(Sampler):
                 **run_kwargs,
             )
 
-            # Sync all processes
-            comm.Barrier()
-
             # Check if we have converged
             if self.sampler.ncall == n_call_before:
                 self.complete = True
@@ -715,7 +707,7 @@ class UltraNestSampler(Sampler):
                 print("Timeout reached, stopping sampler!", flush=True)
                 return time.time() - start_time
 
-            if rank == 0:
+            if self.sampler.mpi_rank == 0:
                 print(
                     "\nDid not reach stopping criterion, continuing...",
                     flush=True
