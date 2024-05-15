@@ -5,7 +5,6 @@ Script to run different nested sampling implementations on HTCondor.
 import argparse
 import os
 import sys
-import warnings
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -136,20 +135,21 @@ if __name__ == "__main__":
     # ...or actually run the nested sampling algorithm
     # -------------------------------------------------------------------------
 
+    # Limit number of threads to 1 to avoid oversubscription
+    os.environ["OMP_NUM_THREADS"] = "1"
+
     # In case of MultiNest + MPI, this will be overwritten
     comm = None
     rank = 0
+
+    # Set random seed for reproducibility
+    np.random.seed(config.sampler.random_seed + rank)
 
     # Define a simple overloaded print function that flushes the output and
     # limits the output to the root process (rank 0) in case of MPI
     def log(*args: Any, **kwargs: Any) -> None:
         if rank == 0:
             print(*args, **kwargs, flush=True)
-
-    # Treat warnings as errors
-    warnings.filterwarnings("error")
-    os.environ["OMP_NUM_THREADS"] = "1"
-    np.random.seed(config.sampler.random_seed)
 
     # Handle MPI communication for MultiNest and UltraNest
     if config.sampler.library in ("multinest", "ultranest"):
