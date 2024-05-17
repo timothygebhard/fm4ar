@@ -19,17 +19,24 @@ from fm4ar.utils.paths import get_experiments_dir
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
-    "library, run_kwargs",
+    "library, sampler_kwargs, run_kwargs",
     [
-        ("nautilus", {}),
-        ("dynesty", {}),
-        ("multinest", {}),
+        ("nautilus", {}, {}),
+        ("dynesty", {}, {}),
+        ("multinest", {}, {}),
         (
             "ultranest",
+            {
+                "stepsampler": {
+                    "generate_direction": "generate_mixture_random_direction",
+                    "nsteps": 10,
+                }
+            },
             {"n_calls_between_timeout_checks": 100},
         ),
         (
             "ultranest",
+            {},
             {
                 "n_calls_between_timeout_checks": 100,
                 "region_class": "RobustEllipsoidRegion",
@@ -40,6 +47,7 @@ from fm4ar.utils.paths import get_experiments_dir
 @pytest.mark.filterwarnings(r"ignore:(?s).*Found Intel OpenMP")
 def test__sampler_timeout(
     library: str,
+    sampler_kwargs: dict[str, Any],
     run_kwargs: dict[str, Any],
     tmp_path: Path,
     capsys: pytest.CaptureFixture,
@@ -92,6 +100,7 @@ def test__sampler_timeout(
         n_livepoints=100,
         inferred_parameters=["x", "y"],
         random_seed=42,
+        sampler_kwargs=sampler_kwargs,
     )
 
     # Run the sampler and save the results
