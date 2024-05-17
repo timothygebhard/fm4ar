@@ -5,6 +5,8 @@ Unit tests for `fm4ar.utils.environ`.
 import sys
 from pathlib import Path
 
+import pytest
+
 from fm4ar.utils.environment import (
     get_packages,
     get_python_version,
@@ -32,13 +34,20 @@ def test__get_python_version() -> None:
     assert python_version == sys.version
 
 
-def test__get_virtual_environment() -> None:
+def test__get_virtual_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Unit test for `fm4ar.utils.environment.get_virtual_environment`.
     """
 
-    virtual_environment = get_virtual_environment()
-    assert isinstance(virtual_environment, str)
+    with monkeypatch.context() as mp:
+
+        # Case 1: Virtual environment present
+        mp.setenv("VIRTUAL_ENV", "my_virtual_environment")
+        assert get_virtual_environment() == "my_virtual_environment"
+
+        # Case 2: Virtual environment not present
+        mp.delenv("VIRTUAL_ENV", raising=False)
+        assert get_virtual_environment() == "No virtual environment detected"
 
 
 def test__document_environment(tmp_path: Path) -> None:

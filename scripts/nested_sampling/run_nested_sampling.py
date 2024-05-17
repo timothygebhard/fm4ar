@@ -5,7 +5,6 @@ Script to run different nested sampling implementations on HTCondor.
 import argparse
 import os
 import sys
-import warnings
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -54,12 +53,14 @@ def get_cli_arguments() -> argparse.Namespace:
 
 def sync_mpi_processes(comm: Any) -> None:
     if comm is not None:
+        if comm.Get_rank() == 0:
+            print("Synchronizing MPI processes...", end=" ", flush=True)
         comm.Barrier()
+        if comm.Get_rank() == 0:
+            print("Done!", flush=True)
 
 
 if __name__ == "__main__":
-
-    print("\nRUN NESTED SAMPLING RETRIEVAL\n", flush=True)
 
     # Load command line arguments and configuration file
     args = get_cli_arguments()
@@ -68,35 +69,38 @@ if __name__ == "__main__":
     # Make sure we do not run nested sampling on the login node
     check_if_on_login_node(args.start_submission)
 
-    # Collect arguments for submission file
-    if config.sampler.library == "multinest":
-        executable = "/usr/mpi/current/bin/mpiexec"
-        job_arguments = [
-            f"-n {config.htcondor.n_cpus}",
-            "--bind-to core:overload-allowed",
-            "--mca coll ^hcoll",
-            "--mca pml ob1",
-            "--mca btl self,vader,tcp",
-            sys.executable,
-            Path(__file__).resolve().as_posix(),
-            f"--experiment-dir {args.experiment_dir}",
-        ]
-    else:
-        executable = sys.executable
-        job_arguments = [
-            Path(__file__).resolve().as_posix(),
-            f"--experiment-dir {args.experiment_dir.resolve()}",
-        ]
-
     # -------------------------------------------------------------------------
     # Either prepare first submission...
     # -------------------------------------------------------------------------
 
     if args.start_submission:
 
+        print("\nPREPARE NESTED SAMPLING RETRIEVAL\n", flush=True)
+
         # Document the git status and the Python environment
         document_git_status(target_dir=args.experiment_dir, verbose=True)
         document_environment(target_dir=args.experiment_dir)
+
+        # Collect arguments for submission file
+        if config.sampler.library in ("multinest", "ultranest"):
+            executable = "/usr/mpi/current/bin/mpiexec"
+            job_arguments = [
+                f"-np {config.htcondor.n_cpus}",
+                "--bind-to core:overload-allowed",
+                "--mca coll ^hcoll",
+                "--mca pml ob1",
+                "--mca btl self,vader,tcp",
+                "--verbose",
+                sys.executable,
+                Path(__file__).resolve().as_posix(),
+                f"--experiment-dir {args.experiment_dir}",
+            ]
+        else:
+            executable = sys.executable
+            job_arguments = [
+                Path(__file__).resolve().as_posix(),
+                f"--experiment-dir {args.experiment_dir.resolve()}",
+            ]
 
         print("Creating submission file...", end=" ", flush=True)
 
@@ -108,7 +112,7 @@ if __name__ == "__main__":
         htcondor_config.log_file_name = "log.$$([NumJobStarts])"
         htcondor_config.extra_kwargs = (
             {}
-            if config.sampler.library != "multinest"
+            if config.sampler.library not in ("multinest", "ultranest")
             else {"transfer_executable": "False"}
         )
 
@@ -131,53 +135,57 @@ if __name__ == "__main__":
     # ...or actually run the nested sampling algorithm
     # -------------------------------------------------------------------------
 
+    # Limit number of threads to 1 to avoid oversubscription
+    os.environ["OMP_NUM_THREADS"] = "1"
+
     # In case of MultiNest + MPI, this will be overwritten
     comm = None
     rank = 0
 
-    # Treat warnings as errors
-    warnings.filterwarnings("error")
-    os.environ["OMP_NUM_THREADS"] = "1"
-    np.random.seed(config.sampler.random_seed)
+    # Set random seed for reproducibility
+    np.random.seed(config.sampler.random_seed + rank)
 
-    # Handle MPI communication for MultiNest
-    if config.sampler.library == "multinest":
+    # Define a simple overloaded print function that flushes the output and
+    # limits the output to the root process (rank 0) in case of MPI
+    def log(*args: Any, **kwargs: Any) -> None:
+        if rank == 0:
+            print(*args, **kwargs, flush=True)
+
+    # Handle MPI communication for MultiNest and UltraNest
+    if config.sampler.library in ("multinest", "ultranest"):
         from mpi4py import MPI
 
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
-        print(f"MPI rank: {rank}", flush=True)
         sync_mpi_processes(comm)
 
-    print("Creating prior distribution...", end=" ", flush=True)
+    log("\nRUN NESTED SAMPLING RETRIEVAL\n")
+
+    log("Creating prior distribution...", end=" ")
+    config.prior.random_seed += rank
     prior = get_prior(config=config.prior)
-    print("Done!", flush=True)
+    log("Done!")
 
-    print("Creating simulator...", end=" ", flush=True)
+    log("Creating simulator...", end=" ")
     simulator = get_simulator(config=config.simulator)
-    print("Done!", flush=True)
+    log("Done!")
 
-    sync_mpi_processes(comm)
-
-    # TODO: Maybe this could be extended to work also with actual observations,
-    #   that is, load the spectrum from a file and use it?
-    print("Simulating ground truth spectrum...", end=" ", flush=True)
+    log("Simulating ground truth...", end=" ")
     theta_obs = np.array([config.ground_truth[n] for n in prior.names])
     if (result := simulator(theta_obs)) is None:
-        raise RuntimeError("Failed to simulate ground truth!")
+        log("Failed!")
+        raise RuntimeError(f"[{rank:2d}] Failed to simulate ground truth!")
     _, flux_obs = result
-    print("Done!", flush=True)
+    log("Done!")
 
-    sync_mpi_processes(comm)
-
-    print("Creating likelihood distribution...", end=" ", flush=True)
+    log("Creating likelihood distribution...", end=" ")
     likelihood_distribution = get_likelihood_distribution(
         flux_obs=flux_obs,
         config=config.likelihood,
     )
-    print("Done!", flush=True)
+    log("Done!")
 
-    print("Preparing log_likelihood function...", end=" ", flush=True)
+    log("Creating log-likelihood function...", end=" ")
 
     # Create masks that indicate which parameters are being inferred, which are
     # being marginalized over, and which are being conditioned on (= fixed)
@@ -210,29 +218,35 @@ if __name__ == "__main__":
 
         # If anything goes wrong, return an approximation for "-inf"
         # (MultiNest can't seem to handle proper -inf values and will complain)
+        # Note: We return different numbers for the three cases so that in case
+        # they ever show up in the output, we can distinguish them.
         try:
             result = simulator(theta)
         except Exception as e:
-            print(f"{e.__class__.__name__}: {str(e)}", file=sys.stderr)
-            return -1e300
+            print(
+                f"\n\n{e.__class__.__name__}: {str(e)}\n",
+                file=sys.stderr,
+                flush=True,
+            )
+            return -1e299
 
         # If the simulation timed out, return "-inf"
         if result is None:
-            return -1e300
+            print("\n\nSimulation timed out!\n", file=sys.stderr)
+            return -1e298
 
         # If there are NaNs, return "-inf"
         _, x = result
         if np.isnan(x).any():
-            return -1e300
+            print("\n\nSimulation result contains NaNs!\n", file=sys.stderr)
+            return -1e297
 
         # Otherwise, return the log-likelihood
         return float(likelihood_distribution.logpdf(x))
 
-    print("Done!", flush=True)
+    log("Done!")
 
-    sync_mpi_processes(comm)
-
-    print("Creating sampler...", end=" ", flush=True)
+    log("Instantiating sampler...", end=" ")
     sampler = get_sampler(config.sampler.library)(
         run_dir=args.experiment_dir,
         prior_transform=partial(prior.transform, mask=infer_mask),
@@ -240,14 +254,16 @@ if __name__ == "__main__":
         n_dim=sum(infer_mask),
         n_livepoints=config.sampler.n_livepoints,
         inferred_parameters=np.array(prior.names)[infer_mask].tolist(),
+        sampler_kwargs=config.sampler.sampler_kwargs,
         random_seed=config.sampler.random_seed,
-        **config.sampler.sampler_kwargs,
     )
-    print("Done!\n", flush=True)
+    log("Done!")
 
+    # Synchronize all processes before running the sampler
     sync_mpi_processes(comm)
 
-    print("Running sampler:", flush=True)
+    # Run the sampler until the maximum runtime is reached
+    log("\n\nRunning sampler:\n")
     runtime = sampler.run(
         max_runtime=config.sampler.max_runtime,
         verbose=True,
@@ -273,22 +289,26 @@ if __name__ == "__main__":
     # For the case of MultiNest, we only do this on the "root" process
     if sampler.complete and rank == 0:
 
-        print("Sampling complete!", flush=True)
-        print("Saving results...", end=" ", flush=True)
+        log("\n\nSampling complete!")
+        log("Saving results...", end=" ")
         sampler.save_results()
-        print("Done!", flush=True)
+        log("Done!")
 
-        print("Creating plot...", end=" ", flush=True)
+        log("Creating plot...", end=" ")
         create_posterior_plot(
             points=np.array(sampler.points),
             weights=np.array(sampler.weights),
             names=np.array(prior.labels)[infer_mask],
+            extents=(
+                np.array(prior.distribution.support()[0][infer_mask]),
+                np.array(prior.distribution.support()[1][infer_mask]),
+            ),
             file_path=args.experiment_dir / "posterior.pdf",
             ground_truth=theta_obs[infer_mask],
         )
-        print("Done!", flush=True)
+        log("Done!")
 
-        print("\nAll done!\n", flush=True)
+        log("\nAll done!\n\n\n")
 
     # Make sure all processes are done before exiting
     print(f"Exiting job {rank} with code {exit_code}!", flush=True)

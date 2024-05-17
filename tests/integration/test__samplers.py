@@ -3,14 +3,18 @@ Integration tests for `fm4ar.nested_sampling.samplers`.
 """
 
 from pathlib import Path
+from shutil import copyfile
 from typing import Any
+from yaml import safe_dump
 
 import numpy as np
 import pytest
 
+from fm4ar.nested_sampling.config import load_config
 from fm4ar.nested_sampling.posteriors import load_posterior
 from fm4ar.nested_sampling.samplers import get_sampler
 from fm4ar.nested_sampling.utils import create_posterior_plot
+from fm4ar.utils.paths import get_experiments_dir
 
 
 @pytest.mark.slow
@@ -21,6 +25,7 @@ from fm4ar.nested_sampling.utils import create_posterior_plot
         ("dynesty", {"sampling_mode": "standard"}, -0.01342119680650299),
         ("dynesty", {"sampling_mode": "dynamic"}, -0.010379853604532594),
         ("multinest", {}, 0.015017932514734234),
+        ("ultranest", {}, 0.0029731808457366285),
     ],
 )
 @pytest.mark.filterwarnings(r"ignore:(?s).*Found Intel OpenMP")
@@ -40,6 +45,24 @@ def test__samplers(
 
     experiment_dir = tmp_path / library
     experiment_dir.mkdir()
+
+    # Copy over the template configuration
+    template_dir = get_experiments_dir() / "templates" / "nested-sampling"
+    copyfile(
+        template_dir / "config.yaml",
+        experiment_dir / "config.yaml",
+    )
+
+    # Update the configuration
+    config = load_config(experiment_dir)
+    config.sampler.library = library  # type: ignore
+    with open(experiment_dir / "config.yaml", "w") as yaml_file:
+        safe_dump(
+            config.dict(),
+            yaml_file,
+            default_flow_style=False,
+            sort_keys=False,
+        )
 
     def prior_transform(u: np.ndarray) -> np.ndarray:
         return 10 * (u - 0.5)
@@ -63,8 +86,8 @@ def test__samplers(
         n_dim=2,
         n_livepoints=100,
         inferred_parameters=["x", "y"],
+        sampler_kwargs=sampler_kwargs,
         random_seed=42,
-        **sampler_kwargs,
     )
 
     # Run the sampler and save the results
@@ -99,6 +122,7 @@ def test__samplers(
         points=points,
         weights=weights,
         names=["x", "y"],
+        extents=(np.array([-5, -5]), np.array([5, 5])),
         file_path=experiment_dir / "posterior.pdf",
         ground_truth=np.array([0, 0]),
     )
@@ -122,8 +146,8 @@ def test__samplers(
         n_dim=2,
         n_livepoints=100,
         inferred_parameters=["x", "y"],
+        sampler_kwargs=sampler_kwargs,
         random_seed=42,
-        **sampler_kwargs,
     )
     sampler.run(max_runtime=60, verbose=True)
     sampler.cleanup()

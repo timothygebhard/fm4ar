@@ -8,6 +8,7 @@ from fm4ar.importance_sampling.utils import (
     clip_and_normalize_weights,
     compute_effective_sample_size,
     compute_is_weights,
+    compute_log_evidence,
 )
 
 
@@ -72,3 +73,14 @@ def test__clip_and_normalize_weights() -> None:
         percentile=0.95,
     )
     assert np.allclose(np.max(normalized_weights), 1.0031017892839922)
+
+
+def test__compute_log_evidence() -> None:
+    """
+    Test `compute_log_evidence()`.
+    """
+
+    raw_log_weights = np.array([0, 1, 2])
+    log_evidence, log_evidence_std = compute_log_evidence(raw_log_weights)
+    assert np.isclose(log_evidence, 1.3089936757762708)
+    assert np.isclose(log_evidence_std, 0.4209628541297575)

@@ -9,7 +9,7 @@ from typing import Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from chainconsumer import ChainConsumer, Chain, Truth
+from chainconsumer import ChainConsumer, Chain, PlotConfig, Truth
 
 from fm4ar.priors.base import BasePrior
 from fm4ar.priors.config import PriorConfig
@@ -77,6 +77,7 @@ def create_posterior_plot(
     points: np.ndarray,
     weights: np.ndarray,
     names: Sequence[str],
+    extents: tuple[np.ndarray, np.ndarray] | None,
     ground_truth: np.ndarray,
     file_path: Path,
 ) -> plt.Figure:
@@ -110,6 +111,30 @@ def create_posterior_plot(
             name="posterior",
         )
     )
+
+    # Set the plot limits to match the prior, if desired
+    # If the extents are not provided, chainconsumer will automatically
+    # determine them from the data.
+    if extents is not None:
+
+        # TODO: If we ever need to handle infite supports (e.g., Gaussian
+        #  priors), we might need to truncate things to some reasonable range.
+        if (  # pragma: no cover
+            np.isinf(extents[0]).any()
+            or np.isinf(extents[1]).any()
+        ):
+            raise ValueError("Infinite supports are currently not supported!")
+
+        # Unpack the extents and set them in the plot config
+        lower, upper = extents
+        c.set_plot_config(
+            PlotConfig(
+                extents={
+                    name: (float(lower[i]), float(upper[i]))
+                    for i, name in enumerate(names)
+                }
+            )
+        )
 
     # Create the plot
     fig = c.plotter.plot()

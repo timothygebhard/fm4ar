@@ -20,7 +20,7 @@ class SamplerConfig(BaseModel):
     Configuration for the nested sampling algorithm / sampler.
     """
 
-    library: Literal["nautilus", "dynesty", "multinest"] = Field(
+    library: Literal["nautilus", "dynesty", "multinest", "ultranest"] = Field(
         ...,
         description="Which nested sampling implementation to use.",
     )

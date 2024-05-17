@@ -2,6 +2,7 @@
 Unit tests for `fm4ar.torchutils.general`.
 """
 
+from types import SimpleNamespace
 from typing import Type
 
 import pytest
@@ -11,6 +12,7 @@ from fm4ar.nn.modules import Sine
 from fm4ar.torchutils.general import (
     check_for_nans,
     get_activation_from_name,
+    get_cuda_info,
     get_number_of_parameters,
     resolve_device,
 )
@@ -74,6 +76,38 @@ def test__get_activation_from_string(
     else:
         activation = get_activation_from_name(activation_name)
         assert isinstance(activation, expected_activation)
+
+
+def test__get_cuda_info(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Test `fm4ar.torchutils.general.get_cuda_info()`.
+    """
+
+    # Case 1: No CUDA devices available
+    with monkeypatch.context() as mp:
+        mp.setattr("torch.cuda.is_available", lambda: False)
+        cuda_info = get_cuda_info()
+        assert cuda_info == {}
+
+    # Case 2: Pretend we have a CUDA device
+    with monkeypatch.context() as mp:
+        mp.setattr("torch.cuda.is_available", lambda: True)
+        mp.setattr("torch.backends.cudnn.version", lambda: 123)
+        mp.setattr("torch.version.cuda", "11.1")
+        mp.setattr("torch.cuda.device_count", lambda: 1)
+        mp.setattr("torch.cuda.get_device_name", lambda _: "GeForce GTX 1080")
+        mp.setattr(
+            "torch.cuda.get_device_properties",
+            lambda _: SimpleNamespace(total_memory=8 * 1024 ** 3),
+        )
+        cuda_info = get_cuda_info()
+        assert cuda_info == {
+            "cuDNN version": 123,
+            "CUDA version": "11.1",
+            "device count": 1,
+            "device name": "GeForce GTX 1080",
+            "memory (GB)": 8.0,
+        }
 
 
 def test__get_number_of_parameters() -> None:

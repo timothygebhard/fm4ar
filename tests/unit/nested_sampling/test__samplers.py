@@ -5,25 +5,42 @@ Unit tests for `fm4ar.nested_sampling.samplers`.
 import os
 import time
 from pathlib import Path
+from shutil import copyfile
+from typing import Any
+from yaml import safe_dump
 
 import numpy as np
 import pytest
 
+from fm4ar.nested_sampling.config import load_config
 from fm4ar.nested_sampling.samplers import get_sampler
+from fm4ar.utils.paths import get_experiments_dir
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
-    "library",
+    "library, run_kwargs",
     [
-        "nautilus",
-        "dynesty",
-        "multinest",
+        ("nautilus", {}),
+        ("dynesty", {}),
+        ("multinest", {}),
+        (
+            "ultranest",
+            {"n_calls_between_timeout_checks": 100},
+        ),
+        (
+            "ultranest",
+            {
+                "n_calls_between_timeout_checks": 100,
+                "region_class": "RobustEllipsoidRegion",
+            },
+        ),
     ],
 )
 @pytest.mark.filterwarnings(r"ignore:(?s).*Found Intel OpenMP")
 def test__sampler_timeout(
     library: str,
+    run_kwargs: dict[str, Any],
     tmp_path: Path,
     capsys: pytest.CaptureFixture,
 ) -> None:
@@ -41,12 +58,30 @@ def test__sampler_timeout(
     experiment_dir = tmp_path / library
     experiment_dir.mkdir()
 
-    def prior_transform(u: np.ndarray) -> np.ndarray:
-        return u
+    # Copy over the template configuration
+    template_dir = get_experiments_dir() / "templates" / "nested-sampling"
+    copyfile(
+        template_dir / "config.yaml",
+        experiment_dir / "config.yaml",
+    )
 
-    def log_likelihood(_: np.ndarray) -> float:
+    # Update the configuration
+    config = load_config(experiment_dir)
+    config.sampler.library = library  # type: ignore
+    with open(experiment_dir / "config.yaml", "w") as yaml_file:
+        safe_dump(
+            config.dict(),
+            yaml_file,
+            default_flow_style=False,
+            sort_keys=False,
+        )
+
+    def prior_transform(u: np.ndarray) -> np.ndarray:
+        return 10 * (u - 0.5)
+
+    def log_likelihood(x: np.ndarray) -> float:
         time.sleep(0.1)
-        return 10 + np.random.normal(0, 1)  # dynesty breaks if all are equal
+        return float(-0.5 * np.sum(x ** 2))
 
     # Set up the sampler
     sampler = get_sampler(library)(
@@ -61,8 +96,13 @@ def test__sampler_timeout(
 
     # Run the sampler and save the results
     max_runtime = 10
-    runtime = sampler.run(max_runtime=max_runtime, verbose=True)
+    runtime = sampler.run(
+        max_runtime=max_runtime,
+        verbose=True,
+        run_kwargs=run_kwargs,
+    )
     sampler.cleanup()
+    sampler.save_runtime(runtime=runtime)
     captured = capsys.readouterr()
     assert "stopping sampler!" in captured.out
 

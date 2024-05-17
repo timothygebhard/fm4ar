@@ -1,5 +1,6 @@
 """
-Collect quantile information for true parameter values.
+Aggregate information from test set runs (e.g., quantile information,
+but also ranks, log evidence, ...) and save it to a single HDF file.
 """
 
 import argparse
@@ -10,8 +11,10 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-from fm4ar.utils.hdf import save_to_hdf
-from fm4ar.importance_sampling.utils import compute_effective_sample_size
+from fm4ar.importance_sampling.utils import (
+    compute_effective_sample_size,
+    compute_log_evidence,
+)
 
 
 def get_cli_arguments() -> argparse.Namespace:
@@ -73,7 +76,7 @@ def get_quantile(
 if __name__ == "__main__":
 
     script_start = time.time()
-    print("\nCOLLECT QUANTILE INFORMATION\n", flush=True)
+    print("\nAGGREGATE RESULTS FROM TEST SET RUNS\n", flush=True)
 
     # Get the command line arguments
     args = get_cli_arguments()
@@ -93,12 +96,20 @@ if __name__ == "__main__":
     )
     print("Done!\n", flush=True)
 
-    # Initialize the quantile information
+    # Initialize variables that will hold the results that we collect
     results: dict[str, list] = {
-        # "run_dir": [],
+        "run_dir": [],
+        "log_evidence": [],
+        "log_evidence_std": [],
         "sampling_efficiency": [],
         "quantiles_without_is": [],
         "quantiles_with_is": [],
+        "theta": [],
+        "sigma": [],
+        "snr": [],
+        "flux": [],
+        "rank_with_is": [],
+        "rank_without_is": [],
     }
 
     # Loop over the run directories
@@ -107,20 +118,39 @@ if __name__ == "__main__":
 
         # Read in the true parameter values
         with h5py.File(run_dir / "target_spectrum.hdf", "r") as f:
-            theta_true = np.array(f["theta"])
+            sigma = float(np.array(f["sigma"]))
+            snr = float(np.array(f["snr"]))
+            theta = np.array(f["theta"])
+            flux = np.array(f["flux"])
 
         # Read in the importance sampling results
         with h5py.File(run_dir / "importance_sampling_results.hdf", "r") as f:
-            samples = np.array(f["theta"])
+            if "theta" in f.keys():  # For the old results
+                samples = np.array(f["theta"])
+            else:
+                samples = np.array(f["samples"])
             weights = np.array(f["weights"])
+            raw_log_weights = np.array(f["raw_log_weights"])
+            log_prob_samples = np.array(f["log_prob_samples"])
+            log_prob_theta_true = np.array(f["log_prob_theta_true"])
 
-        # Compute the sampling efficiency
+        # Compute the rank for the ground truth theta value
+        rank_without_is = np.mean(log_prob_samples < log_prob_theta_true)
+        rank_with_is = np.average(
+            log_prob_samples < log_prob_theta_true,
+            weights=weights,
+        )
+        results["rank_without_is"].append(rank_without_is)
+        results["rank_with_is"].append(rank_with_is)
+
+        # Compute the sampling efficiency and the evidence
         _, sampling_efficiency = compute_effective_sample_size(weights)
+        log_evidence, log_evidence_std = compute_log_evidence(raw_log_weights)
 
         # Loop over the parameters to compute the quantiles
         quantiles_without_is = []
         quantiles_with_is = []
-        for i in range(len(theta_true)):
+        for i in range(len(theta)):
 
             # Construct the bins
             # Going from the minimum to the maximum sample is probably fine,
@@ -134,7 +164,7 @@ if __name__ == "__main__":
             # Compute the quantiles with and without importance sampling
             quantiles_without_is.append(
                 get_quantile(
-                    value=float(theta_true[i]),
+                    value=float(theta[i]),
                     array=samples[:, i],
                     weights=np.ones(len(samples)),
                     bins=bins,
@@ -142,7 +172,7 @@ if __name__ == "__main__":
             )
             quantiles_with_is.append(
                 get_quantile(
-                    value=float(theta_true[i]),
+                    value=float(theta[i]),
                     array=samples[:, i],
                     weights=weights,
                     bins=bins,
@@ -150,22 +180,39 @@ if __name__ == "__main__":
             )
 
         # Store the quantiles
-        # results["run_dir"].append(run_dir)
+        results["run_dir"].append(run_dir.as_posix())
+        results["log_evidence"].append(log_evidence)
+        results["log_evidence_std"].append(log_evidence_std)
+        results["theta"].append(theta)
+        results["sigma"].append(sigma)
+        results["snr"].append(snr)
+        results["flux"].append(flux)
         results["sampling_efficiency"].append(sampling_efficiency)
         results["quantiles_without_is"].append(quantiles_without_is)
         results["quantiles_with_is"].append(quantiles_with_is)
 
     print("\nSaving results to HDF...", end=" ", flush=True)
 
-    # Convert the lists to arrays
-    results_as_arrays = {}
-    for key in results:
-        results_as_arrays[key] = np.array(results[key])
-
     # Save the results to an HDF file
-    file_path = important_sampling_dir / "quantile_information.hdf"
-    save_to_hdf(file_path=file_path, **results_as_arrays)
+    file_name = "aggregated__" + args.name_pattern.replace("*", "X") + ".hdf"
+    file_path = important_sampling_dir / file_name
+    with h5py.File(file_path, "w") as f:
+        for key, value in results.items():
+            if key != "run_dir":
+                f.create_dataset(
+                    name=key,
+                    data=np.array(value),
+                    dtype=np.float32
+                )
+            else:
+                dataset = f.create_dataset(
+                    name=key,
+                    shape=(len(value),),
+                    dtype=h5py.special_dtype(vlen=str),
+                )
+                dataset[:] = value
 
     print("Done!", flush=True)
+    print("Results saved to:", file_path, flush=True)
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")
