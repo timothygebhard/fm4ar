@@ -185,7 +185,9 @@ def draw_samples_from_ml_model(
                 **model_kwargs,
             ).cpu().numpy().flatten()
         print("Done!\n")
-    else:
+
+    # This part is hard to test, but also unlikely to be used in practice
+    else:  # pragma: no cover
         log_prob_theta_true = np.full(1, np.nan)
 
     # Determine the chunk sizes: Every chunk should have `chunk_size` samples,
