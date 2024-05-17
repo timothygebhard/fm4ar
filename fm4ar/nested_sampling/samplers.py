@@ -634,6 +634,14 @@ class UltraNestSampler(Sampler):
             **sampler_kwargs,
         )
 
+        # Set the random seed of numpy's global RNG for reproducibility
+        # We need to very cautious here not to break the sampler by setting
+        # the random seed in a way that all processes generate the same
+        # random numbers (in particular: the same live points). This is why
+        # we use the `rank` and the number of calls as a seed offset here.
+        offset = self.sampler.mpi_rank + self.sampler.ncall
+        np.random.seed(random_seed + offset)
+
         # Optional: Add step sampler (for now, we only support `SliceSampler`)
         # For more details about step samplers and settings, see:
         # https://arxiv.org/pdf/2211.09426
@@ -663,11 +671,6 @@ class UltraNestSampler(Sampler):
         Run the ultranest sampler.
         """
 
-        # IMPORTANT: Do *NOT* fix the random seed of numpy's global RNG here,
-        # at least not without using the `rank` as a seed offset. If you do,
-        # this will result in all processes generating the same random numbers
-        # (in particular: the same live points), which breaks the sampler!
-
         # Convert the `run_kwargs` to a dictionary if it is `None`
         run_kwargs = run_kwargs if run_kwargs is not None else {}
 
@@ -695,7 +698,7 @@ class UltraNestSampler(Sampler):
         #   96 cores, ~2 sec per likelihood call -> ~48 calls / sec on avg.
         # The total runtime should be within +/- 5 minutes of the max_runtime.
         #   300 sec * 48 calls / sec = 14_400 calls
-        # Let's set this number to 10k for now to account for overhead.
+        # Let's set the default value to 10k for now to account for overhead.
         n_calls_between_timeout_checks = run_kwargs.pop(
             "n_calls_between_timeout_checks", 10_000
         )
