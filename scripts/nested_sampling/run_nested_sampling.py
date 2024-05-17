@@ -82,10 +82,17 @@ if __name__ == "__main__":
         document_environment(target_dir=args.experiment_dir)
 
         # Collect arguments for submission file
+        # MultiNest and UltraNest both parallelize the sampling process using
+        # MPI, which is why we need a bunch of additional arguments for them.
+        # Also, it looks like at least UltraNest benefits from setting the
+        # number of processes to about half the number of CPUs --- otherwise,
+        # the load average is significantly higher than the number of CPUs and
+        # things actually slow down (about 10% in some preliminary tests).
         if config.sampler.library in ("multinest", "ultranest"):
+            factor = 2 if config.sampler.library == "ultranest" else 1
             executable = "/usr/mpi/current/bin/mpiexec"
             job_arguments = [
-                f"-np {config.htcondor.n_cpus}",
+                f"-np {config.htcondor.n_cpus // factor}",
                 "--bind-to core:overload-allowed",
                 "--mca coll ^hcoll",
                 "--mca pml ob1",
