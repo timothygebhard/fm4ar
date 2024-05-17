@@ -15,10 +15,7 @@ from collections.abc import Mapping
 import numpy as np
 from pydantic import BaseModel, Field
 
-from fm4ar.datasets.noise import (
-    NoiseGenerator,
-    get_noise_transform_from_string,
-)
+from fm4ar.datasets.noise import get_noise_generator
 
 
 class DataTransformConfig(BaseModel):
@@ -73,7 +70,7 @@ def get_data_transforms(
     for data_transform_config in data_transform_configs:
         match data_transform_config.type:
             case "AddNoise":
-                data_transform = AddNoise(**data_transform_config.kwargs)
+                data_transform = AddNoise(config=data_transform_config.kwargs)
             case "Subsample":
                 data_transform = Subsample(**data_transform_config.kwargs)
             case _:
@@ -90,39 +87,26 @@ class AddNoise(DataTransform):
     Use a `NoiseGenerator` to add noise to the given flux.
     """
 
-    def __init__(
-        self,
-        random_seed: int,
-        complexity: int,
-        transform: str,
-    ) -> None:
+    def __init__(self, config: dict) -> None:
         """
         Initialize a new `AddNoise` transform.
 
-        See the `NoiseGenerator` class for more details, especially the
-        documentation of the `transform` argument.
-
         Args:
-            random_seed: Seed for the random number generator.
-            complexity: Complexity of the noise model.
-            transform: String specifying the noise transform.
+            config: This dictionary needs to contain two keys: `type`
+                specifies the type of noise generator to use (see the
+                `get_noise_generator` function), and `kwargs` contains
+                the keyword arguments that are passed to the constructor
+                of the noise generator.
         """
 
         super().__init__()
 
-        self.noise_generator = NoiseGenerator(
-            random_seed=random_seed,
-            complexity=complexity,
-            transform=get_noise_transform_from_string(transform),
-        )
+        self.noise_generator = get_noise_generator(config=config)
 
     def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         """
         Add noise to the given flux.
         """
-
-        # TODO: Maybe we want to thing about the "SNR" here, too?
-        #   Example: Rescale the noise to a certain target SNR?
 
         output = dict(x)
 

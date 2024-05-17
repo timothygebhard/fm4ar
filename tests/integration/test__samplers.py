@@ -2,6 +2,7 @@
 Integration tests for `fm4ar.nested_sampling.samplers`.
 """
 
+import os
 from pathlib import Path
 from shutil import copyfile
 from typing import Any
@@ -42,6 +43,10 @@ def test__samplers(
     Note: This test (for multinest) seems to work only when running
     `pytest` directly, not when using PyCharm's test runner.
     """
+
+    # Fail this test if it runs in PyCharm (it cannot handle multinest)
+    if library == "multinest" and "PYCHARM_HOSTED" in os.environ:
+        pytest.fail("This test does not work in PyCharm!")
 
     experiment_dir = tmp_path / library
     experiment_dir.mkdir()

@@ -20,9 +20,14 @@ def test__add_noise() -> None:
 
     # Instantiate the transform
     transform = AddNoise(
-        random_seed=42,
-        complexity=3,
-        transform="lambda wlen, flux_error: flux_error",
+        config=dict(
+            type="DefaultNoiseGenerator",
+            kwargs=dict(
+                sigma_min=1.0,
+                sigma_max=1.0,
+                random_seed=42,
+            ),
+        )
     )
 
     # Create a dummy input
@@ -42,7 +47,8 @@ def test__add_noise() -> None:
     assert np.allclose(y["wlen"], x["wlen"])
 
     # Ensure reproducibility (i.e., the same noise is added)
-    assert np.isclose(np.sum(y["flux"]), 0.09608717939064015)
+    assert np.isclose(np.mean(y["flux"]), -0.03197121324948966)
+    assert np.isclose(np.std(y["flux"]), 1.0271166340887257)
 
 
 def test__subsample() -> None:
@@ -83,11 +89,14 @@ def test__get_data_transforms() -> None:
     data_transform_configs = [
         DataTransformConfig(
             type="AddNoise",
-            kwargs={
-                "random_seed": 42,
-                "complexity": 3,
-                "transform": "lambda wlen, flux_error: flux_error",
-            },
+            kwargs=dict(
+                type="DefaultNoiseGenerator",
+                kwargs=dict(
+                    sigma_min=1.0,
+                    sigma_max=1.0,
+                    random_seed=42,
+                ),
+            )
         ),
         DataTransformConfig(
             type="Subsample",
