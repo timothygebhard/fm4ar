@@ -710,7 +710,10 @@ class UltraNestSampler(Sampler):
 
             if self.sampler.mpi_rank == 0:
                 print("\n\n" + 80 * "-")
-                print(f"Calling run() at ncall={n_call_before:,}")
+                print(
+                    f"Calling run() at ncall={n_call_before:,} after "
+                    f"{time.time() - start_time:,.1f} s into the job"
+                )
                 print(80 * "-" + "\n\n")
 
             # Run for a given number of likelihood evaluations
