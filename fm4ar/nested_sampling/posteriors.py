@@ -36,7 +36,7 @@ def load_posterior(
     if sampler_type is None:
         try:
             config = load_config(experiment_dir)
-        except FileNotFoundError as e:
+        except FileNotFoundError as e:  # pragma: no cover
             raise RuntimeError("Could not determine the sampler type!") from e
         sampler_type = config.sampler.library
 
