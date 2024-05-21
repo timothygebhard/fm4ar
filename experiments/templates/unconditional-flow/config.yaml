@@ -44,7 +44,6 @@ training:
       factor: 0.5
       patience: 10
       min_lr: 5.0e-8
-  train_fraction: 0.95
 
 # HTCondor settings
 htcondor:
