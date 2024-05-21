@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from yaml import safe_load
 
 from fm4ar.utils.htcondor import HTCondorConfig
+from fm4ar.training.stages import StageConfig
 
 
 class InputFileConfig(BaseModel):
@@ -74,7 +75,7 @@ class UnconditionalFlowConfig(BaseModel):
         ...,
         description="Configuration for the scaler for `theta`.",
     )
-    training: dict[str, Any] = Field(
+    training: StageConfig = Field(
         ...,
         description="Configuration for the training.",
     )
