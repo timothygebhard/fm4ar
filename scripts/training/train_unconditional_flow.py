@@ -82,9 +82,8 @@ def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
             experiment_dir = input_file.file_path.parent
             samples, weights = load_posterior(experiment_dir=experiment_dir)
             weights = weights / weights.sum()
-            samples = samples[: input_file.n_samples]
-            weights = weights[: input_file.n_samples]
             samples = resample_equal(samples, weights)
+            samples = samples[: input_file.n_samples]
         elif input_file.file_type == "ml":
             with h5py.File(input_file.file_path, "r") as f:
                 samples = np.array(f["theta"][: input_file.n_samples])
@@ -383,8 +382,8 @@ def run_training_loop(config: UnconditionalFlowConfig) -> None:
                 {
                     "epoch": epoch,
                     "train_loss": avg_train_loss,
-                    "valid_loss": avg_valid_loss,
-                    "learning_rate": get_lr(optimizer),
+                    "test_loss": avg_valid_loss,
+                    "learning_rate": float(get_lr(optimizer)[0]),
                 }
             )
 
