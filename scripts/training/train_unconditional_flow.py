@@ -39,6 +39,10 @@ from fm4ar.unconditional_flow.config import (
 )
 
 
+# FIXME: The train fraction should probably not be hard-coded
+TRAIN_FRACTION = 0.95
+
+
 def get_cli_arguments() -> argparse.Namespace:
     """
     Get command line arguments.
@@ -149,7 +153,7 @@ def prepare_data(
 
     # Split into training and validation
     print("Splitting into training and validation...", end=" ", flush=True)
-    n = int(len(samples) * config.training["train_fraction"])
+    n = int(len(samples) * TRAIN_FRACTION)
     theta_train = samples[:n]
     theta_valid = samples[n:]
     print("Done!")
@@ -158,7 +162,7 @@ def prepare_data(
     print("Creating dataloaders...", end=" ", flush=True)
     train_loader = DataLoader(
         dataset=TensorDataset(theta_train),
-        batch_size=config.training["batch_size"],
+        batch_size=config.training.batch_size,
         shuffle=True,
         drop_last=True,
         num_workers=get_number_of_available_cores(),
@@ -166,7 +170,7 @@ def prepare_data(
     )
     valid_loader = DataLoader(
         dataset=TensorDataset(theta_valid),
-        batch_size=config.training["batch_size"],
+        batch_size=config.training.batch_size,
         shuffle=False,
         drop_last=False,
         num_workers=get_number_of_available_cores(),
@@ -201,11 +205,11 @@ def prepare_model_optimizer_scheduler(
     print("Creating optimizer and LR scheduler...", end=" ", flush=True)
     optimizer = get_optimizer_from_config(
         model_parameters=model.parameters(),
-        optimizer_config=config.training["optimizer"],
+        optimizer_config=config.training.optimizer,
     )
     scheduler = get_scheduler_from_config(
         optimizer=optimizer,
-        scheduler_config=config.training["scheduler"],
+        scheduler_config=config.training.scheduler,
     )
     print("Done!\n\n")
 
@@ -354,7 +358,7 @@ def run_training_loop(config: UnconditionalFlowConfig) -> None:
 
     # Train the model for the specified number of epochs
     print("Running training:\n")
-    for epoch in range(config.training["epochs"]):
+    for epoch in range(config.training.epochs):
 
         # Train and validate the model
         avg_train_loss = train_epoch(
