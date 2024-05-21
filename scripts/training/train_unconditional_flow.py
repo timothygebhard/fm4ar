@@ -31,7 +31,7 @@ from fm4ar.torchutils.schedulers import (
     get_scheduler_from_config,
     perform_scheduler_step,
 )
-from fm4ar.torchutils.optimizers import get_optimizer_from_config
+from fm4ar.torchutils.optimizers import get_lr, get_optimizer_from_config
 from fm4ar.unconditional_flow.config import (
     InputFileConfig,
     UnconditionalFlowConfig,
@@ -379,6 +379,7 @@ def run_training_loop(config: UnconditionalFlowConfig) -> None:
                     "epoch": epoch,
                     "train_loss": avg_train_loss,
                     "valid_loss": avg_valid_loss,
+                    "learning_rate": get_lr(optimizer),
                 }
             )
 
