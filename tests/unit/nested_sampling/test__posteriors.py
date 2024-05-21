@@ -16,6 +16,9 @@ def test__load_posterior(tmp_path: Path) -> None:
 
     # This tests only the trivial bits; the rest is tested in the tests of
     # the samplers themselves
-    with pytest.raises(RuntimeError) as runtime_error:
-        load_posterior(experiment_dir=tmp_path)
-    assert "Could not determine the sampler type!" in str(runtime_error)
+    with pytest.raises(ValueError) as value_error:
+        load_posterior(
+            experiment_dir=tmp_path,
+            sampler_type="invalid",  # type: ignore
+        )
+    assert "Invalid `sampler_type`: invalid" in str(value_error)
