@@ -2,6 +2,8 @@
 Train an unconditional normalizing flow on the combined samples from
 different methods (nested sampling, FMPE, NPE). This can be used to
 obtain a reference posterior.
+For the time being, this script provides a rather simple training loop,
+without advanced features like automatic restarts to limit the runtime.
 """
 
 import argparse
@@ -11,19 +13,51 @@ from pathlib import Path
 import h5py
 import numpy as np
 import torch
+import wandb
+from dynesty.utils import resample_equal
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from fm4ar.datasets.theta_scalers import get_theta_scaler
 from fm4ar.nested_sampling.posteriors import load_posterior
 from fm4ar.nn.flows import create_unconditional_flow_wrapper
+from fm4ar.utils.htcondor import (
+    create_submission_file,
+    condor_submit_bid,
+)
 from fm4ar.utils.multiproc import get_number_of_available_cores
 from fm4ar.torchutils.schedulers import (
+    Scheduler,
     get_scheduler_from_config,
     perform_scheduler_step,
 )
 from fm4ar.torchutils.optimizers import get_optimizer_from_config
-from fm4ar.unconditional_flow.config import InputFileConfig, load_config
+from fm4ar.unconditional_flow.config import (
+    InputFileConfig,
+    UnconditionalFlowConfig,
+    load_config,
+)
+
+
+def get_cli_arguments() -> argparse.Namespace:
+    """
+    Get command line arguments.
+    """
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--experiment-dir",
+        type=Path,
+        required=True,
+        help="Path to the experiment directory.",
+    )
+    parser.add_argument(
+        "--start-submission",
+        action="store_true",
+        help="Create submit file and launch training as an HTCondor job.",
+    )
+    args = parser.parse_args()
+    return args
 
 
 def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
@@ -42,8 +76,10 @@ def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
         # samples from FMPE or NPE (which we can load using `h5py`).
         if input_file.file_type == "ns":
             experiment_dir = input_file.file_path.parent
-            samples, _ = load_posterior(experiment_dir=experiment_dir)
+            samples, weights = load_posterior(experiment_dir=experiment_dir)
             samples = samples[: input_file.n_samples]
+            weights = weights[: input_file.n_samples]
+            samples = resample_equal(samples, weights)
         elif input_file.file_type == "ml":
             with h5py.File(input_file.file_path, "r") as f:
                 samples = np.array(f["theta"][: input_file.n_samples])
@@ -59,35 +95,44 @@ def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
     return torch.from_numpy(samples).float()
 
 
-if __name__ == "__main__":
+def prepare_and_launch_job(
+    args: argparse.Namespace,
+    config: UnconditionalFlowConfig,
+) -> None:
+    """
+    Prepare and launch the job as an HTCondor job.
+    """
 
-    # -------------------------------------------------------------------------
-    # Preliminaries
-    # -------------------------------------------------------------------------
+    # Create a directory for the logs
+    log_dir = args.experiment_dir / "logs"
+    log_dir.mkdir(exist_ok=True)
 
-    script_start = time.time()
-    print("\nTRAIN UNCONDITIONAL NORMALIZING FLOW\n")
+    # Collect the arguments for the job
+    htcondor_config = config.htcondor.copy()
+    htcondor_config.arguments = [
+        Path(__file__).as_posix(),
+        f"--experiment-dir {args.experiment_dir}",
+    ]
 
-    # Get command line arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--experiment-dir",
-        type=Path,
-        required=True,
-        help="Path to the experiment directory.",
+    # Create the submit file
+    file_path = create_submission_file(
+        htcondor_config=htcondor_config,
+        experiment_dir=args.experiment_dir,
     )
-    args = parser.parse_args()
 
-    # Load (and validate) the configuration file
-    config = load_config(experiment_dir=args.experiment_dir)
+    # Submit the job
+    condor_submit_bid(
+        file_path=file_path,
+        bid=htcondor_config.bid,
+    )
 
-    # Get the device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}\n")
 
-    # -------------------------------------------------------------------------
-    # Prepare training
-    # -------------------------------------------------------------------------
+def prepare_data(
+    config: UnconditionalFlowConfig,
+) -> tuple[DataLoader, DataLoader, torch.Tensor]:
+    """
+    Load samples and create dataloaders for training and validation.
+    """
 
     # Load combined samples and shuffle them
     print("Loading samples:", flush=True)
@@ -128,10 +173,22 @@ if __name__ == "__main__":
     )
     print("Done!\n")
 
+    return train_loader, valid_loader, samples
+
+
+def prepare_model_optimizer_scheduler(
+    config: UnconditionalFlowConfig,
+    dim_theta: int,
+    device: torch.device,
+) -> tuple[torch.nn.Module, torch.optim.Optimizer, Scheduler]:
+    """
+    Prepare the model, optimizer, and scheduler.
+    """
+
     # Create the flow (with default settings)
     print("Creating the unconditional flow...", end=" ", flush=True)
     model = create_unconditional_flow_wrapper(
-        dim_theta=samples.shape[1],
+        dim_theta=dim_theta,
         flow_wrapper_config=config.model.flow_wrapper,
     )
     model.to(device)
@@ -151,89 +208,184 @@ if __name__ == "__main__":
     )
     print("Done!\n\n")
 
+    return model, optimizer, scheduler
+
+
+def prepare_wandb(
+    args: argparse.Namespace,
+    config: UnconditionalFlowConfig,
+) -> bool:
+    """
+    Initialize Weights & Biases and define metrics, if desired.
+    """
+
+    # Pop the `enable` key from the configuration
+    use_wandb = bool(config.wandb.pop("enable", True))
+
+    # Initialize Weights & Biases and define metrics, if desired
+    if use_wandb:
+        wandb.init(
+            config=config.model.dict(),
+            dir=args.experiment_dir,
+            **config.wandb,
+        )
+        wandb.define_metric("epoch")
+        wandb.define_metric("*", step_metric="epoch")
+
+    return use_wandb
+
+
+def train_epoch(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: Scheduler,
+    train_loader: torch.utils.data.DataLoader,
+    device: torch.device,
+    epoch: int,
+) -> float:
+    """
+    Train the model for one epoch.
+    """
+
+    model.train()
+    training_losses = []
+
+    with tqdm(
+        iterable=train_loader,
+        ncols=80,
+        desc=f"[Train]    Epoch {epoch:4d}",
+    ) as progressbar:
+
+        for batch in progressbar:
+
+            theta = batch[0].to(device, non_blocking=True)
+            optimizer.zero_grad()
+            loss = -model.log_prob(theta=theta).mean()
+
+            if ~(torch.isnan(loss) | torch.isinf(loss)):
+                loss.backward()
+                optimizer.step()
+                training_losses.append(loss.item())
+                progressbar.set_postfix(loss=loss.item())
+
+                perform_scheduler_step(
+                    scheduler=scheduler,
+                    end_of="batch",
+                    loss=loss.item(),
+                )
+
+        avg_train_loss = float(np.mean(training_losses))
+        progressbar.set_postfix(loss=avg_train_loss)
+
+    return avg_train_loss
+
+
+def valid_epoch(
+    model: torch.nn.Module,
+    scheduler: Scheduler,
+    valid_loader: torch.utils.data.DataLoader,
+    device: torch.device,
+    epoch: int,
+) -> float:
+    """
+    Perform a single validation epoch.
+    """
+
+    model.eval()
+    valid_losses = []
+
+    with tqdm(
+        iterable=valid_loader,
+        ncols=80,
+        desc=f"[Validate] Epoch {epoch:4d}",
+    ) as progressbar:
+
+        for batch in progressbar:
+
+            theta = batch[0].to(device, non_blocking=True)
+            with torch.no_grad():
+                loss = -model.log_prob(theta=theta).mean()
+
+            if ~(torch.isnan(loss) | torch.isinf(loss)):
+                valid_losses.append(loss.item())
+                progressbar.set_postfix(loss=loss.item())
+            else:
+                print("NaN or Inf loss encountered!", flush=True)
+
+        avg_valid_loss = float(np.mean(valid_losses))
+        progressbar.set_postfix(loss=avg_valid_loss)
+
+    # Perform a scheduler step (for ReduceLROnPlateau scheduler)
+    perform_scheduler_step(
+        scheduler=scheduler,
+        end_of="epoch",
+        loss=avg_valid_loss,
+    )
+
+    return avg_valid_loss
+
+
+def run_training_loop(config: UnconditionalFlowConfig) -> None:
+    """
+    Run the training loop.
+    """
+
+    # Set up Weights & Biases, if desired
+    use_wandb = prepare_wandb(args=args, config=config)
+
+    # Get the device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}\n")
+
+    # Load the data and prepare the dataloaders
+    train_loader, valid_loader, samples = prepare_data(config=config)
+    dim_theta = samples.shape[1]
+
+    # Prepare the model, optimizer, and scheduler
+    model, optimizer, scheduler = prepare_model_optimizer_scheduler(
+        config=config,
+        dim_theta=dim_theta,
+        device=device,
+    )
+
     # Keep track of the best model
     best_loss = np.inf
 
-    # -------------------------------------------------------------------------
-    # Train the flow
-    # -------------------------------------------------------------------------
-
+    # Train the model for the specified number of epochs
     print("Running training:\n")
     for epoch in range(config.training["epochs"]):
 
-        # ---------------------------------------------------------------------
-        # Train the model
-        # ---------------------------------------------------------------------
-
-        model.train()
-        training_losses = []
-
-        with tqdm(
-            iterable=train_loader,
-            ncols=80,
-            desc=f"[Train]    Epoch {epoch:4d}",
-        ) as progressbar:
-
-            for batch in progressbar:
-
-                theta = batch[0].to(device, non_blocking=True)
-                optimizer.zero_grad()
-                loss = -model.log_prob(theta=theta).mean()
-
-                if ~(torch.isnan(loss) | torch.isinf(loss)):
-                    loss.backward()  # type: ignore
-                    optimizer.step()
-                    training_losses.append(loss.item())
-                    progressbar.set_postfix(loss=loss.item())
-
-                    perform_scheduler_step(
-                        scheduler=scheduler,
-                        end_of="batch",
-                        loss=loss.item(),
-                    )
-
-            avg_train_loss = float(np.mean(training_losses))
-            progressbar.set_postfix(loss=avg_train_loss)
-
-        # ---------------------------------------------------------------------
-        # Validate the model
-        # ---------------------------------------------------------------------
-
-        model.eval()
-        test_losses = []
-
-        with tqdm(
-            iterable=valid_loader,
-            ncols=80,
-            desc=f"[Validate] Epoch {epoch:4d}",
-        ) as progressbar:
-
-            for batch in progressbar:
-
-                theta = batch[0].to(device, non_blocking=True)
-                loss = -model.log_prob(theta=theta).mean()
-
-                if ~(torch.isnan(loss) | torch.isinf(loss)):
-                    test_losses.append(loss.item())
-                    progressbar.set_postfix(loss=loss.item())
-
-            avg_test_loss = float(np.mean(test_losses))
-            progressbar.set_postfix(loss=avg_test_loss)
-
-        perform_scheduler_step(
+        # Train and validate the model
+        avg_train_loss = train_epoch(
+            model=model,
+            optimizer=optimizer,
             scheduler=scheduler,
-            end_of="epoch",
-            loss=avg_test_loss,
+            train_loader=train_loader,
+            device=device,
+            epoch=epoch,
         )
-        print()
+        avg_valid_loss = valid_epoch(
+            model=model,
+            scheduler=scheduler,
+            valid_loader=valid_loader,
+            device=device,
+            epoch=epoch,
+        )
 
-        # ---------------------------------------------------------------------
-        # Save the model
-        # ---------------------------------------------------------------------
+        # Log everything to Weights & Biases, if desired
+        if use_wandb:
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "train_loss": avg_train_loss,
+                    "valid_loss": avg_valid_loss,
+                }
+            )
 
-        if avg_test_loss < best_loss:
+        # Save a checkpoint of the best model, if applicable
+        if avg_valid_loss < best_loss:
             print("Saving best model...", end=" ", flush=True)
-            best_loss = avg_test_loss
+            best_loss = avg_valid_loss
             file_path = args.experiment_dir / "model__best.pt"
             torch.save(
                 {
@@ -249,5 +401,21 @@ if __name__ == "__main__":
             print("Done!")
 
         print()
+
+
+if __name__ == "__main__":
+
+    script_start = time.time()
+    print("\nTRAIN UNCONDITIONAL NORMALIZING FLOW\n")
+
+    # Get command line arguments and load the configuration file
+    args = get_cli_arguments()
+    config = load_config(experiment_dir=args.experiment_dir)
+
+    # Either prepare and launch the job as an HTCondor job, or train model
+    if args.start_submission:
+        prepare_and_launch_job(args=args, config=config)
+    else:
+        run_training_loop(config=config)
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")

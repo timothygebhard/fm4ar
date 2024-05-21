@@ -8,6 +8,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from yaml import safe_load
 
+from fm4ar.utils.htcondor import HTCondorConfig
+
 
 class InputFileConfig(BaseModel):
     """
@@ -75,6 +77,14 @@ class UnconditionalFlowConfig(BaseModel):
     training: dict[str, Any] = Field(
         ...,
         description="Configuration for the training.",
+    )
+    htcondor: HTCondorConfig = Field(
+        ...,
+        description="Configuration for HTCondor.",
+    )
+    wandb: dict[str, Any] = Field(
+        ...,
+        description="Configuration for Weights & Biases.",
     )
 
 
