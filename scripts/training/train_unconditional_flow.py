@@ -77,6 +77,7 @@ def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
         if input_file.file_type == "ns":
             experiment_dir = input_file.file_path.parent
             samples, weights = load_posterior(experiment_dir=experiment_dir)
+            weights = weights / weights.sum()
             samples = samples[: input_file.n_samples]
             weights = weights[: input_file.n_samples]
             samples = resample_equal(samples, weights)
