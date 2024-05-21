@@ -9,6 +9,7 @@ Note: This script probably needs a GPU to run in a reasonable time.
 import argparse
 import time
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -119,7 +120,10 @@ if __name__ == "__main__":
     print("Done!")
 
     # Set tolerance of ODE solver (for FMPE models)
-    model_kwargs = {} if isinstance(model, NPEModel) else {"tolerance": 1e-4}
+    model_kwargs: dict[str, Any] = (
+        {} if isinstance(model, NPEModel)
+        else {"tolerance": 1e-4}
+    )
 
     # Define chunk sizes
     n_samples = samples.shape[0]
