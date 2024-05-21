@@ -76,7 +76,7 @@ class HTCondorConfig(BaseModel):
         ),
     )
     log_file_name: str = Field(
-        default="info",
+        default="log",
         description="Base name for the log files.",
     )
     queue: int = Field(
