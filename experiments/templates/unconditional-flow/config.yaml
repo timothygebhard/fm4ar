@@ -45,3 +45,17 @@ training:
       patience: 10
       min_lr: 5.0e-8
   train_fraction: 0.95
+
+# HTCondor settings
+htcondor:
+  bid: 50
+  n_cpus: 8
+  n_gpus: 1
+  memory_cpus: 200_000
+  gpu_type: "H100"
+
+# Settings for Weights & Biases
+wandb:
+  enable: true
+  project: "fm4ar"
+  group: "unconditional-flow"
