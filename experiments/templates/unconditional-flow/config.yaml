@@ -1,3 +1,6 @@
+# Overall random seed
+random_seed: 42
+
 # List of HDF files to use for training
 input_files:
   - file_path: "..."
@@ -31,19 +34,18 @@ theta_scaler:
 
 # Training settings
 training:
+  add_noise: null
   batch_size: 32_768
   epochs: 1000
   optimizer:
     type: "AdamW"
     kwargs:
-      lr: 5.0e-4
-  random_seed: 42
+      lr: 1.0e-4
   scheduler:
-    type: "ReduceLROnPlateau"
+    type: "CosineAnnealingLR"
     kwargs:
-      factor: 0.5
-      patience: 10
-      min_lr: 5.0e-8
+      T_max: 1000
+  train_fraction: 0.95
 
 # HTCondor settings
 htcondor:

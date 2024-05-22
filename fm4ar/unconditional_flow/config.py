@@ -8,8 +8,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from yaml import safe_load
 
+from fm4ar.torchutils.optimizers import OptimizerConfig
+from fm4ar.torchutils.schedulers import SchedulerConfig
 from fm4ar.utils.htcondor import HTCondorConfig
-from fm4ar.training.stages import StageConfig
 
 
 class InputFileConfig(BaseModel):
@@ -58,11 +59,52 @@ class ModelConfig(BaseModel):
     )
 
 
+class TrainingConfig(BaseModel):
+    """
+    Parser class for the training configuration.
+    This is a simplified version of the `StageConfig` class that is
+    used for training FMPE and NPE models, because we do not need all
+    of its options (e.g., `data_transforms` or `logprob_epochs`) and
+    have a few additional options (e.g., `train_fraction`).
+    """
+
+    add_noise: float | None = Field(
+        default=None,
+        description="Standard deviation of the noise to add to the data.",
+    )
+    batch_size: int = Field(
+        ...,
+        description="Batch size for the stage.",
+    )
+    early_stopping: int = Field(
+        default=float("inf"),
+        description="Number of epochs to wait for early stopping.",
+    )
+    epochs: int = Field(
+        ...,
+        description="Number of epochs to train the model for.",
+    )
+    gradient_clipping: float | None = Field(
+        default=1.0,
+        description="Gradient clipping threshold (on L2 norm).",
+    )
+    optimizer: OptimizerConfig
+    scheduler: SchedulerConfig
+    train_fraction: float = Field(
+        default=0.95,
+        description="Fraction of the samples to use for training.",
+    )
+
+
 class UnconditionalFlowConfig(BaseModel):
     """
     Parser class for the general unconditional flow configuration.
     """
 
+    random_seed: int = Field(
+        default=42,
+        description="Random seed for reproducibility.",
+    )
     input_files: list[InputFileConfig] = Field(
         ...,
         description="List of input files to load samples from.",
@@ -75,7 +117,7 @@ class UnconditionalFlowConfig(BaseModel):
         ...,
         description="Configuration for the scaler for `theta`.",
     )
-    training: StageConfig = Field(
+    training: TrainingConfig = Field(
         ...,
         description="Configuration for the training.",
     )

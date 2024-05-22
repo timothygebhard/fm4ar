@@ -39,10 +39,6 @@ from fm4ar.unconditional_flow.config import (
 )
 
 
-# FIXME: The train fraction should probably not be hard-coded
-TRAIN_FRACTION = 0.95
-
-
 def get_cli_arguments() -> argparse.Namespace:
     """
     Get command line arguments.
@@ -150,9 +146,14 @@ def prepare_data(
     samples = scaler.forward_tensor(samples)
     print("Done!")
 
+    # Shuffle the samples
+    print("Shuffling the samples...", end=" ", flush=True)
+    samples = samples[torch.randperm(len(samples))]
+    print("Done!")
+
     # Split into training and validation
     print("Splitting into training and validation...", end=" ", flush=True)
-    n = int(len(samples) * TRAIN_FRACTION)
+    n = int(len(samples) * config.training.train_fraction)
     theta_train = samples[:n]
     theta_valid = samples[n:]
     print("Done!")
@@ -263,12 +264,23 @@ def train_epoch(
         for batch in progressbar:
 
             theta = batch[0].to(device, non_blocking=True)
+            if config.training.add_noise is not None:
+                noise = config.training.add_noise * torch.randn_like(theta)
+                theta = theta + noise
+
             optimizer.zero_grad()
             loss = -model.log_prob(theta=theta).mean()
 
             if ~(torch.isnan(loss) | torch.isinf(loss)):
+
                 loss.backward()
+                if config.training.gradient_clipping is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        parameters=model.parameters(),
+                        max_norm=config.training.gradient_clipping,
+                    )
                 optimizer.step()
+
                 training_losses.append(loss.item())
                 progressbar.set_postfix(loss=loss.item())
 
@@ -353,6 +365,7 @@ def run_training_loop(config: UnconditionalFlowConfig) -> None:
     )
 
     # Keep track of the best model
+    early_stopping_counter = 0
     best_loss = np.inf
 
     # Train the model for the specified number of epochs
@@ -390,6 +403,7 @@ def run_training_loop(config: UnconditionalFlowConfig) -> None:
         # Save a checkpoint of the best model, if applicable
         if avg_valid_loss < best_loss:
             print("Saving best model...", end=" ", flush=True)
+            early_stopping_counter = 0
             best_loss = avg_valid_loss
             file_path = args.experiment_dir / "model__best.pt"
             torch.save(
@@ -405,6 +419,12 @@ def run_training_loop(config: UnconditionalFlowConfig) -> None:
             )
             print("Done!")
 
+        # Handle early stopping
+        early_stopping_counter += 1
+        if early_stopping_counter >= config.training.early_stopping:
+            print("Early stopping criterion reached!")
+            break
+
         print()
 
 
@@ -416,6 +436,9 @@ if __name__ == "__main__":
     # Get command line arguments and load the configuration file
     args = get_cli_arguments()
     config = load_config(experiment_dir=args.experiment_dir)
+
+    # Set global random seed
+    torch.manual_seed(config.random_seed)
 
     # Either prepare and launch the job as an HTCondor job, or train model
     if args.start_submission:
