@@ -68,9 +68,14 @@ class TrainingConfig(BaseModel):
     have a few additional options (e.g., `train_fraction`).
     """
 
-    add_noise: float | None = Field(
+    add_noise: float | list[float] | None = Field(
         default=None,
-        description="Standard deviation of the noise to add to the data.",
+        description=(
+            "Standard deviation of the noise to add to the data:"
+            " 1. If a float, the same noise is added to all features. "
+            " 2. If a list of floats, each feature gets its own noise. "
+            " 3. If None, no noise is added."
+        ),
     )
     batch_size: int = Field(
         ...,

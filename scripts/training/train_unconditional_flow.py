@@ -245,6 +245,7 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     scheduler: Scheduler,
     train_loader: torch.utils.data.DataLoader,
+    dim_theta: int,
     device: torch.device,
     epoch: int,
 ) -> float:
@@ -255,6 +256,15 @@ def train_epoch(
     model.train()
     training_losses = []
 
+    # Prepare sigma for adding noise to the samples
+    if config.training.add_noise is None:
+        sigma = torch.zeros(dim_theta)
+    elif isinstance(config.training.add_noise, float):
+        sigma = config.training.add_noise * torch.ones(dim_theta)
+    else:
+        sigma = torch.tensor(config.training.add_noise)
+    sigma = sigma.float().to(device, non_blocking=True)
+
     with tqdm(
         iterable=train_loader,
         ncols=80,
@@ -264,9 +274,7 @@ def train_epoch(
         for batch in progressbar:
 
             theta = batch[0].to(device, non_blocking=True)
-            if config.training.add_noise is not None:
-                noise = config.training.add_noise * torch.randn_like(theta)
-                theta = theta + noise
+            theta = theta + sigma * torch.randn_like(theta)
 
             optimizer.zero_grad()
             loss = -model.log_prob(theta=theta).mean()
@@ -378,6 +386,7 @@ def run_training_loop(config: UnconditionalFlowConfig) -> None:
             optimizer=optimizer,
             scheduler=scheduler,
             train_loader=train_loader,
+            dim_theta=dim_theta,
             device=device,
             epoch=epoch,
         )
