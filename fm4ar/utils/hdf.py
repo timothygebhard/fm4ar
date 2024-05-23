@@ -22,8 +22,13 @@ def save_to_hdf(
         kwargs: Arrays to save.
     """
 
-    with h5py.File(file_path, "w") as f:
-        for key, value in kwargs.items():
+    # Ensure that the file exists and is empty
+    with h5py.File(file_path, "w") as _:
+        pass
+
+    # Save the arrays to the HDF5 file (one by one)
+    for key, value in kwargs.items():
+        with h5py.File(file_path, "a") as f:
             f.create_dataset(name=key, data=value, dtype=value.dtype)
 
 
