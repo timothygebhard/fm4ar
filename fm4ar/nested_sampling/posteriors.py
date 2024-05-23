@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from fm4ar.nested_sampling.config import load_config
+from fm4ar.utils.hdf import load_from_hdf
 from fm4ar.utils.misc import suppress_output
 
 
@@ -18,10 +19,26 @@ SAMPLER_TYPE = Literal["nautilus", "dynesty", "multinest", "ultranest"]
 
 def load_posterior(
     experiment_dir: Path,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load the posterior samples and weights from a directory using the
+    new, unified format for all samplers.
+    """
+
+    results = load_from_hdf(
+        file_path=experiment_dir / "posterior.hdf",
+        keys=["samples", "weights"],
+    )
+    return results["samples"], results["weights"]
+
+
+def load_old_posterior(
+    experiment_dir: Path,
     sampler_type: SAMPLER_TYPE | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Load the posterior samples and weights from a directory.
+    Load the posterior samples and weights from a directory for
+    nested sampling runs using the *old* format.
 
     Args:
         experiment_dir: Path to the experiment directory.
