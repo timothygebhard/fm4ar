@@ -271,7 +271,7 @@ if __name__ == "__main__":
 
     # Run the sampler until the maximum runtime is reached
     log("\n\nRunning sampler:\n")
-    runtime = sampler.run(
+    sampler.run(
         max_runtime=config.sampler.max_runtime,
         verbose=True,
         run_kwargs=config.sampler.run_kwargs,
@@ -282,12 +282,6 @@ if __name__ == "__main__":
     # after this point will cause the MultiNest sampler to hang indefinitely.
     # This also applies to operations like `comm.allgather()` that could be
     # used to synchronize the `complete` flag across all processes.
-
-    # Store the runtime of the sampler
-    # We do this only once, on the "root" process, to avoid having multiple
-    # processes write to the same file at the same time
-    if rank == 0:
-        sampler.save_runtime(runtime=runtime)
 
     # Determine the exit code: 42 means "hold and restart the job"
     exit_code = 0 if sampler.complete else 42
@@ -303,7 +297,7 @@ if __name__ == "__main__":
 
         log("Creating plot...", end=" ")
         create_posterior_plot(
-            points=np.array(sampler.points),
+            samples=np.array(sampler.samples),
             weights=np.array(sampler.weights),
             names=np.array(prior.labels)[infer_mask],
             extents=(
