@@ -105,17 +105,17 @@ def test__samplers(
     sampler.save_results()
 
     # Get the points and weights
-    points = sampler.points
+    samples = sampler.samples
     weights = sampler.weights
-    assert points is not None
+    assert samples is not None
     assert weights is not None
 
     # Check that the posterior mean is close to the expected mean
-    assert np.isclose(np.mean(points), expected_mean)
+    assert np.isclose(np.mean(samples), expected_mean)
 
     # Check that we can load the points
-    loaded_points, loaded_weights = load_posterior(experiment_dir)
-    assert np.allclose(points, loaded_points)
+    loaded_samples, loaded_weights = load_posterior(experiment_dir)
+    assert np.allclose(samples, loaded_samples)
     assert np.allclose(weights, loaded_weights)
 
     # Check that we can compute the weighted average
@@ -124,7 +124,7 @@ def test__samplers(
 
     # Check that we can plot the result
     create_posterior_plot(
-        points=points,
+        samples=samples,
         weights=weights,
         names=["x", "y"],
         extents=(np.array([-5, -5]), np.array([5, 5])),
@@ -158,7 +158,7 @@ def test__samplers(
     sampler.cleanup()
     captured = capsys.readouterr()
     assert captured.err == ""
-    assert sampler.points is not None
+    assert sampler.samples is not None
     assert sampler.weights is not None
-    assert np.allclose(points, loaded_points)
+    assert np.allclose(samples, loaded_samples)
     assert np.allclose(weights, loaded_weights)

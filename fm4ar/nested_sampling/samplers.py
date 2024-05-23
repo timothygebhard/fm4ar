@@ -16,7 +16,9 @@ import dill
 import multiprocess
 import numpy as np
 
-from fm4ar.nested_sampling.posteriors import load_posterior
+from fm4ar.importance_sampling.utils import compute_effective_sample_size
+from fm4ar.utils.hdf import save_to_hdf
+from fm4ar.utils.misc import suppress_output
 from fm4ar.utils.multiproc import get_number_of_available_cores
 from fm4ar.utils.timeout import TimeoutException, timelimit
 
@@ -136,7 +138,7 @@ class Sampler(ABC):
 
     @property
     @abstractmethod
-    def points(self) -> np.ndarray:
+    def samples(self) -> np.ndarray:
         raise NotImplementedError  # pragma: no cover
 
     @property
@@ -144,13 +146,23 @@ class Sampler(ABC):
     def weights(self) -> np.ndarray:
         raise NotImplementedError  # pragma: no cover
 
+    @property
+    def total_runtime(self) -> float:
+        """
+        Get the total runtime of the sampler (in seconds) from the
+        `runtime.txt` file in the `run_dir`.
+        """
+
+        with open(self.run_dir / "runtime.txt", "r") as f:
+            return sum(float(line) for line in f)
+
     def get_weighted_posterior_mean(self) -> np.ndarray:
         """
         Get the weighted posterior mean.
         """
 
         return np.asarray(
-            np.average(self.points, weights=self.weights, axis=0)
+            np.average(self.samples, weights=self.weights, axis=0)
         )
 
 
@@ -251,8 +263,11 @@ class NautilusSampler(Sampler):
         if not self.complete:
             print("\nTimeout reached, stopping sampler!\n")
 
-        # Return the actual runtime
-        return time.time() - start_time
+        # Save the actual runtime of the sampler
+        runtime = time.time() - start_time
+        self.save_runtime(runtime)
+
+        return runtime
 
     def cleanup(self) -> None:
         for pool in (self.sampler.pool_l, self.sampler.pool_s):
@@ -260,12 +275,37 @@ class NautilusSampler(Sampler):
                 pool.close()
 
     def save_results(self) -> None:
-        points, log_w, log_l = self.sampler.posterior()
-        file_path = self.run_dir / "posterior.npz"
-        np.savez(file_path, points=points, log_w=log_w, log_l=log_l)
+        """
+        Save the results of the run to an HDF file.
+        """
+
+        # Get log-weights and log-likelihoods
+        _, log_w, log_l = self.sampler.posterior()
+
+        # Compute the uncertainty in the evidence
+        n_eff = self.sampler.n_eff
+        sampling_efficiency = self.sampler.eta
+        n = n_eff / sampling_efficiency
+        log_evidence_std = np.sqrt((n - n_eff) / (n * n_eff))
+
+        # Save posterior, plus some additional information
+        file_path = self.run_dir / "posterior.hdf"
+        save_to_hdf(
+            file_path=file_path,
+            samples=self.samples,
+            weights=self.weights,
+            log_w=log_w,
+            log_l=log_l,
+            log_evidence=np.array(self.sampler.log_z),
+            log_evidence_std=np.array(log_evidence_std),
+            effective_sample_size=np.array(n_eff),
+            sampling_efficiency=np.array(sampling_efficiency),
+            n_likelihood_calls=np.array(self.sampler.n_like),
+            total_runtime=np.array(self.total_runtime),
+        )
 
     @property
-    def points(self) -> np.ndarray:
+    def samples(self) -> np.ndarray:
         points, *_ = self.sampler.posterior()
         return np.array(points)
 
@@ -419,32 +459,66 @@ class DynestySampler(Sampler):
                 )
         except TimeoutException:
             print("\nTimeout reached, stopping sampler!\n")
-            return time.time() - start_time
+            runtime = time.time() - start_time
+            self.save_runtime(runtime)
+            return runtime
         except UserWarning as e:
             if "You are resuming a finished static run" in str(e):
                 self.complete = True
-                return time.time() - start_time
+                runtime = time.time() - start_time
+                self.save_runtime(runtime)
+                return runtime
             if "The sampling was stopped short due to maxiter" in str(e):
                 self.complete = True
-                return time.time() - start_time
+                runtime = time.time() - start_time
+                self.save_runtime(runtime)
+                return runtime
             else:  # pragma: no cover
                 raise e
         finally:
             warnings.resetwarnings()
 
         self.complete = True
-        return time.time() - start_time
+        runtime = time.time() - start_time
+        self.save_runtime(runtime)
+        return runtime
 
     def cleanup(self) -> None:
         self.pool.close()
 
     def save_results(self) -> None:
+        """
+        Save the results of the run to an HDF file (and a pickle file).
+        """
+
+        # Save full `sampler.results` as a pickle file
         file_path = self.run_dir / "posterior.pickle"
         with open(file_path, "wb") as handle:
             dill.dump(obj=self.sampler.results, file=handle)
 
+        # Compute sampling efficiency and effective sample size
+        n_eff, sampling_efficiency = compute_effective_sample_size(
+            weights=self.weights
+        )
+
+        # Save structured data to an HDF file
+        file_path = self.run_dir / "posterior.hdf"
+        save_to_hdf(
+            file_path=file_path,
+            samples=self.samples,
+            weights=self.weights,
+            log_w=self.sampler.results.logwt,
+            log_l=self.sampler.results.logl,
+            log_evidence=np.array(self.sampler.results.logz[-1]),
+            log_evidence_std=np.array(self.sampler.results.logzerr[-1]),
+            effective_sample_size=np.array(n_eff),
+            sampling_efficiency=np.array(sampling_efficiency),
+            n_likelihood_calls=np.array(np.sum(self.sampler.ncall)),
+            total_runtime=np.array(self.total_runtime),
+        )
+
     @property
-    def points(self) -> np.ndarray:
+    def samples(self) -> np.ndarray:
         return np.array(self.sampler.results.samples)
 
     @property
@@ -469,7 +543,7 @@ class MultiNestSampler(Sampler):
         sampler_kwargs: dict[str, Any] | None = None,
     ) -> None:
         """
-        Create a new `DynestySampler` instance.
+        Create a new `MultiNestSampler` instance.
 
         Given that the MultiNest sampler does not construct a `sampler`
         object, any `sampler_kwargs` will effectively be ignored. The
@@ -490,11 +564,17 @@ class MultiNestSampler(Sampler):
 
         # Handle caching of points and weights that need to be loaded from
         # the MultiNest output files (we only want to read them once)
-        self._points: np.ndarray
+        self._samples: np.ndarray
         self._weights: np.ndarray
-        self._points_and_weights_loaded = False
+        self._samples_and_weights_loaded = False
 
-        self.outputfiles_basename = (self.run_dir / "run").as_posix()
+        # Define base name for the output files created by MultiNest
+        self.outputfiles_basename = (self.run_dir / "multinest_").as_posix()
+
+        # Figure out the rank of the current process
+        from mpi4py import MPI
+        self.comm = MPI.COMM_WORLD
+        self.rank = self.comm.Get_rank()
 
     def run(
         self,
@@ -545,36 +625,86 @@ class MultiNestSampler(Sampler):
         else:
             self.complete = True
 
-        # Return the actual runtime
-        return time.time() - start_time
+        runtime = time.time() - start_time
+        if self.rank == 0:
+            self.save_runtime(runtime)
+
+        return runtime
 
     def cleanup(self) -> None:
         pass
 
     def save_results(self) -> None:
-        pass  # all results are saved automatically
-
-    def _load_points_and_weights(self) -> None:
         """
-        Load the points and weights from the MultiNest output files.
+        Save the results of the run to an HDF file.
         """
 
-        # Skip if we have already loaded the points and weights
-        if self._points_and_weights_loaded:
+        from pymultinest.analyse import Analyzer
+
+        # Load the log-evidence and the samples from the MultiNest output
+        with suppress_output():
+            analyzer = Analyzer(
+                n_params=self.n_dim,
+                outputfiles_basename=self.outputfiles_basename,
+            )
+            s = analyzer.get_stats()
+            log_evidence = s['nested sampling global log-evidence']
+            log_evidence_std = s['nested sampling global log-evidence error']
+
+        # Get the number of likelihood evaluations
+        # The number of likelihood evaluations is usually the second integer
+        # on the second line in the `resume.dat` file
+        with open(self.outputfiles_basename + "resume.dat", "r") as f:
+            lines = f.readlines()
+            n_likelihood_calls = int(lines[1].split()[1])
+
+        # Save structured data to an HDF file
+        file_path = self.run_dir / "posterior.hdf"
+        save_to_hdf(
+            file_path=file_path,
+            samples=self.samples,
+            weights=self.weights,
+            log_w=np.array([]),
+            log_l=np.array([]),
+            log_evidence=np.array(log_evidence),
+            log_evidence_std=np.array(log_evidence_std),
+            effective_sample_size=np.array(np.nan),
+            sampling_efficiency=np.array(np.nan),
+            n_likelihood_calls=np.array(n_likelihood_calls),
+            total_runtime=np.array(self.total_runtime),
+        )
+
+    def _load_samples_and_weights(self) -> None:
+        """
+        Load the samples and weights from the MultiNest output files.
+        """
+
+        # Skip if we have already loaded the samples and weights
+        if self._samples_and_weights_loaded:
             return
 
-        # Load the points and weights from the MultiNest output files
-        self._points, self._weights = load_posterior(self.run_dir)
-        self._points_and_weights_loaded = True
+        from pymultinest.analyse import Analyzer
+
+        # Load the samples and weights from the MultiNest output files
+        with suppress_output():
+            analyzer = Analyzer(
+                n_params=self.n_dim,
+                outputfiles_basename=self.outputfiles_basename,
+            )
+            samples = np.array(analyzer.get_equal_weighted_posterior()[:, :-1])
+            weights = np.ones(len(samples))
+
+        self._samples, self._weights = samples, weights
+        self._samples_and_weights_loaded = True
 
     @property
-    def points(self) -> np.ndarray:
-        self._load_points_and_weights()
-        return self._points
+    def samples(self) -> np.ndarray:
+        self._load_samples_and_weights()
+        return self._samples
 
     @property
     def weights(self) -> np.ndarray:
-        self._load_points_and_weights()
+        self._load_samples_and_weights()
         return self._weights
 
 
@@ -727,13 +857,20 @@ class UltraNestSampler(Sampler):
             # Check if we have converged
             if self.sampler.ncall == n_call_before:
                 self.complete = True
-                return time.time() - start_time
+                runtime = time.time() - start_time
+                if self.sampler.mpi_rank == 0:
+                    self.save_runtime(runtime)
+                return runtime
 
             # Check if the timeout is reached
             if time.time() - start_time > max_runtime:
                 print("Timeout reached, stopping sampler!", flush=True)
-                return time.time() - start_time
+                runtime = time.time() - start_time
+                if self.sampler.mpi_rank == 0:
+                    self.save_runtime(runtime)
+                return runtime
 
+            # If we are not done yet, continue running
             if self.sampler.mpi_rank == 0:
                 print(
                     "\nDid not reach stopping criterion, continuing...",
@@ -744,15 +881,33 @@ class UltraNestSampler(Sampler):
         pass
 
     def save_results(self) -> None:
-        file_path = self.run_dir / "posterior.npz"
-        np.savez(
-            file_path,
-            points=self.points,
+        """
+        Save the results of the run to an HDF file.
+        """
+
+        # Compute effective sample size and sampling efficiency
+        n_eff, sampling_efficiency = compute_effective_sample_size(
+            weights=self.sampler.results['weighted_samples']['weights'],
+        )
+
+        # Save structured data to an HDF file
+        file_path = self.run_dir / "posterior.hdf"
+        save_to_hdf(
+            file_path=file_path,
+            samples=self.samples,
             weights=self.weights,
+            log_w=self.sampler.results["weighted_samples"]["logw"],
+            log_l=self.sampler.results["weighted_samples"]["logl"],
+            log_evidence=np.array(self.sampler.results["logz"]),
+            log_evidence_std=np.array(self.sampler.results["logzerr"]),
+            effective_sample_size=np.array(n_eff),
+            sampling_efficiency=np.array(sampling_efficiency),
+            n_likelihood_calls=np.array(self.sampler.ncall),
+            total_runtime=np.array(self.total_runtime),
         )
 
     @property
-    def points(self) -> np.ndarray:
+    def samples(self) -> np.ndarray:
         return np.array(self.sampler.results["weighted_samples"]["points"])
 
     @property
