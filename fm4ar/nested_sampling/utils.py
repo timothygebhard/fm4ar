@@ -74,7 +74,7 @@ def get_parameter_masks(
 
 
 def create_posterior_plot(
-    points: np.ndarray,
+    samples: np.ndarray,
     weights: np.ndarray,
     names: Sequence[str],
     extents: tuple[np.ndarray, np.ndarray] | None,
@@ -98,16 +98,16 @@ def create_posterior_plot(
 
     # Construct data frame with samples. We need to drop the zero-weight
     # samples because the new version of ChainConsumer can't handle them...
-    samples = pd.DataFrame(
-        data=np.column_stack([points, weights]),
+    df = pd.DataFrame(
+        data=np.column_stack([samples, weights]),
         columns=list(names) + ["weight"],
     )
-    samples = samples[samples['weight'] > 0]
+    df = df[df['weight'] > 0]
 
     # Add a chain with the actual samples
     c.add_chain(
         Chain(
-            samples=samples,
+            samples=df,
             name="posterior",
         )
     )
