@@ -192,6 +192,9 @@ def validate_epoch(
     # Ensure that the neural net is in evaluation mode
     model.network.eval()
 
+    # Clear the cache to reduce out-of-memory errors
+    torch.cuda.empty_cache()
+
     # -------------------------------------------------------------------------
     # Compute validation loss
     # -------------------------------------------------------------------------
