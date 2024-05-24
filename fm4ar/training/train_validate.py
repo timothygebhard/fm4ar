@@ -233,6 +233,10 @@ def validate_epoch(
             loss_info.update(loss.item(), len(theta))
             loss_info.print_info(batch_idx)
 
+            # Explicitly delete the loss; otherwise we get a major memory
+            # leak on the GPU (at least for the NPE model)
+            del loss
+
     # Select the average validation loss
     avg_loss = loss_info.get_avg()
 
