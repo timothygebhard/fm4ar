@@ -65,7 +65,7 @@ class DefaultNoiseGenerator(NoiseGenerator):
         # Store constructor arguments and initialize the RNG
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
-        self.rng = np.random.RandomState(random_seed)
+        self.rng = np.random.default_rng(random_seed)
 
         # Check that the input parameters are valid
         if sigma_min < 0 or sigma_max < 0:
@@ -80,7 +80,7 @@ class DefaultNoiseGenerator(NoiseGenerator):
         sigma = self.rng.uniform(self.sigma_min, self.sigma_max)
 
         # Error bars are the same for all bins
-        error_bars = sigma * np.ones_like(wlen, dtype=np.float32)
+        error_bars = np.full(wlen.shape, sigma, dtype=np.float32)
 
         return error_bars
 
@@ -91,7 +91,8 @@ class DefaultNoiseGenerator(NoiseGenerator):
         """
 
         # Draw noise with mean 0 and standard deviation equal to `error_bars`
-        return self.rng.normal(loc=0, scale=error_bars).astype(np.float32)
+        # noinspection PyTypeChecker
+        return self.rng.normal(loc=0, scale=error_bars)
 
 
 def get_noise_generator(config: dict) -> NoiseGenerator:
