@@ -24,7 +24,7 @@ def test__default_noise_generator() -> None:
     error_bars = noise_generator.sample_error_bars(wlen=wlen)
     assert np.allclose(error_bars, 0.5 * np.ones(10))
     noise = noise_generator.sample_noise(error_bars=error_bars)
-    assert np.allclose(np.mean(noise), -0.18835558)
+    assert np.allclose(np.mean(noise), -0.1390516094475158)
 
     # Case 2: Random noise level
     noise_generator = DefaultNoiseGenerator(
@@ -36,7 +36,7 @@ def test__default_noise_generator() -> None:
     assert np.all(0.5 <= error_bars)
     assert np.all(error_bars <= 1.0)
     noise = noise_generator.sample_noise(error_bars=error_bars)
-    assert np.allclose(np.mean(noise), -0.2541489)
+    assert np.allclose(np.mean(noise), -0.03235029769558608)
 
     # Case 3: Invalid noise level
     with pytest.raises(ValueError) as value_error:

@@ -32,8 +32,8 @@ def test__add_noise() -> None:
 
     # Create a dummy input
     x = {
-        "wlen": np.linspace(0.95, 2.45, 100),
-        "flux": np.zeros(100),
+        "wlen": np.linspace(0.95, 2.45, 1000),
+        "flux": np.zeros(1000),
     }
 
     # Apply the forward transformation
@@ -47,8 +47,8 @@ def test__add_noise() -> None:
     assert np.allclose(y["wlen"], x["wlen"])
 
     # Ensure reproducibility (i.e., the same noise is added)
-    assert np.isclose(np.mean(y["flux"]), -0.03197121324948966)
-    assert np.isclose(np.std(y["flux"]), 1.0271166340887257)
+    assert np.isclose(np.mean(y["flux"]), -0.029255550721727204)
+    assert np.isclose(np.std(y["flux"]), 0.9886664718018733)
 
 
 def test__subsample() -> None:
