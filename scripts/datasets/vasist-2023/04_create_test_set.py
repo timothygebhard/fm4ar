@@ -6,6 +6,7 @@ import argparse
 import time
 
 import numpy as np
+from tqdm import tqdm
 
 from fm4ar.utils.hdf import save_to_hdf
 from fm4ar.datasets.vasist_2023.prior import Prior
@@ -81,36 +82,35 @@ if __name__ == "__main__":
 
     # Simulate spectra until the desired number of spectra is reached
     print("Generating test set:", flush=True)
-    while len(thetas) < args.n_spectra:
+    with tqdm(total=args.n_spectra, ncols=80) as progressbar:
+        while len(thetas) < args.n_spectra:
 
-        i = len(thetas) + 1
-        print(f"[{i:3d}] Simulating spectrum...", end=" ", flush=True)
+            # Sample parameters from the prior
+            theta = prior.sample()
 
-        # Sample parameters from the prior
-        theta = prior.sample()
+            # Simulate target spectrum
+            result = simulator(theta)
+            if result is None:
+                print("Failed!", flush=True)
+                continue
+            else:
+                wlen, flux = result
 
-        # Simulate target spectrum
-        result = simulator(theta)
-        if result is None:
-            print("Failed!", flush=True)
-            continue
-        else:
-            wlen, flux = result
+            # Add noise to the spectrum
+            sigma = rng.uniform(args.min_sigma, args.max_sigma)
+            noise = sigma * rng.standard_normal(size=flux.shape)
 
-        # Add noise to the spectrum
-        sigma = rng.uniform(args.min_sigma, args.max_sigma)
-        noise = sigma * rng.standard_normal(size=flux.shape)
+            # Add noise to the spectrum
+            noisy_flux = flux + noise
 
-        # Add noise to the spectrum
-        noisy_flux = flux + noise
+            # Store the results
+            thetas.append(theta)
+            fluxes.append(noisy_flux)
+            noises.append(noise)
+            sigmas.append(sigma)
 
-        # Store the results
-        thetas.append(theta)
-        fluxes.append(noisy_flux)
-        noises.append(noise)
-        sigmas.append(sigma)
-
-        print("Done!", flush=True)
+            # Update progress bar
+            progressbar.update(1)
 
     # Prepare the output directory
     output_dir = get_datasets_dir() / "vasist-2023" / "test"
