@@ -10,13 +10,14 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from fm4ar.utils.config import load_config as load_experiment_config
 from fm4ar.datasets.theta_scalers import get_theta_scaler
 from fm4ar.importance_sampling.config import ImportanceSamplingConfig
 from fm4ar.importance_sampling.target_spectrum import load_target_spectrum
 from fm4ar.models.build_model import build_model
 from fm4ar.nn.flows import create_unconditional_flow_wrapper
+from fm4ar.torchutils.general import set_random_seed
 from fm4ar.unconditional_flow.config import load_config as load_flow_config
+from fm4ar.utils.config import load_config as load_experiment_config
 
 
 def draw_proposal_samples(
@@ -143,10 +144,11 @@ def draw_samples_from_ml_model(
         random_seed: Random seed for the random number generator.
     """
 
-    # Fix the global seed. This is not ideal, but it seems that at least the
-    # libraries used for the NPE models do not provide a way to set the seed
-    # for the RNG for the model itself.
-    torch.manual_seed(random_seed)
+    # Fix the global seed for PyTorch.
+    # This is not ideal, but it seems that at least the libraries used for
+    # the NPE models do not provide a way to set the seed for the RNG for
+    # the model itself?
+    set_random_seed(random_seed)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_kwargs = {} if model_kwargs is None else model_kwargs
@@ -250,10 +252,11 @@ def draw_samples_from_unconditional_flow(
         random_seed: Random seed for the random number generator.
     """
 
-    # Fix the global seed. This is not ideal, but it seems that at least the
-    # libraries used for the NPE models do not provide a way to set the seed
-    # for the RNG for the model itself.
-    torch.manual_seed(random_seed)
+    # Fix the global seed for PyTorch.
+    # This is not ideal, but it seems that at least the libraries used for
+    # the NPE models do not provide a way to set the seed for the RNG for
+    # the model itself?
+    set_random_seed(random_seed)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
