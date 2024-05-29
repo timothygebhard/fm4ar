@@ -144,12 +144,6 @@ def draw_samples_from_ml_model(
         random_seed: Random seed for the random number generator.
     """
 
-    # Fix the global seed for PyTorch.
-    # This is not ideal, but it seems that at least the libraries used for
-    # the NPE models do not provide a way to set the seed for the RNG for
-    # the model itself?
-    set_random_seed(random_seed)
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_kwargs = {} if model_kwargs is None else model_kwargs
 
@@ -162,6 +156,14 @@ def draw_samples_from_ml_model(
     )
     model.network.eval()
     print("Done!")
+
+    # Fix the global seed for PyTorch.
+    # Note: This needs to happen *after* loading the model, because the model
+    # constructor will set the random seed itself (see `initialize_network()`).
+    # Clearly, this is all not very ideal, but it seems that at least the
+    # libraries used for the NPE models do not provide a way to set the seed
+    # for the RNG for the model itself but rely on the global state...
+    set_random_seed(random_seed)
 
     # Load experiment config and construct a standardizer for the data
     print("Creating standardizer...", end=" ")
@@ -252,12 +254,6 @@ def draw_samples_from_unconditional_flow(
         random_seed: Random seed for the random number generator.
     """
 
-    # Fix the global seed for PyTorch.
-    # This is not ideal, but it seems that at least the libraries used for
-    # the NPE models do not provide a way to set the seed for the RNG for
-    # the model itself?
-    set_random_seed(random_seed)
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load the unconditional flow config
@@ -286,6 +282,10 @@ def draw_samples_from_unconditional_flow(
     model.to(device)
     model.eval()
     print("Done!")
+
+    # Fix the global seed for PyTorch.
+    # See `draw_samples_from_ml_model()` for a more detailed explanation.
+    set_random_seed(random_seed)
 
     # Determine the chunk sizes: Every chunk should have `chunk_size` samples,
     # except for the last one, which may have fewer samples.
