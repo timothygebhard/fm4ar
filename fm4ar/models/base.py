@@ -52,7 +52,7 @@ class Base:
         config: dict | None = None,
         device: Literal["auto", "cpu", "cuda"] = "auto",
         load_training_info: bool = True,
-        random_seed: int | None = 42,
+        random_seed: int = 42,
     ) -> None:
         """
         Initialize a model for the posterior distribution.
