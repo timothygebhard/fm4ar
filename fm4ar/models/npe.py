@@ -11,6 +11,7 @@ from torch import nn as nn
 from fm4ar.models.base import Base
 from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.nn.flows import FlowWrapper, create_flow_wrapper
+from fm4ar.torchutils.general import set_random_seed
 # from fm4ar.utils.misc import freeze_args
 
 
@@ -28,9 +29,7 @@ class NPEModel(Base):
         """
 
         # Fix the random seed for reproducibility
-        torch.manual_seed(self.random_seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        set_random_seed(self.random_seed)
 
         # Create the NPE network
         self.network = create_npe_network(model_config=self.config["model"])

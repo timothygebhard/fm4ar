@@ -26,6 +26,7 @@ from fm4ar.utils.htcondor import (
     condor_submit_bid,
 )
 from fm4ar.utils.multiproc import get_number_of_available_cores
+from fm4ar.torchutils.general import set_random_seed
 from fm4ar.torchutils.schedulers import (
     Scheduler,
     get_scheduler_from_config,
@@ -447,7 +448,7 @@ if __name__ == "__main__":
     config = load_config(experiment_dir=args.experiment_dir)
 
     # Set global random seed
-    torch.manual_seed(config.random_seed)
+    set_random_seed(config.random_seed)
 
     # Either prepare and launch the job as an HTCondor job, or train model
     if args.start_submission:

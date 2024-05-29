@@ -12,6 +12,7 @@ from torchdiffeq import odeint
 from fm4ar.models.base import Base
 from fm4ar.nn.embedding_nets import create_embedding_net
 from fm4ar.nn.vectorfield_nets import create_vectorfield_net
+from fm4ar.torchutils.general import set_random_seed
 # from fm4ar.utils.misc import freeze_args
 from fm4ar.utils.shapes import validate_dims
 
@@ -77,9 +78,7 @@ class FMPEModel(Base):
         """
 
         # Fix the random seed for reproducibility
-        torch.manual_seed(self.random_seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        set_random_seed(self.random_seed)
 
         # Create the FMPE network
         self.network = create_fmpe_network(model_config=self.config["model"])
