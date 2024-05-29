@@ -92,7 +92,6 @@ if __name__ == "__main__":
             target_spectrum["noise"] = np.array(f["noise"][idx])
             target_spectrum["theta"] = np.array(f["theta"][idx])
             target_spectrum["sigma"] = np.array(f["sigma"][idx])
-            target_spectrum["snr"] = np.array(f["snr"][idx])
 
         # Create a new configuration
         config = deepcopy(base_config)
