@@ -118,8 +118,10 @@ if __name__ == "__main__":
 
     # Save target data to HDF file
     print("\nSaving results...", end=" ", flush=True)
-    file_name = f"default__R-{args.resolution}__seed-{args.random_seed}.hdf"
-    file_path = output_dir / file_name
+    file_path = (
+        output_dir
+        / f"test-default__R-{args.resolution}__seed-{args.random_seed}.hdf"
+    )
     save_to_hdf(
         file_path=file_path,
         wlen=wlen.reshape(1, -1),
