@@ -267,6 +267,14 @@ if __name__ == "__main__":
         samples = proposal_samples["samples"]
         log_prob_samples = proposal_samples["log_prob_samples"]
 
+        # Sanity check: Are there any duplicate samples? (This can happen if
+        # there are issues with setting the random seed for each proposal job)
+        n_duplicates = len(np.unique(samples, axis=0)) - len(samples)
+        if n_duplicates > 0:
+            raise ValueError(
+                f"Found {n_duplicates:,} duplicate samples in the proposal!"
+            )
+
         # Load the target spectrum
         target = load_target_spectrum(
             file_path=config.target_spectrum.file_path,
