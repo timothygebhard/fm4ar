@@ -101,3 +101,14 @@ def resolve_device(device: str) -> torch.device:
 
     # Otherwise, just return the device as specified
     return torch.device(device)
+
+
+def set_random_seed(seed: int) -> None:
+    """
+    Set the seed for all PyTorch-related random number generators.
+    """
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
