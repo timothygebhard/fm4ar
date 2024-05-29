@@ -42,7 +42,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n-spectra",
         type=int,
-        default=100,
+        default=1000,
         help="Number of spectra to simulate. Default: 1000.",
     )
     parser.add_argument(
