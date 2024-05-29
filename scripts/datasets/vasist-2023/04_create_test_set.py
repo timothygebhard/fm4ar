@@ -30,32 +30,32 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min-sigma",
         type=float,
-        default=0.06627,  # SNR = 20 for reference spectrum
-        help="Minimum value for the standard deviation of the noise.",
+        default=0.05,
+        help="Minimum value for the std of the noise. Default: 0.05.",
     )
     parser.add_argument(
         "--max-sigma",
         type=float,
-        default=0.26507,  # SNR = 5 for reference spectrum
-        help="Maximum value for the standard deviation of the noise.",
+        default=0.50,
+        help="Maximum value for the std of the noise. Default: 0.50.",
     )
     parser.add_argument(
         "--n-spectra",
         type=int,
         default=100,
-        help="Number of spectra to simulate.",
+        help="Number of spectra to simulate. Default: 1000.",
     )
     parser.add_argument(
         "--random-seed",
         type=int,
         default=42,
-        help="Random seed for reproducibility.",
+        help="Random seed for reproducibility. Default: 42.",
     )
     parser.add_argument(
         "--time-limit",
         type=int,
-        default=5,
-        help="Time limit for the simulation in seconds. Default: 5.",
+        default=10,
+        help="Time limit for the simulation in seconds. Default: 10.",
     )
     args = parser.parse_args()
 
@@ -78,7 +78,6 @@ if __name__ == "__main__":
     fluxes: list[np.ndarray] = []
     noises: list[np.ndarray] = []
     sigmas: list[float] = []
-    snrs: list[float] = []
 
     # Simulate spectra until the desired number of spectra is reached
     print("Generating test set:", flush=True)
@@ -102,14 +101,6 @@ if __name__ == "__main__":
         sigma = rng.uniform(args.min_sigma, args.max_sigma)
         noise = sigma * rng.standard_normal(size=flux.shape)
 
-        # Compute the SNR
-        snr = np.mean(flux) / sigma
-
-        # Skip spectra with SNR < 5 or SNR > 20
-        if snr < 5 or snr > 20:
-            print(f"Rejected! ({snr=:.3f})", flush=True)
-            continue
-
         # Add noise to the spectrum
         noisy_flux = flux + noise
 
@@ -118,9 +109,8 @@ if __name__ == "__main__":
         fluxes.append(noisy_flux)
         noises.append(noise)
         sigmas.append(sigma)
-        snrs.append(snr)
 
-        print(f"Done! ({snr=:.3f})", flush=True)
+        print("Done!", flush=True)
 
     # Prepare the output directory
     output_dir = get_datasets_dir() / "vasist-2023" / "test"
@@ -128,7 +118,7 @@ if __name__ == "__main__":
 
     # Save target data to HDF file
     print("\nSaving results...", end=" ", flush=True)
-    file_name = f"test__R-{args.resolution}.hdf"
+    file_name = f"default__R-{args.resolution}__seed-{args.random_seed}.hdf"
     file_path = output_dir / file_name
     save_to_hdf(
         file_path=file_path,
@@ -137,7 +127,6 @@ if __name__ == "__main__":
         noise=np.array(noises),
         theta=np.array(thetas),
         sigma=np.array(sigmas),
-        snr=np.array(snrs),
     )
     print("Done!")
 
