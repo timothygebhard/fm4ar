@@ -53,6 +53,10 @@ class MergeProposalSamplesConfig(BaseModel):
     Configuration for the "merge proposal samples" stage.
     """
 
+    delete_after_merge: bool = Field(
+        default=True,
+        description="Delete proposal sample HDF files after merge?",
+    )
     htcondor: HTCondorConfig
 
 
@@ -69,6 +73,10 @@ class MergeSimulationResultsConfig(BaseModel):
     Configuration for the "merge simulation results" stage.
     """
 
+    delete_after_merge: bool = Field(
+        default=True,
+        description="Delete simulation result HDF files after merge?",
+    )
     htcondor: HTCondorConfig
 
 

@@ -223,13 +223,14 @@ if __name__ == "__main__":
         print(80 * "-" + "\n", flush=True)
 
         print("Merging HDF files:", flush=True)
+        delete_after_merge = config.merge_proposal_samples.delete_after_merge
         merge_hdf_files(
             target_dir=working_dir,
             name_pattern="proposal-samples-*.hdf",
             output_file_path=working_dir / "proposal-samples.hdf",
             keys=["samples", "log_prob_samples"],
             singleton_keys=["log_prob_theta_true"],
-            delete_after_merge=True,
+            delete_after_merge=delete_after_merge,
             show_progressbar=True,
         )
         print("\n")
@@ -371,6 +372,7 @@ if __name__ == "__main__":
 
         # Merge the results from all simulation jobs
         print("Merging HDF files:")
+        delete_after_merge = config.merge_simulation_results.delete_after_merge
         merge_hdf_files(
             target_dir=working_dir, name_pattern="simulations-*.hdf",
             output_file_path=working_dir / "simulations.hdf",
@@ -382,7 +384,7 @@ if __name__ == "__main__":
                 "samples",
             ],
             singleton_keys=["log_prob_theta_true"],
-            delete_after_merge=True,
+            delete_after_merge=delete_after_merge,
             show_progressbar=True,
         )
         print()
