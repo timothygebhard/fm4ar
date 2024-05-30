@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--theta-mode",
         type=str,
-        default="gaussian",
+        default="default",
         choices=["default", "gaussian", "contracted"],
         help=(
             "Mode for sampling theta. There are three options available:"
