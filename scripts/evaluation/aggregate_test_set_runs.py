@@ -106,7 +106,6 @@ if __name__ == "__main__":
         "quantiles_with_is": [],
         "theta": [],
         "sigma": [],
-        "snr": [],
         "flux": [],
         "rank_with_is": [],
         "rank_without_is": [],
@@ -119,7 +118,6 @@ if __name__ == "__main__":
         # Read in the true parameter values
         with h5py.File(run_dir / "target_spectrum.hdf", "r") as f:
             sigma = float(np.array(f["sigma"]))
-            snr = float(np.array(f["snr"]))
             theta = np.array(f["theta"])
             flux = np.array(f["flux"])
 
@@ -185,7 +183,6 @@ if __name__ == "__main__":
         results["log_evidence_std"].append(log_evidence_std)
         results["theta"].append(theta)
         results["sigma"].append(sigma)
-        results["snr"].append(snr)
         results["flux"].append(flux)
         results["sampling_efficiency"].append(sampling_efficiency)
         results["quantiles_without_is"].append(quantiles_without_is)
