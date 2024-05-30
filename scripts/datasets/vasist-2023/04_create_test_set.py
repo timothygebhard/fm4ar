@@ -113,7 +113,7 @@ if __name__ == "__main__":
                 raise ValueError(f"Invalid theta mode: {args.theta_mode}")
 
             # Transform the random numbers to the parameter space
-            theta = prior.transform(u)
+            theta = prior.transform(u).astype(np.float32)
 
             # Simulate target spectrum
             result = simulator(theta)
@@ -123,9 +123,14 @@ if __name__ == "__main__":
             else:
                 wlen, flux = result
 
+            # Convert to float32
+            wlen = wlen.astype(np.float32)
+            flux = flux.astype(np.float32)
+
             # Add noise to the spectrum
             sigma = rng.uniform(args.min_sigma, args.max_sigma)
             noise = sigma * rng.standard_normal(size=flux.shape)
+            noise = noise.astype(np.float32)
 
             # Add noise to the spectrum
             noisy_flux = flux + noise
@@ -149,11 +154,11 @@ if __name__ == "__main__":
     file_path = output_dir / f"{prefix}__seed-{args.random_seed}.hdf"
     save_to_hdf(
         file_path=file_path,
-        wlen=wlen.reshape(1, -1),
-        flux=np.array(fluxes),
-        noise=np.array(noises),
-        theta=np.array(thetas),
-        sigma=np.array(sigmas),
+        wlen=wlen.reshape(1, -1).astype(np.float32),
+        flux=np.array(fluxes).astype(np.float32),
+        noise=np.array(noises).astype(np.float32),
+        theta=np.array(thetas).astype(np.float32),
+        sigma=np.array(sigmas).astype(np.float32),
     )
     print("Done!")
 
