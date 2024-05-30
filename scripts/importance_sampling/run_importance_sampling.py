@@ -126,6 +126,7 @@ def prepare_and_launch_dag(
         htcondor_config: HTCondorConfig = getattr(config, stage).htcondor
         htcondor_config.arguments = [
             Path(__file__).resolve().as_posix(),
+            f"--experiment-dir {args.experiment_dir}",
             f"--working-dir {args.working_dir}",
             f"--stage {stage}",
         ]
