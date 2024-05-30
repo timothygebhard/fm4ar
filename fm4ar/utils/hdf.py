@@ -34,7 +34,7 @@ def save_to_hdf(
 
 def load_from_hdf(
     file_path: Path,
-    keys: list[str],
+    keys: list[str] | None = None,
     idx: int | slice | np.ndarray | None = None,
 ) -> dict[str, np.ndarray]:
     """
@@ -42,8 +42,8 @@ def load_from_hdf(
 
     Args:
         file_path: Path to the HDF file.
-        keys: Keys of the arrays to load.
-        idx: Indices of the arrays to load.
+        keys: Keys of the arrays to load. If None, load all arrays.
+        idx: Indices of the arrays to load. If None, load all indices.
 
     Returns:
         data: Loaded arrays.
@@ -51,6 +51,8 @@ def load_from_hdf(
 
     data = {}
     with h5py.File(file_path, "r") as f:
+        if keys is None:
+            keys = sorted(list(f.keys()))
         for key in keys:
             if idx is None:
                 data[key] = np.array(f[key], dtype=f[key].dtype)
