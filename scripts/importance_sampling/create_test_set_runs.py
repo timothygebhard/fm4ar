@@ -26,10 +26,13 @@ def get_cli_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--base-name",
-        type=str,
-        default="base.yaml",
-        help="Name of the base configuration file."
+        "--base-config-path",
+        type=Path,
+        required=True,
+        help=(
+            "Path to the base configuration file. The run directories will "
+            "be created in the same directory as this file."
+        )
     )
     parser.add_argument(
         "--end-idx",
@@ -75,9 +78,9 @@ if __name__ == "__main__":
     # Get path to launch script
     launch_script = Path(__file__).parent / "run_importance_sampling.py"
 
-    # Load the base configuration
-    importance_sampling_dir = Path(args.experiment_dir / "importance_sampling")
-    base_config = load_config(importance_sampling_dir, name=args.base_name)
+    # Load the base configuration and get directory for the runs
+    base_config = load_config(args.base_config_path)
+    runs_dir = args.base_config_path.parent
 
     # Loop over indices
     for idx in range(args.start_idx, args.end_idx + 1):
@@ -101,7 +104,7 @@ if __name__ == "__main__":
 
         # Create the directory for the run
         target_stem = args.target_file_path.stem
-        run_dir = importance_sampling_dir / f"{target_stem}__idx-{idx:04d}"
+        run_dir = runs_dir / f"{target_stem}__idx-{idx:04d}"
         run_dir.mkdir(exist_ok=True)
 
         # Save the configuration
