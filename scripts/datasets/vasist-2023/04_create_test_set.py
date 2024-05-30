@@ -9,7 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 from fm4ar.utils.hdf import save_to_hdf
-from fm4ar.datasets.vasist_2023.prior import Prior
+from fm4ar.datasets.vasist_2023.prior import Prior, THETA_0
 from fm4ar.datasets.vasist_2023.simulator import Simulator
 from fm4ar.utils.paths import get_datasets_dir
 
@@ -21,6 +21,21 @@ if __name__ == "__main__":
 
     # Get command line arguments
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--theta-mode",
+        type=str,
+        default="gaussian",
+        choices=["default", "gaussian", "contracted"],
+        help=(
+            "Mode for sampling theta. There are three options available:"
+            "  1. 'default': Sample directly from prior. "
+            "  2. 'gaussian': Sample from a Gaussian distribution centered "
+            "       at the location of the benchmark spectrum."
+            "  3. 'contracted': Sample from a contracted version of the "
+            "       prior, i.e., avoid the outermost 5% of the prior range. "
+            "Default: 'default'."
+        ),
+    )
     parser.add_argument(
         "--resolution",
         type=int,
@@ -43,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n-spectra",
         type=int,
-        default=1000,
+        default=100,
         help="Number of spectra to simulate. Default: 1000.",
     )
     parser.add_argument(
@@ -85,8 +100,20 @@ if __name__ == "__main__":
     with tqdm(total=args.n_spectra, ncols=80) as progressbar:
         while len(thetas) < args.n_spectra:
 
-            # Sample parameters from the prior
-            theta = prior.sample()
+            # Sample parameters from the prior (in the unit cube)
+            if args.theta_mode == "default":
+                u = rng.uniform(0, 1, size=len(prior.names))
+            elif args.theta_mode == "gaussian":
+                u = prior.distribution.cdf(THETA_0)
+                u = u + rng.normal(0, 0.05, size=len(prior.names))
+                u = np.clip(u, 0, 1)
+            elif args.theta_mode == "contracted":
+                u = rng.uniform(0.05, 0.95, size=len(prior.names))
+            else:
+                raise ValueError(f"Invalid theta mode: {args.theta_mode}")
+
+            # Transform the random numbers to the parameter space
+            theta = prior.transform(u)
 
             # Simulate target spectrum
             result = simulator(theta)
@@ -118,10 +145,8 @@ if __name__ == "__main__":
 
     # Save target data to HDF file
     print("\nSaving results...", end=" ", flush=True)
-    file_path = (
-        output_dir
-        / f"test-default__R-{args.resolution}__seed-{args.random_seed}.hdf"
-    )
+    prefix = f"test-{args.theta_mode}__R-{args.resolution}"
+    file_path = output_dir / f"{prefix}__seed-{args.random_seed}.hdf"
     save_to_hdf(
         file_path=file_path,
         wlen=wlen.reshape(1, -1),
