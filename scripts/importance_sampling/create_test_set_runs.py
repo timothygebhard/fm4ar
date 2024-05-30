@@ -30,8 +30,8 @@ def get_cli_arguments() -> argparse.Namespace:
         type=Path,
         required=True,
         help=(
-            "Path to the base configuration file. The run directories will "
-            "be created in the same directory as this file."
+            "Path to the base configuration file. The run directories "
+            "will be created in the same directory as this file."
         )
     )
     parser.add_argument(
@@ -39,12 +39,6 @@ def get_cli_arguments() -> argparse.Namespace:
         type=int,
         default=10,
         help="Last index in the target file."
-    )
-    parser.add_argument(
-        "--experiment-dir",
-        type=Path,
-        required=True,
-        help="Path to the experiment directory."
     )
     parser.add_argument(
         "--no-launch",
