@@ -44,6 +44,12 @@ def get_cli_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--experiment-dir",
+        type=Path,
+        required=True,
+        help="Path to the directory containing the trained model.",
+    )
+    parser.add_argument(
         "--job",
         type=int,
         default=0,
@@ -78,10 +84,7 @@ def get_cli_arguments() -> argparse.Namespace:
         required=True,
         help=(
             "Path to the directory containing the importance sampling config "
-            "file. We assume that this directory is located at: "
-            "  `<experiment_dir>/importance_sampling/<working_dir>` "
-            "where `<experiment_dir>` is the directory containing the trained "
-            "model. The importance sampling config file is expected to be "
+            "file. The importance sampling config file is expected to be "
             "named `importance_sampling.yaml` (to reduce confusion)."
         ),
     )

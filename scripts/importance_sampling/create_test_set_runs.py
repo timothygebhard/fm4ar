@@ -41,6 +41,12 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Last index in the target file."
     )
     parser.add_argument(
+        "--experiment-dir",
+        type=Path,
+        required=True,
+        help="Path to the directory that holds the trained model."
+    )
+    parser.add_argument(
         "--no-launch",
         action="store_true",
         help="If set, create but do not launch the runs."
@@ -124,6 +130,8 @@ if __name__ == "__main__":
                 sys.executable,
                 launch_script.as_posix(),
                 "--start-submission",
+                "--experiment-dir",
+                args.experiment_dir.as_posix(),
                 "--working-dir",
                 run_dir.as_posix()
             ]

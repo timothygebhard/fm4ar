@@ -40,11 +40,8 @@ def draw_proposal_samples(
             distribution.
     """
 
-    # Determine the experiment directory from the working directory
-    experiment_dir = args.working_dir.parent.parent
-
     # Determine the model type: FMPE / NPE or unconditional flow?
-    experiment_config = load_experiment_config(experiment_dir)
+    experiment_config = load_experiment_config(args.experiment_dir)
     model_type = experiment_config["model"]["model_type"]
 
     # Determine the number of samples that the current job should draw
@@ -86,7 +83,7 @@ def draw_proposal_samples(
         results = draw_samples_from_ml_model(
             theta_true=target_spectrum["theta"],
             context=context,
-            experiment_dir=experiment_dir,
+            experiment_dir=args.experiment_dir,
             checkpoint_file_name=config.checkpoint_file_name,
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
@@ -99,7 +96,7 @@ def draw_proposal_samples(
 
         print("Running for unconditional flow model!\n")
         results = draw_samples_from_unconditional_flow(
-            experiment_dir=experiment_dir,
+            experiment_dir=args.experiment_dir,
             n_samples=n_for_job,
             chunk_size=config.draw_proposal_samples.chunk_size,
             random_seed=config.random_seed + args.job,
