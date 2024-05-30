@@ -25,16 +25,16 @@ def get_cli_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--experiment-dir",
-        type=Path,
-        required=True,
-        help="Path to the experiment directory."
-    )
-    parser.add_argument(
         "--name-pattern",
         type=str,
         required=True,
         help="Pattern for the name of the run directories to include."
+    )
+    parser.add_argument(
+        "--runs-dir",
+        type=Path,
+        required=True,
+        help="Path to the directory that holds the test set runs."
     )
 
     args = parser.parse_args()
@@ -83,7 +83,6 @@ if __name__ == "__main__":
 
     # Determine the directories to include
     print("Collecting run directories...", end=" ", flush=True)
-    important_sampling_dir = Path(args.experiment_dir) / "importance_sampling"
     run_dirs = sorted(
         filter(
             lambda path: (
@@ -91,7 +90,7 @@ if __name__ == "__main__":
                 and (path / "target_spectrum.hdf").exists()
                 and (path / "importance_sampling_results.hdf").exists()
             ),
-            important_sampling_dir.glob(args.name_pattern)
+            args.runs_dir.glob(args.name_pattern)
         )
     )
     print("Done!\n", flush=True)
@@ -192,7 +191,7 @@ if __name__ == "__main__":
 
     # Save the results to an HDF file
     file_name = "aggregated__" + args.name_pattern.replace("*", "X") + ".hdf"
-    file_path = important_sampling_dir / file_name
+    file_path = args.runs_dir / file_name
     with h5py.File(file_path, "w") as f:
         for key, value in results.items():
             if key != "run_dir":
