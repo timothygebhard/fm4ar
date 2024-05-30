@@ -72,9 +72,10 @@ if __name__ == "__main__":
     # Get path to launch script
     launch_script = Path(__file__).parent / "run_importance_sampling.py"
 
-    # Load the base configuration and get directory for the runs
-    base_config = load_config(args.base_config_path)
+    # Get directory for the runs and load the base configuration
     runs_dir = args.base_config_path.parent
+    file_name = args.base_config_path.name
+    base_config = load_config(runs_dir, file_name)
 
     # Loop over indices
     for idx in range(args.start_idx, args.end_idx + 1):
