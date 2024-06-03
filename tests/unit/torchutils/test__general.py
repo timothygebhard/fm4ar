@@ -15,6 +15,7 @@ from fm4ar.torchutils.general import (
     get_cuda_info,
     get_number_of_parameters,
     resolve_device,
+    set_random_seed,
 )
 
 
@@ -161,3 +162,23 @@ def test__resolve_device() -> None:
     with pytest.raises(RuntimeError) as runtime_error:
         resolve_device("invalid")
     assert "Expected one of" in str(runtime_error)
+
+
+def test__set_random_seed(capsys: pytest.CaptureFixture):
+    """
+    Test `fm4ar.torchutils.general.set_random_seed()`.
+    """
+
+    # Case 1: Set random seed
+    set_random_seed(seed=42, verbose=False)
+    assert torch.initial_seed() == 42
+
+    # Case 2: Set random seed again
+    set_random_seed(seed=43, verbose=False)
+    assert torch.initial_seed() == 43
+
+    # Case 3: Set random seed again with verbose output
+    set_random_seed(seed=423, verbose=True)
+    assert torch.initial_seed() == 423
+    captured = capsys.readouterr()
+    assert "Set PyTorch random seed to 423" in captured.out

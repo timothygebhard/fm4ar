@@ -103,7 +103,7 @@ def resolve_device(device: str) -> torch.device:
     return torch.device(device)
 
 
-def set_random_seed(seed: int) -> None:
+def set_random_seed(seed: int, verbose: bool = True) -> None:
     """
     Set the seed for all PyTorch-related random number generators.
     """
@@ -113,4 +113,5 @@ def set_random_seed(seed: int) -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    print(f"Set PyTorch random seed to {seed}!", flush=True)
+    if verbose:
+        print(f"Set PyTorch random seed to {seed}!", flush=True)

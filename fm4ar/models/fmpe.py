@@ -78,7 +78,7 @@ class FMPEModel(Base):
         """
 
         # Fix the random seed for reproducibility
-        set_random_seed(self.random_seed)
+        set_random_seed(seed=self.random_seed, verbose=False)
 
         # Create the FMPE network
         self.network = create_fmpe_network(model_config=self.config["model"])

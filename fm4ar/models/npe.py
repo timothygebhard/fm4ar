@@ -29,7 +29,7 @@ class NPEModel(Base):
         """
 
         # Fix the random seed for reproducibility
-        set_random_seed(self.random_seed)
+        set_random_seed(seed=self.random_seed, verbose=False)
 
         # Create the NPE network
         self.network = create_npe_network(model_config=self.config["model"])
