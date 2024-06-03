@@ -32,13 +32,16 @@ def load_posterior(
     return results["samples"], results["weights"]
 
 
-def load_old_posterior(
+def load_old_posterior(  # pragma: no cover
     experiment_dir: Path,
     sampler_type: SAMPLER_TYPE | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Load the posterior samples and weights from a directory for
     nested sampling runs using the *old* format.
+
+    This is kept around purely for backward compatibility reasons and
+    will be removed in the future.
 
     Args:
         experiment_dir: Path to the experiment directory.

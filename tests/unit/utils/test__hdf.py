@@ -29,7 +29,14 @@ def test__save_to_hdf__load_from_hdf(tmp_path: Path) -> None:
     assert np.array_equal(loaded["a2"], a2)
     assert np.array_equal(loaded["a3"], a3)
 
-    # Case 3: Load arrays with indices
+    # Case 3: Load without specifying keys
+    loaded = load_from_hdf(file_path=file_path, keys=None)
+    assert set(loaded.keys()) == {"a1", "a2", "a3"}
+    assert np.array_equal(loaded["a1"], a1)
+    assert np.array_equal(loaded["a2"], a2)
+    assert np.array_equal(loaded["a3"], a3)
+
+    # Case 4: Load arrays with indices
     loaded = load_from_hdf(file_path=file_path, keys=["a1"], idx=1)
     assert np.array_equal(loaded["a1"], a1[1])
 
