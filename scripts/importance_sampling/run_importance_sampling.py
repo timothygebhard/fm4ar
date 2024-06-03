@@ -26,6 +26,7 @@ from fm4ar.importance_sampling.utils import (
 from fm4ar.likelihoods import get_likelihood_distribution
 from fm4ar.priors import get_prior
 from fm4ar.simulators import get_simulator
+from fm4ar.torchutils.general import get_cuda_info
 from fm4ar.utils.hdf import load_from_hdf, merge_hdf_files, save_to_hdf
 from fm4ar.utils.htcondor import (
     DAGManFile,
@@ -203,6 +204,11 @@ if __name__ == "__main__":
         print(80 * "-", flush=True)
         print("(1) Draw samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
+
+        # Document the CUDA setup
+        print("CUDA information:")
+        for key, value in get_cuda_info().items():
+            print(f"{key + ':':<16}{value}")
 
         # Draw samples (this comes with its own progress bar)
         results = draw_proposal_samples(args=args, config=config)
