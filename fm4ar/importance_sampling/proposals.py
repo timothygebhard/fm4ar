@@ -32,7 +32,7 @@ def draw_proposal_samples(
         config: Configuration for the importance sampling run.
 
     Returns:
-        A dicttionary containing:
+        A dictionary containing:
         (1) the log probability of the true theta under the proposal
             distribution,
         (2) the samples drawn from the proposal distribution, and
