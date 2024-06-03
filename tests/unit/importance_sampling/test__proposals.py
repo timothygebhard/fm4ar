@@ -96,6 +96,7 @@ def test__draw_proposal_samples__npe(
 
     # Create the command-line arguments
     args = Namespace(
+        experiment_dir=experiment_dir,
         working_dir=working_dir,
         job=0,
         n_jobs=1,
@@ -168,6 +169,7 @@ def test__draw_proposal_samples__unconditional_flow(
 
     # Create the command-line arguments
     args = Namespace(
+        experiment_dir=experiment_dir,
         working_dir=working_dir,
         job=0,
         n_jobs=1,
