@@ -79,7 +79,7 @@ def draw_proposal_samples(
         }
         context["error_bars"] = sigma * torch.ones(1, n_bins).float()
 
-        print("Running for ML model (FMPE / NPE)!\n")
+        print(f"Running for ML model ({model_type})!\n")
         results = draw_samples_from_ml_model(
             theta_true=target_spectrum["theta"],
             context=context,
@@ -203,7 +203,7 @@ def draw_samples_from_ml_model(
     print("Drawing samples from the model posterior:", flush=True)
     samples_chunks = []
     log_prob_chunks = []
-    with torch.no_grad() and torch.cuda.amp.autocast(enabled=use_amp):
+    with torch.no_grad():
         for n in tqdm(chunk_sizes, ncols=80):
 
             # Adjust the size of the context so that the batch size matches
@@ -214,20 +214,24 @@ def draw_samples_from_ml_model(
             }
 
             # Draw samples and corresponding log-probs from the model
-            chunk = model.sample_and_log_prob_batch(
-                context=chunk_context,
-                **model_kwargs,
-            )
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                chunk = model.sample_and_log_prob_batch(
+                    context=chunk_context,
+                    **model_kwargs,
+                )
 
             # Inverse-transform the theta samples and store the chunks
-            samples_chunks.append(theta_scaler.inverse_tensor(chunk[0].cpu()))
-            log_prob_chunks.append(chunk[1].cpu())
+            samples_chunks.append(
+                theta_scaler.inverse_tensor(chunk[0].cpu()).numpy()
+            )
+            log_prob_chunks.append(chunk[1].cpu().numpy())
+            del chunk
 
     print(flush=True)
 
-    # Combine all chunks into a single array
-    samples = torch.cat(samples_chunks, dim=0).numpy()
-    log_prob_samples = torch.cat(log_prob_chunks, dim=0).numpy().flatten()
+    # Combine all chunks into a single numpy array
+    samples = np.concatenate(samples_chunks, axis=0)
+    log_prob_samples = np.concatenate(log_prob_chunks, axis=0).flatten()
 
     return {
         "samples": samples,
