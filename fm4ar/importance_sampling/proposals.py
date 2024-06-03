@@ -89,6 +89,7 @@ def draw_proposal_samples(
             chunk_size=config.draw_proposal_samples.chunk_size,
             model_kwargs=config.model_kwargs,
             random_seed=config.random_seed + args.job,
+            use_amp=config.draw_proposal_samples.use_amp,
         )
 
     # ... or from an unconditional flow model
@@ -117,6 +118,7 @@ def draw_samples_from_ml_model(
     chunk_size: int = 1024,
     model_kwargs: dict[str, Any] | None = None,
     random_seed: int = 42,
+    use_amp: bool = False,
 ) -> dict[str, np.ndarray]:
     """
     Load a trained ML model (NPE or FMPE) and draw samples from it,
@@ -139,6 +141,8 @@ def draw_samples_from_ml_model(
         model_kwargs: Additional keyword arguments for the model.
             This is useful for specifying the tolerance for FMPE models.
         random_seed: Random seed for the random number generator.
+        use_amp: If True, use automatic mixed-precision for the model.
+            This only makes sense for FMPE models.
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -199,7 +203,7 @@ def draw_samples_from_ml_model(
     print("Drawing samples from the model posterior:", flush=True)
     samples_chunks = []
     log_prob_chunks = []
-    with torch.no_grad():
+    with torch.no_grad() and torch.cuda.amp.autocast(enabled=use_amp):
         for n in tqdm(chunk_sizes, ncols=80):
 
             # Adjust the size of the context so that the batch size matches

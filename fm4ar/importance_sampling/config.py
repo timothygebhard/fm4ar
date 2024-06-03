@@ -45,6 +45,10 @@ class DrawProposalSamplesConfig(BaseModel):
         ge=1,
         description="Number of proposal samples to draw.",
     )
+    use_amp: bool = Field(
+        default=False,
+        description="Use AMP for the proposal sampling?",
+    )
     htcondor: HTCondorConfig
 
 

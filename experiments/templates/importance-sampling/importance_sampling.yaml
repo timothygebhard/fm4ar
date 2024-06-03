@@ -20,7 +20,7 @@ prior:
 
 # Likelihood settings
 likelihood:
-  sigma: 0.125754  # SNR = 10.54 for reference spectrum
+  sigma: 0.125754
 
 # Simulator settings
 simulator:
@@ -33,6 +33,7 @@ simulator:
 draw_proposal_samples:
   chunk_size: 1024
   n_samples: 2048
+  use_amp: False
   htcondor:
     bid: 50
     n_cpus: 4
