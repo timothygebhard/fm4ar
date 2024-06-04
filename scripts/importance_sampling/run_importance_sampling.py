@@ -208,7 +208,8 @@ if __name__ == "__main__":
         # Document the CUDA setup
         print("CUDA information:")
         for key, value in get_cuda_info().items():
-            print(f"{key + ':':<16}{value}")
+            print(f"  {key + ':':<16}{value}")
+        print()
 
         # Draw samples (this comes with its own progress bar)
         results = draw_proposal_samples(args=args, config=config)
