@@ -312,20 +312,17 @@ if __name__ == "__main__":
 
             # Evaluate the prior at theta_i
             # If the prior is 0, we can skip the rest of the computation since
-            # the weight will be 0 anyway. Otherwise, we compute the log-prior
-            # value. We return -np.inf here, because we do not want to discard
-            # the zero-weight sample, as this would bias the estimate of the
-            # log-evidence.
+            # the importance sampling weight will be 0 anyway.
             if (prior_value := prior.evaluate(theta_i)) <= 0:
                 return np.full(n_bins, np.nan), -np.inf, -np.inf
             log_prior_value = np.log(prior_value)
 
             # Simulate the spectrum that belongs to theta_i
-            # If the simulation fails, we return NaNs so that we know that
-            # we need to discard this sample
+            # If it fails, we set the log-prior and log-likelihood to -np.inf,
+            # which will result in an importance sampling weight of 0.
             result = simulator(theta_i)
             if result is None:
-                return np.full(n_bins, np.nan), np.nan, np.nan
+                return np.full(n_bins, np.nan), -np.inf, -np.inf
             else:
                 _, flux = result
 
@@ -333,6 +330,8 @@ if __name__ == "__main__":
             # We use the log-likelihood to avoid numerical issues, because
             # the likelihood can take on values on the order of 10^-1000
             log_likelihood = likelihood_distribution.logpdf(flux)
+            if np.isnan(log_likelihood):
+                return np.full(n_bins, np.nan), -np.inf, -np.inf
 
             return flux, log_likelihood, log_prior_value
 
@@ -347,23 +346,6 @@ if __name__ == "__main__":
         flux = np.array(_flux)
         log_likelihoods = np.array(_log_likelihoods).flatten()
         log_prior_values = np.array(_log_prior_values).flatten()
-
-        # Drop anything with NaNs (e.g., failed simulation)
-        mask = np.logical_and.reduce(
-            (
-                ~np.isnan(flux).any(axis=1),
-                ~np.isnan(log_likelihoods),
-                ~np.isnan(log_prior_values),
-            )
-        )
-        samples = samples[mask]
-        log_prob_samples = log_prob_samples[mask]
-        flux = flux[mask]
-        log_likelihoods = log_likelihoods[mask]
-        log_prior_values = log_prior_values[mask]
-        n = len(samples)
-        print(f"Dropped {np.sum(~mask):,} invalid samples!")
-        print(f"Remaining samples: {n:,} ({100 * n / len(mask):.2f}%)\n")
 
         # Save the results for the current job
         file_name = f"simulations-{args.job:04d}.hdf"
