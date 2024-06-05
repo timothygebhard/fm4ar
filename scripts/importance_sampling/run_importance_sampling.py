@@ -416,27 +416,39 @@ if __name__ == "__main__":
         merged["weights"] = weights.astype(np.float32)
         print("Done!\n")
 
-        # Compute the effective sample size and sample efficiency as well
-        # as the log-evidence estimate and its standard deviation
-        n_eff, sample_efficiency = compute_effective_sample_size(weights)
+        # Compute the effective sample size, the sampling efficiency and the
+        # simulation_efficiency, as well as the log-evidence and its std
+        (
+            n_eff,
+            sampling_efficiency,
+            simulation_efficiency
+        ) = compute_effective_sample_size(weights)
         log_Z, log_Z_std = compute_log_evidence(merged["raw_log_weights"])
         print(f"  Effective sample size: {n_eff:.2f}")
-        print(f"  Sample efficiency:     {100 * sample_efficiency:.2f}%\n")
-        print(f"  Log-evidence estimate: {log_Z:.2f} +/- {log_Z_std:.2f}\n")
+        print(f"  Sampling efficiency:   {100 * sampling_efficiency:.2f}%\n")
+        print(f"  Simulation efficiency: {100 * simulation_efficiency:.2f}%\n")
+        print(f"  Log-evidence estimate: {log_Z:.3f} +/- {log_Z_std:.3f}\n")
 
-        # Save the final results: full and minimized
-        print("Saving results to HDF...", end=" ")
-        save_to_hdf(
-            file_path=working_dir / "importance_sampling_results.hdf",
-            **merged,
-        )
-        save_to_hdf(
-            file_path=working_dir / "importance_sampling_results_min.hdf",
-            log_prob_theta_true=merged["log_prob_theta_true"],
-            raw_log_weights=merged["raw_log_weights"],
-            samples=merged["samples"],
-            weights=merged["weights"],
-        )
+        # Add these values to the merged results
+        merged["n_eff"] = np.array(n_eff)
+        merged["sampling_efficiency"] = np.array(sampling_efficiency)
+        merged["simulation_efficiency"] = np.array(simulation_efficiency)
+        merged["log_evidence"] = np.array(log_Z)
+        merged["log_evidence_std"] = np.array(log_Z_std)
+
+        # Save the full results
+        print("Saving full results to HDF...", end=" ")
+        save_to_hdf(file_path=working_dir / "results.hdf", **merged)
+        print("Done!")
+
+        # Drop some quantities that are usually not needed for downstream
+        # analysis and save a minimized version
+        print("Saving minimized results to HDF...", end=" ")
+        del merged["flux"]
+        del merged["log_prior_values"]
+        del merged["log_prob_samples"]
+        del merged["log_likelihoods"]
+        save_to_hdf(file_path=working_dir / "results.min.hdf", **merged)
         print("Done!")
 
     # -------------------------------------------------------------------------

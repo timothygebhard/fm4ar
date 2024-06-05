@@ -19,15 +19,36 @@ def test__compute_effective_sample_size() -> None:
 
     # Case 1
     weights = np.array([0, 1])
-    n_eff, sampling_efficiency = compute_effective_sample_size(weights)
+    (
+        n_eff,
+        sampling_efficiency,
+        simulation_efficiency,
+    ) = compute_effective_sample_size(weights)
     assert np.isclose(n_eff, 1)
     assert np.isclose(sampling_efficiency, 0.5)
+    assert np.isclose(simulation_efficiency, 1.0)
 
     # Case 2
     weights = np.array([1, 1])
-    n_eff, sampling_efficiency = compute_effective_sample_size(weights)
+    (
+        n_eff,
+        sampling_efficiency,
+        simulation_efficiency,
+    ) = compute_effective_sample_size(weights)
     assert np.isclose(n_eff, 2)
-    assert np.isclose(sampling_efficiency, 1)
+    assert np.isclose(sampling_efficiency, 1.0)
+    assert np.isclose(simulation_efficiency, 1.0)
+
+    # Case 3
+    weights = np.array([1, 2])
+    (
+        n_eff,
+        sampling_efficiency,
+        simulation_efficiency,
+    ) = compute_effective_sample_size(weights)
+    assert np.isclose(n_eff, 1.8)
+    assert np.isclose(sampling_efficiency, 0.9)
+    assert np.isclose(simulation_efficiency, 0.9)
 
 
 def test__compute_is_weights() -> None:

@@ -11,7 +11,10 @@ def clip_and_normalize_weights(
     percentile: float | None = None,
 ) -> np.ndarray:
     """
-    Clip and normalize the raw log-weights.
+    Normalize the raw log-weights (and optionally clip them first).
+
+    Clipping the largest raw log-weights can reduce the variance of the
+    weights, at the cost of introducing a bias. Use with caution!
 
     Args:
         raw_log_weights: Raw log-weights.
@@ -63,7 +66,10 @@ def compute_is_weights(
     Args:
         log_likelihoods: Log-likelihood values.
         log_prior_values: Log-prior values.
-        log_probs: Log-probabilities under the proposal distribution.
+        log_probs: Log-probabilities under the proposal distribution,
+            i.e., the probabilities returned by the ML model. Note
+            that, technically, these are probability *densities*, so
+            they do not have to be in [0, 1].
 
     Returns:
         raw_log_weights: Raw log-weights (without normalization).
@@ -77,7 +83,7 @@ def compute_is_weights(
     # However, L_i is usually very small, so we use the log-weights instead.
     raw_log_weights = log_likelihoods + log_prior_values - log_probs
 
-    # Normalize the raw log-weights (by default without clipping)
+    # Normalize the raw log-weights (by default without weight clipping)
     normalized_weights = clip_and_normalize_weights(
         raw_log_weights=raw_log_weights,
         percentile=None,
@@ -88,22 +94,28 @@ def compute_is_weights(
 
 def compute_effective_sample_size(
     weights: np.ndarray,
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
     """
-    Compute the effective sample size.
+    Compute the effective sample size, the sampling efficiency, and the
+    simulator efficiency.
 
     Args:
         weights: (Normalized) importance sampling weights.
 
     Returns:
         n_eff: Effective sample size.
-        sampling_efficiency: Sampling efficiency.
+        sampling_efficiency: Sampling efficiency, i.e., number of total
+            proposal samples divided by the effective sample size.
+        simulator_efficiency: Simulator efficiency, i.e., number of
+            simulator calls divided by the effective sample size. This
+            excludes the proposal samples where the prior is zero.
     """
 
-    n_eff = np.sum(weights) ** 2 / np.sum(weights**2)
-    sampling_efficiency = float(n_eff / len(weights))
+    n_eff = float(np.sum(weights) ** 2 / np.sum(weights**2))
+    sampling_efficiency = n_eff / len(weights)
+    simulator_efficiency = n_eff / float(np.sum(weights > 0))
 
-    return n_eff, sampling_efficiency
+    return n_eff, sampling_efficiency, simulator_efficiency
 
 
 def compute_log_evidence(
@@ -124,12 +136,12 @@ def compute_log_evidence(
     weights = clip_and_normalize_weights(raw_log_weights)
 
     # Compute the number of samples and the effective sample size
-    N = len(raw_log_weights)
-    N_eff, _ = compute_effective_sample_size(weights)
+    n = len(raw_log_weights)
+    n_eff, _, _ = compute_effective_sample_size(weights)
 
     # Copmute the log-evidence estimate and its standard deviation
     # noinspection PyUnresolvedReferences
-    log_evidence = float(logsumexp(raw_log_weights) - np.log(N))
-    log_evidence_std = float(np.sqrt((N - N_eff) / (N * N_eff)))
+    log_evidence = float(logsumexp(raw_log_weights) - np.log(n))
+    log_evidence_std = float(np.sqrt((n - n_eff) / (n * n_eff)))
 
     return log_evidence, log_evidence_std

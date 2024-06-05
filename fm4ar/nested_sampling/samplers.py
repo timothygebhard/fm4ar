@@ -496,8 +496,9 @@ class DynestySampler(Sampler):
         with open(file_path, "wb") as handle:
             dill.dump(obj=self.sampler.results, file=handle)
 
-        # Compute sampling efficiency and effective sample size
-        n_eff, sampling_efficiency = compute_effective_sample_size(
+        # Compute effective sample size and sampling efficiency
+        # The simulation efficiency does not make sense for nested sampling
+        n_eff, sampling_efficiency, _ = compute_effective_sample_size(
             weights=self.weights
         )
 
@@ -886,7 +887,8 @@ class UltraNestSampler(Sampler):
         """
 
         # Compute effective sample size and sampling efficiency
-        n_eff, sampling_efficiency = compute_effective_sample_size(
+        # The simulation efficiency does not make sense for nested sampling
+        n_eff, sampling_efficiency, _ = compute_effective_sample_size(
             weights=self.sampler.results['weighted_samples']['weights'],
         )
 

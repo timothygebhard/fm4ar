@@ -101,6 +101,7 @@ if __name__ == "__main__":
         "log_evidence": [],
         "log_evidence_std": [],
         "sampling_efficiency": [],
+        "simulation_efficiency": [],
         "quantiles_without_is": [],
         "quantiles_with_is": [],
         "theta": [],
@@ -121,15 +122,16 @@ if __name__ == "__main__":
             flux = np.array(f["flux"])
 
         # Read in the importance sampling results
-        with h5py.File(run_dir / "importance_sampling_results.hdf", "r") as f:
-            if "theta" in f.keys():  # For the old results
-                samples = np.array(f["theta"])
-            else:
-                samples = np.array(f["samples"])
+        with h5py.File(run_dir / "results.hdf", "r") as f:
+            samples = np.array(f["samples"])
             weights = np.array(f["weights"])
             raw_log_weights = np.array(f["raw_log_weights"])
             log_prob_samples = np.array(f["log_prob_samples"])
             log_prob_theta_true = np.array(f["log_prob_theta_true"])
+            sampling_efficiency = np.array(f["sampling_efficiency"])
+            simulation_efficiency = np.array(f["simulation_efficiency"])
+            log_evidence = np.array(f["log_evidence"])
+            log_evidence_std = np.array(f["log_evidence_std"])
 
         # Compute the rank for the ground truth theta value
         rank_without_is = np.mean(log_prob_samples < log_prob_theta_true)
@@ -139,10 +141,6 @@ if __name__ == "__main__":
         )
         results["rank_without_is"].append(rank_without_is)
         results["rank_with_is"].append(rank_with_is)
-
-        # Compute the sampling efficiency and the evidence
-        _, sampling_efficiency = compute_effective_sample_size(weights)
-        log_evidence, log_evidence_std = compute_log_evidence(raw_log_weights)
 
         # Loop over the parameters to compute the quantiles
         quantiles_without_is = []
@@ -184,6 +182,7 @@ if __name__ == "__main__":
         results["sigma"].append(sigma)
         results["flux"].append(flux)
         results["sampling_efficiency"].append(sampling_efficiency)
+        results["simulation_efficiency"].append(simulation_efficiency)
         results["quantiles_without_is"].append(quantiles_without_is)
         results["quantiles_with_is"].append(quantiles_with_is)
 
