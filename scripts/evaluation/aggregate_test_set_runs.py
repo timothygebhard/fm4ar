@@ -11,11 +11,6 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-from fm4ar.importance_sampling.utils import (
-    compute_effective_sample_size,
-    compute_log_evidence,
-)
-
 
 def get_cli_arguments() -> argparse.Namespace:
     """

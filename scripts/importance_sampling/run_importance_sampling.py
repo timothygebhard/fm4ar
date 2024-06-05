@@ -311,8 +311,8 @@ if __name__ == "__main__":
             """
 
             # Evaluate the prior at theta_i
-            # If the prior is 0, we can skip the rest of the computation since
-            # the importance sampling weight will be 0 anyway.
+            # If the prior is 0, we do not actually need to run the simulator
+            # since the importance sampling weight will be 0 anyway.
             if (prior_value := prior.evaluate(theta_i)) <= 0:
                 return np.full(n_bins, np.nan), -np.inf, -np.inf
             log_prior_value = np.log(prior_value)
@@ -320,17 +320,22 @@ if __name__ == "__main__":
             # Simulate the spectrum that belongs to theta_i
             # If it fails, we set the log-prior and log-likelihood to -np.inf,
             # which will result in an importance sampling weight of 0.
+            # Failure can occur, e.g., if the simulator exceeds its time limit.
             result = simulator(theta_i)
             if result is None:
+                print("\nSimulator return None!", file=sys.stderr, flush=True)
                 return np.full(n_bins, np.nan), -np.inf, -np.inf
             else:
                 _, flux = result
 
             # Compute the log-likelihood
             # We use the log-likelihood to avoid numerical issues, because
-            # the likelihood can take on values on the order of 10^-1000
+            # the likelihood can take on values on the order of 10^-1000.
+            # In cases where the `flux` contains NaNs, the log-likelihood will
+            # also be NaN, which will result in a weight of 0.
             log_likelihood = likelihood_distribution.logpdf(flux)
             if np.isnan(log_likelihood):
+                print("\nNaN in log-likelihood!", file=sys.stderr, flush=True)
                 return np.full(n_bins, np.nan), -np.inf, -np.inf
 
             return flux, log_likelihood, log_prior_value
@@ -422,7 +427,10 @@ if __name__ == "__main__":
             n_eff,
             sampling_efficiency,
             simulation_efficiency
-        ) = compute_effective_sample_size(weights)
+        ) = compute_effective_sample_size(
+            weights=weights,
+            log_prior_values=merged["log_prior_values"],
+        )
         log_Z, log_Z_std = compute_log_evidence(merged["raw_log_weights"])
         print(f"  Effective sample size: {n_eff:.2f}")
         print(f"  Sampling efficiency:   {100 * sampling_efficiency:.2f}%\n")

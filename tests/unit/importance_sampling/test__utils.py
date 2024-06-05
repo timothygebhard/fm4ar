@@ -23,29 +23,55 @@ def test__compute_effective_sample_size() -> None:
         n_eff,
         sampling_efficiency,
         simulation_efficiency,
-    ) = compute_effective_sample_size(weights)
+    ) = compute_effective_sample_size(
+        weights=weights,
+        log_prior_values=None,
+    )
     assert np.isclose(n_eff, 1)
     assert np.isclose(sampling_efficiency, 0.5)
-    assert np.isclose(simulation_efficiency, 1.0)
+    assert np.isnan(simulation_efficiency)
 
     # Case 2
-    weights = np.array([1, 1])
+    weights = np.array([0, 1, 1])
+    log_prior_values = np.array([-np.inf, 0, 13])
     (
         n_eff,
         sampling_efficiency,
         simulation_efficiency,
-    ) = compute_effective_sample_size(weights)
+    ) = compute_effective_sample_size(
+        weights=weights,
+        log_prior_values=log_prior_values,
+    )
     assert np.isclose(n_eff, 2)
-    assert np.isclose(sampling_efficiency, 1.0)
+    assert np.isclose(sampling_efficiency, 2/3)
     assert np.isclose(simulation_efficiency, 1.0)
 
     # Case 3
-    weights = np.array([1, 2])
+    weights = np.array([0, 0, 1])
+    log_prior_values = np.array([-np.inf, 0, 13])
     (
         n_eff,
         sampling_efficiency,
         simulation_efficiency,
-    ) = compute_effective_sample_size(weights)
+    ) = compute_effective_sample_size(
+        weights=weights,
+        log_prior_values=log_prior_values,
+    )
+    assert np.isclose(n_eff, 1)
+    assert np.isclose(sampling_efficiency, 1/3)
+    assert np.isclose(simulation_efficiency, 0.5)
+
+    # Case 4
+    weights = np.array([1, 2])
+    log_prior_values = np.array([42, 23])
+    (
+        n_eff,
+        sampling_efficiency,
+        simulation_efficiency,
+    ) = compute_effective_sample_size(
+        weights=weights,
+        log_prior_values=log_prior_values,
+    )
     assert np.isclose(n_eff, 1.8)
     assert np.isclose(sampling_efficiency, 0.9)
     assert np.isclose(simulation_efficiency, 0.9)

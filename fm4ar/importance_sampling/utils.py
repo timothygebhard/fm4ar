@@ -94,26 +94,42 @@ def compute_is_weights(
 
 def compute_effective_sample_size(
     weights: np.ndarray,
+    log_prior_values: np.ndarray | None = None,
 ) -> tuple[float, float, float]:
     """
-    Compute the effective sample size, the sampling efficiency, and the
-    simulator efficiency.
+    Compute the effective sample size, the sampling efficiency, and
+    optionally the simulation efficiency.
 
     Args:
         weights: (Normalized) importance sampling weights.
+        log_prior_values: Log-prior values. If `None`, simulator
+            efficiency is not computed but set to NaN.
 
     Returns:
         n_eff: Effective sample size.
         sampling_efficiency: Sampling efficiency, i.e., number of total
             proposal samples divided by the effective sample size.
-        simulator_efficiency: Simulator efficiency, i.e., number of
+        simulation_effiency: Simulation efficiency, i.e., number of
             simulator calls divided by the effective sample size. This
             excludes the proposal samples where the prior is zero.
+            Trivially, `simulation_efficiency` >= `sampling_efficiency`.
     """
 
+    # Compute the effective sample size and the "raw" sampling efficiency,
+    # as it is required, e.g., to compute the log-evidence estimate
     n_eff = float(np.sum(weights) ** 2 / np.sum(weights**2))
     sampling_efficiency = n_eff / len(weights)
-    simulator_efficiency = n_eff / float(np.sum(weights > 0))
+
+    # Optionally: Compute the simulator efficiency
+    # For this we need the number of actual simulator calls, which we can get
+    # from the number of proposal samples where the prior is non-zero: Those
+    # are the samples for which we ran the simulator, even if the likelihood
+    # came out as zero (e.g., because the simulation failed or timed out).
+    if log_prior_values is not None:
+        n_simulator_calls = float(np.sum(log_prior_values > -np.inf))
+        simulator_efficiency = n_eff / n_simulator_calls
+    else:
+        simulator_efficiency = np.nan
 
     return n_eff, sampling_efficiency, simulator_efficiency
 
