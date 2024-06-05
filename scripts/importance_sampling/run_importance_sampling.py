@@ -323,7 +323,7 @@ if __name__ == "__main__":
             # Failure can occur, e.g., if the simulator exceeds its time limit.
             result = simulator(theta_i)
             if result is None:
-                print("\nSimulator return None!", file=sys.stderr, flush=True)
+                print("Simulator returned None!", file=sys.stderr, flush=True)
                 return np.full(n_bins, np.nan), -np.inf, -np.inf
             else:
                 _, flux = result
@@ -335,7 +335,7 @@ if __name__ == "__main__":
             # also be NaN, which will result in a weight of 0.
             log_likelihood = likelihood_distribution.logpdf(flux)
             if np.isnan(log_likelihood):
-                print("\nNaN in log-likelihood!", file=sys.stderr, flush=True)
+                print("NaN in log-likelihood!", file=sys.stderr, flush=True)
                 return np.full(n_bins, np.nan), -np.inf, -np.inf
 
             return flux, log_likelihood, log_prior_value
