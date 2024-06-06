@@ -39,6 +39,11 @@ from fm4ar.utils.htcondor import (
 from fm4ar.utils.multiproc import get_number_of_available_cores
 
 
+# Define a custom exception to flag the case of too many simulator timeouts
+class TooManyTimeoutsError(Exception):
+    pass
+
+
 def get_cli_arguments() -> argparse.Namespace:
     """
     Get the command line arguments.
@@ -311,6 +316,12 @@ if __name__ == "__main__":
             config=config.likelihood,
         )
 
+        # Set up a counter for the number of simulator timeouts, and define
+        # an upper limit for the number of timeouts before we restart the job
+        # on a different node.
+        n_timeouts = 0
+        max_timeouts = 1
+
         # Define a function that processes a single `theta_i`
         def process_theta_i(
             theta_i: np.ndarray,
@@ -330,17 +341,20 @@ if __name__ == "__main__":
             # Simulate the spectrum that belongs to theta_i
             # If we get `None` here, it means the simulator has timed out,
             # which usually only happens when running on a node that is
-            # experiencing some issues. In this case, we want to fail the
-            # job with a specific exit code to automatically resubmit it
-            # on a different node.
+            # experiencing some issues. If the number of timeouts across
+            # all parallel processes exceeds a certain threshold, we raise
+            # an error, which will trigger a resubmission of the job on a
+            # different node. We cannot directly call `sys.exit()` inside this
+            # function because this will cause the script to hang. Instead, we
+            # need to raise an exception and handle the exit code in __main__.
             result = simulator(theta_i)
             if result is None:
-                print(
-                    "Simulator timed out! Will restart job on another node!",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                sys.exit(13)
+                print("Simulator timed out!", file=sys.stderr, flush=True)
+                global n_timeouts  # access the counter defined outside
+                n_timeouts += 1
+                if n_timeouts >= max_timeouts:
+                    raise TooManyTimeoutsError()
+                return np.full(n_bins, np.nan), -np.inf, -np.inf
             else:
                 _, flux = result
 
@@ -357,9 +371,19 @@ if __name__ == "__main__":
             return flux, log_likelihood, log_prior_value
 
         # Compute spectra, likelihoods and prior values in parallel
+        # If we encounter too many timeouts, we exit the script with code 13
+        # which will trigger a resubmission of the job on a different node.
         print("Simulating spectra (in parallel):", flush=True)
         num_cpus = get_number_of_available_cores()
-        results = p_map(process_theta_i, samples, num_cpus=num_cpus, ncols=80)
+        try:
+            results = p_map(
+                process_theta_i,
+                samples,
+                num_cpus=num_cpus,
+                ncols=80,
+            )
+        except TooManyTimeoutsError:
+            sys.exit(13)
         print()
 
         # Unpack the results from the parallel map and convert to arrays
