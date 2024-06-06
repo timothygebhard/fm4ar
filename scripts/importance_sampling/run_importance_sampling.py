@@ -39,11 +39,6 @@ from fm4ar.utils.htcondor import (
 from fm4ar.utils.multiproc import get_number_of_available_cores
 
 
-# Define a custom exception to flag the case of too many simulator timeouts
-class TooManyTimeoutsError(Exception):
-    pass
-
-
 def get_cli_arguments() -> argparse.Namespace:
     """
     Get the command line arguments.
@@ -353,7 +348,7 @@ if __name__ == "__main__":
                 global n_timeouts  # access the counter defined outside
                 n_timeouts += 1
                 if n_timeouts >= max_timeouts:
-                    raise TooManyTimeoutsError()
+                    raise RuntimeError("Too many timeouts!")
                 return np.full(n_bins, np.nan), -np.inf, -np.inf
             else:
                 _, flux = result
@@ -382,8 +377,11 @@ if __name__ == "__main__":
                 num_cpus=num_cpus,
                 ncols=80,
             )
-        except TooManyTimeoutsError:
-            sys.exit(13)
+        except RuntimeError as e:
+            if "Too many timeouts!" in str(e):
+                sys.exit(13)
+            else:
+                raise e
         print()
 
         # Unpack the results from the parallel map and convert to arrays
