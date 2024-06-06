@@ -83,7 +83,7 @@ if __name__ == "__main__":
             lambda path: (
                 path.is_dir()
                 and (path / "target_spectrum.hdf").exists()
-                and (path / "importance_sampling_results.hdf").exists()
+                and (path / "results.hdf").exists()
             ),
             args.runs_dir.glob(args.name_pattern)
         )
