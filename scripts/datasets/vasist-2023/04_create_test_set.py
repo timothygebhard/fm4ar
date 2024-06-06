@@ -25,14 +25,16 @@ if __name__ == "__main__":
         "--theta-mode",
         type=str,
         default="default",
-        choices=["default", "gaussian", "contracted"],
+        choices=["default", "gaussian", "contracted", "benchmark"],
         help=(
-            "Mode for sampling theta. There are three options available:"
+            "Mode for sampling theta. There are four options available:"
             "  1. 'default': Sample directly from prior. "
             "  2. 'gaussian': Sample from a Gaussian distribution centered "
             "       at the location of the benchmark spectrum."
             "  3. 'contracted': Sample from a contracted version of the "
             "       prior, i.e., avoid the outermost 5% of the prior range. "
+            "  4. 'benchmark': Always use the same theta (but add different"
+            "       noise realizations)."
             "Default: 'default'."
         ),
     )
@@ -109,6 +111,8 @@ if __name__ == "__main__":
                 u = np.clip(u, 0, 1)
             elif args.theta_mode == "contracted":
                 u = rng.uniform(0.05, 0.95, size=len(prior.names))
+            elif args.theta_mode == "benchmark":
+                u = prior.distribution.cdf(THETA_0)
             else:
                 raise ValueError(f"Invalid theta mode: {args.theta_mode}")
 
