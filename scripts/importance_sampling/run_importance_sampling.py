@@ -142,6 +142,14 @@ def prepare_and_launch_dag(
                 f"--n-jobs {htcondor_config.queue}",
             ]
 
+        # For simulation jobs, we need to handle the case of "dead" nodes, that
+        # is, nodes on which the simulator times out. In this case, we need to
+        # fail the job with a specific exit code so that it can automatically
+        # be resubmitted on a different node.
+        if stage == "simulate_spectra":
+            htcondor_config.retry_on_exit_code = 13
+            htcondor_config.retry_on_different_node = True
+
         # Create submission file
         file_path = create_submission_file(
             htcondor_config=htcondor_config,
@@ -320,13 +328,19 @@ if __name__ == "__main__":
             log_prior_value = np.log(prior_value)
 
             # Simulate the spectrum that belongs to theta_i
-            # If it fails, we set the log-prior and log-likelihood to -np.inf,
-            # which will result in an importance sampling weight of 0.
-            # Failure can occur, e.g., if the simulator exceeds its time limit.
+            # If we get `None` here, it means the simulator has timed out,
+            # which usually only happens when running on a node that is
+            # experiencing some issues. In this case, we want to fail the
+            # job with a specific exit code to automatically resubmit it
+            # on a different node.
             result = simulator(theta_i)
             if result is None:
-                print("Simulator returned None!", file=sys.stderr, flush=True)
-                return np.full(n_bins, np.nan), -np.inf, -np.inf
+                print(
+                    "Simulator timed out! Will restart job on another node!",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                sys.exit(13)
             else:
                 _, flux = result
 
