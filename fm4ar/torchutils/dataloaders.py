@@ -52,6 +52,7 @@ def build_dataloaders(
         drop_last=drop_last,
         pin_memory=True,
         num_workers=n_workers,
+        persistent_workers=(n_workers > 0),
         generator=torch.Generator().manual_seed(random_seed + 1),
     )
 
@@ -63,6 +64,7 @@ def build_dataloaders(
         drop_last=False,
         pin_memory=True,
         num_workers=n_workers,
+        persistent_workers=(n_workers > 0),
         generator=torch.Generator().manual_seed(random_seed + 2),
     )
 

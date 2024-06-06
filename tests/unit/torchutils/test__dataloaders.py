@@ -30,8 +30,8 @@ def dummy_dataset() -> TensorDataset:
 # We run this test for different numbers of workers to check if the loaders
 # behave reproducibly both when running in the main thread (0 workers) and
 # when running in parallel (2 workers).
-@pytest.mark.parametrize("n_workers", [0, 2])
-@pytest.mark.slow  # because of num_workers=2
+@pytest.mark.parametrize("n_workers", [0, 2, 4])
+@pytest.mark.slow  # because of cases where num_workers > 0
 def test__build_dataloaders(
     n_workers: int,
     dummy_dataset: TensorDataset,
@@ -75,10 +75,17 @@ def test__build_dataloaders(
         assert np.isclose(actual, expected[i])
 
     # On the second "epoch", we should get new batches (not just new order)!
-    expected = [  # fmt: off
-        152, 128, 154, 122, 154, 78, 118, 111, 156, 198,
-        70, 71, 98, 89, 79, 142, 116, 80, 113, 67, 64,
-    ]  # fmt: on
+    # It looks like the batches depend on whether we use workers or not (?)
+    if n_workers == 0:
+        expected = [  # fmt: off
+            152, 128, 154, 122, 154, 78, 118, 111, 156, 198,
+            70, 71, 98, 89, 79, 142, 116, 80, 113, 67, 64,
+        ]  # fmt: on
+    else:
+        expected = [  # fmt: off
+            111, 112, 156, 144, 101, 91, 125, 140, 136, 176,
+            104, 130, 87, 67, 17, 150, 103, 76, 111, 162, 99
+        ]  # fmt: on
     for i, batch in enumerate(train_loader):
         actual = torch.sum(torch.Tensor(batch[0])).item()
         assert np.isclose(actual, expected[i])
@@ -119,10 +126,16 @@ def test__build_dataloaders(
         assert np.isclose(actual, expected[i])
 
     # Again, we should get new batches for epoch number 2
-    expected = [  # fmt: off
-        213, 130, 144, 78, 127, 108, 125, 89, 210, 167, 93,
-        93, 108, 209, 137, 81, 116, 88, 44, 109, 90,
-    ]  # fmt: on
+    if n_workers == 0:
+        expected = [  # fmt: off
+            213, 130, 144, 78, 127, 108, 125, 89, 210, 167, 93,
+            93, 108, 209, 137, 81, 116, 88, 44, 109, 90,
+        ]  # fmt: on
+    else:
+        expected = [  # fmt: off
+            101, 68, 120, 201, 109, 126, 77, 98, 93, 73, 143, 179,
+            153, 148, 99, 117, 66, 148, 143, 127, 173,
+        ]  # fmt: on
     for i, batch in enumerate(train_loader):
         actual = torch.sum(torch.Tensor(batch[0])).item()
         assert np.isclose(actual, expected[i])
