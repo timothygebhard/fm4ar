@@ -75,6 +75,14 @@ class HTCondorConfig(BaseModel):
             "If `None`, do not retry."
         ),
     )
+    retry_on_different_node: bool = Field(
+        default=False,
+        description=(
+            "If True, a job that exits with the `retry_on_exit_code` will "
+            "be retried on a different node. If False, no such constraint "
+            "will be added (e.g., if the code is used for checkpointing)."
+        ),
+    )
     log_file_name: str = Field(
         default="log",
         description="Base name for the log files.",
@@ -296,9 +304,18 @@ def create_submission_file(
             cuda_capability = get_cuda_capability(gpu_type)
             requirements.append(f"TARGET.CUDACapability == {cuda_capability}")
 
+    # Add machines on which NOT to run the job based on the job history
+    # This is needed to handle the case where we want to retry a job with a
+    # specific exit code on a different node. By default, we maintain a list
+    # of five machines on which the job has run, and we exclude them.
+    if htcondor_config.retry_on_different_node:
+        for i in range(1, 5):  # Note: this is really a 5, not a 6
+            requirements.append(f"TARGET.machine =!= MachineAttrMachine{i}")
+
     # Add the combined requirements to the submission file
     if requirements:
-        lines.append(f"requirements = ({' && '.join(requirements)})\n\n")
+        requirements_string = ' && \\\n  '.join(f'({r})' for r in requirements)
+        lines.append(f"\nrequirements = \\\n  {requirements_string}\n\n")
 
     # Set the arguments
     arguments = (
@@ -314,14 +331,54 @@ def create_submission_file(
     lines.append(f'output = {logs_dir / f"{name}.out"}\n')
     lines.append(f'log = {logs_dir / f"{name}.log"}\n\n')
 
-    # If get get a particular exit code, keep retrying
+    # Handle automatic retries
     if (exit_code := htcondor_config.retry_on_exit_code) is not None:
+
+        # In case we want to retry on a different node, we need to maintain
+        # a history of the nodes on which the job has run. For now, we just
+        # hardcode the value to 5, but this could be made configurable.
+        if htcondor_config.retry_on_different_node:
+            lines.append("job_machine_attrs = Machine\n")
+            lines.append("job_machine_attrs_history_length = 5\n")
+            lines.append("NumRetries = 5\n\n")
+
+        # Set the exit code on which to retry
         lines.append(f"on_exit_hold = (ExitCode =?= {exit_code})\n")
-        lines.append('on_exit_hold_reason = "Checkpointed, will resume"\n')
-        lines.append("on_exit_hold_subcode = 1\n")
+
+        # Add a reason for the hold
+        # For now, we assume `retry_on_different_node == True` means there
+        # was an issue with the job, and `retry_on_different_node == False`
+        # is only used for limiting the run time of the job
+        if not htcondor_config.retry_on_different_node:
+            reason = (
+                f'"Job exited with code {exit_code}! '
+                'Reached runtime limit, will restart from checkpoint..."'
+            )
+        else:
+            reason = (
+                'ifThenElse( \\\n'
+                '  JobRunCount <= $(NumRetries), \\\n'
+                f'  "Job exited with code {exit_code}! '
+                'Will try to restart on a different node...", \\\n'
+                f'  "Job exited with code {exit_code}! '
+                'No more retries left, exiting..." \\\n'
+                ')'
+            )
+        lines.append(f'on_exit_hold_reason = {reason}\n')
+
+        # Add a subcode for the hold
+        # Subcode 1 means we should retry (always the case for checkpointing),
+        # subcode 2 means we should not retry (no more retries left)
+        if not htcondor_config.retry_on_different_node:
+            subcode = "1"
+        else:
+            subcode = "ifThenElse(JobRunCount <= $(NumRetries),1,2)"
+        lines.append(f"on_exit_hold_subcode = {subcode}\n")
+
+        # Add a periodic release for the job
         lines.append(
             "periodic_release = ( (JobStatus =?= 5) "
-            "&& (HoldReasonCode =?= 3) "
+            "&& (HoldReasonCode =?= 3) "  # 3 = "ON_EXIT_HOLD"
             "&& (HoldReasonSubCode =?= 1) )\n\n"
         )
 
