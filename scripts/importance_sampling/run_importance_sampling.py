@@ -8,6 +8,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
+from socket import gethostname
 
 import numpy as np
 from p_tqdm import p_map
@@ -179,6 +180,7 @@ if __name__ == "__main__":
 
     # Ensure that we do not run compute-heavy jobs on the login node
     check_if_on_login_node(start_submission=args.start_submission)
+    print("Running on host:", gethostname(), "\n", flush=True)
 
     # Load the importance sampling config
     config = load_config(experiment_dir=args.working_dir)
