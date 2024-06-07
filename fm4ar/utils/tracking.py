@@ -39,7 +39,7 @@ class LossInfo:
         len_dataset: int,
         batch_size: int,
         mode: str = "Train",
-        print_freq: int = 8,
+        print_freq: int = 10,
     ) -> None:
         """
         Initialize new LossInfo instance.
@@ -130,7 +130,7 @@ class LossInfo:
             1_000 * self.times["model"].get_last(),
             1_000 * self.times["model"].get_avg(),
         )
-        print(f"t_model = {tn:.1f} ms ({tn_avg:.1f} ms)")
+        print(f"t_model = {tn:.1f} ms ({tn_avg:.1f} ms)", flush=True)
 
 
 class RuntimeLimits:

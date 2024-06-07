@@ -86,7 +86,7 @@ def train_epoch(
         len_dataset=len(dataloader.dataset),  # type: ignore
         batch_size=int(dataloader.batch_size),  # type: ignore
         mode="Train",
-        print_freq=1,
+        print_freq=10,
     )
 
     # Create scaler for automatic mixed precision
@@ -209,7 +209,7 @@ def validate_epoch(
             len_dataset=len(dataloader.dataset),  # type: ignore
             batch_size=dataloader.batch_size,  # type: ignore
             mode="Validate",
-            print_freq=1,
+            print_freq=10,
         )
 
         # Iterate over the batches
