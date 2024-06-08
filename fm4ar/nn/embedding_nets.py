@@ -2,7 +2,7 @@
 Different embedding networks and convenience functions.
 """
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from math import pi
 from typing import Any
@@ -25,6 +25,7 @@ class SupportsDictInput(ABC):
     # access it without instantiating the class.
     required_keys: list[str] = ["theta", "flux", "wlen"]
 
+    @abstractmethod
     def forward(self, x: Mapping[str, torch.Tensor]) -> Any:
         """
         Forward pass through the block with a dictionary input.
