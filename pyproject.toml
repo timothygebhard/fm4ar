@@ -39,7 +39,7 @@ dependencies = [
     "numpy==1.26.4",
     "p-tqdm==1.4.0",
     "pandas==2.2.2",
-    "pydantic==2.0.0",
+    "pydantic==2.2.0",
     "pyyaml==6.0.1",
     "scipy==1.13.1",
     "spectres==2.2.0",
@@ -47,6 +47,7 @@ dependencies = [
     "torch==2.2.2",
     "torchdiffeq==0.2.4",
     "tqdm==4.66.4",
+    "ultranest==4.2.0",
     "wandb>=0.17.1",
 ]
 
