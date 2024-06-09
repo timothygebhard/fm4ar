@@ -1,0 +1,134 @@
+# -----------------------------------------------------------------------------
+# DATASET AND THETA SCALER
+# -----------------------------------------------------------------------------
+
+dataset:
+  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/R-400/merged.hdf"
+  n_train_samples: 33_554_432
+  n_valid_samples: 1_048_576
+  random_seed: 42
+
+theta_scaler:
+  method: "MeanStdScaler"
+  kwargs:
+    dataset: "vasist_2023"
+
+# -----------------------------------------------------------------------------
+# MODEL ARCHITECTURE
+# -----------------------------------------------------------------------------
+
+model:
+
+  # General settings
+  model_type: "npe"
+  random_seed: 42
+
+  # Embedding network for context
+  context_embedding_net:
+    - block_type: "SoftClipFlux"
+      kwargs:
+        bound: 100.0
+    - block_type: "Concatenate"
+      kwargs:
+        keys: [ "flux", "error_bars" ]
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims:
+          - 4096
+          - 4096
+          - 4096
+          - 2048
+          - 2048
+          - 2048
+          - 1024
+          - 1024
+          - 1024
+          - 512
+          - 512
+          - 512
+          - 256
+          - 256
+        activation: "GELU"
+        output_dim: 256
+        dropout: 0.1
+        use_layer_norm: true
+
+  # Discrete normalizing flow (wrapped in a compatibility layer)
+  # Note: normflows uses slightly different kwargs (see unit tests for demo)
+  flow_wrapper:
+    flow_library: "glasflow"
+    kwargs:
+      num_flow_steps: 16
+      base_transform_type: "rq-coupling"
+      base_transform_kwargs:
+        hidden_dim: 1024
+        num_transform_blocks: 4
+        activation: "GELU"
+        dropout_probability: 0.1
+        use_batch_norm: false
+        num_bins: 16
+        tail_bound: 10.0
+
+# -----------------------------------------------------------------------------
+# TRAINING
+# -----------------------------------------------------------------------------
+
+training:
+
+  stage_0:
+    backup_interval: 10
+    batch_size: 16_384
+    data_transforms:
+      - type: "AddNoise"
+        kwargs:
+          type: "DefaultNoiseGenerator"
+          kwargs:
+            sigma_min: 0.05
+            sigma_max: 0.50
+            random_seed: 42
+    early_stopping:
+      stage_patience: 100
+    epochs: 600
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      enabled: true
+      max_norm: 1.0
+    logprob_evaluation:
+      interval: 10
+      n_samples: 2048
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 5.0e-5
+    scheduler:
+      type: "CosineAnnealingLR"
+      kwargs:
+        T_max: 600
+    use_amp: false
+
+# -----------------------------------------------------------------------------
+# LOCAL SETTINGS
+# -----------------------------------------------------------------------------
+
+local:
+
+  # Device ("cpu" or "cuda"; or "auto")
+  device: "auto"
+
+  # Maximum runtime (in seconds) per cluster job
+  max_runtime: 28_800
+
+  # Settings for HTCondor
+  htcondor:
+    bid: 50
+    n_cpus: 21
+    n_gpus: 1
+    memory_cpus: 200_000
+    memory_gpus: 85_000
+    gpu_type: "H100"
+
+  # Settings for Weights & Biases, remove if not used
+  wandb:
+    project: "fm4ar"
+    group: "paper"
+    name: "npe__noise-conditional"
