@@ -39,7 +39,7 @@ dependencies = [
     "numpy==1.26.4",
     "p-tqdm==1.4.0",
     "pandas==2.2.2",
-    "pydantic==2.2.0",
+    "pydantic==2.7.3",
     "pyyaml==6.0.1",
     "scipy==1.13.1",
     "spectres==2.2.0",
