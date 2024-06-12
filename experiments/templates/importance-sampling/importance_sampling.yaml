@@ -6,7 +6,7 @@
 checkpoint_file_name: "model__best.pt"
 random_seed: 42
 model_kwargs: {}
-  # tolerance: 1.0e-4  # tolerance for ODE solver on FMPE models
+  # tolerance: 5.0e-5  # tolerance for ODE solver on FMPE models
 
 # Define target spectrum
 # If the model is an unconditional flow, this will be ignored.
