@@ -87,7 +87,9 @@ def get_cli_arguments() -> argparse.Namespace:
         help=(
             "Path to the directory containing the importance sampling config "
             "file. The importance sampling config file is expected to be "
-            "named `importance_sampling.yaml` (to reduce confusion)."
+            "named `importance_sampling.yaml` (to reduce confusion). The path "
+            "can either be absolute, or relative to the `importance_sampling` "
+            "directory in the experiment directory."
         ),
     )
     args = parser.parse_args()
@@ -184,14 +186,24 @@ if __name__ == "__main__":
 
     # Get the command line arguments and define shortcuts
     args = get_cli_arguments()
-    working_dir = args.working_dir
+    working_dir = Path(args.working_dir)
+
+    # Resolve the working directory in case it is not absolute
+    if not working_dir.is_absolute():
+        working_dir = (
+            Path(args.experiment_dir)
+            / "importance_sampling"
+            / working_dir
+        )
+    if not working_dir.exists():
+        raise FileNotFoundError(f"Working directory not found: {working_dir}")
 
     # Ensure that we do not run compute-heavy jobs on the login node
     check_if_on_login_node(start_submission=args.start_submission)
     print("Running on host:", gethostname(), "\n", flush=True)
 
     # Load the importance sampling config
-    config = load_config(experiment_dir=args.working_dir)
+    config = load_config(experiment_dir=working_dir)
 
     # -------------------------------------------------------------------------
     # If --start-submission: Create DAG file, launch job, and exit
