@@ -189,6 +189,8 @@ if __name__ == "__main__":
     working_dir = Path(args.working_dir)
 
     # Resolve the working directory in case it is not absolute
+    # We need to overwrite args because some functions expect args.working_dir
+    # to be an absolute path. FIXME: Maybe this should be handled cleaner?
     if not working_dir.is_absolute():
         working_dir = (
             Path(args.experiment_dir)
@@ -197,6 +199,8 @@ if __name__ == "__main__":
         )
     if not working_dir.exists():
         raise FileNotFoundError(f"Working directory not found: {working_dir}")
+    else:
+        args.working_dir = working_dir
 
     # Ensure that we do not run compute-heavy jobs on the login node
     check_if_on_login_node(start_submission=args.start_submission)
