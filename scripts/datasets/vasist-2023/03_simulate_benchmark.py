@@ -55,11 +55,7 @@ if __name__ == "__main__":
         wlen, flux = result
         wlen = wlen.astype(np.float32)
         flux = flux.astype(np.float32)
-        print("Done!", flush=True)
-
-    # Define error bars for the benchmark spectrum
-    # We use the default noise level from Vasist et al. (2023)
-    error_bars = np.full_like(flux, SIGMA, dtype=np.float32)
+        print("Done!\n", flush=True)
 
     # Prepare output directory
     output_dir = get_datasets_dir() / "vasist-2023" / "benchmark"
@@ -76,38 +72,61 @@ if __name__ == "__main__":
         "packages": "\n".join(get_packages()),
     }
 
-    # First, save the noise-free benchmark spectrum
-    print("Saving noise-free benchmark spectrum...", end=" ", flush=True)
-    file_name = f"noise-free__R-{args.resolution}__pRT-{prt_version}.hdf"
-    file_path = output_dir / file_name
-    with h5py.File(file_path, "w") as f:
-        f.attrs.update(metadata)
-        f.create_dataset("wlen", data=wlen.reshape(1, -1))
-        f.create_dataset("flux", data=flux.reshape(1, -1))
-        f.create_dataset("theta", data=THETA_0.reshape(1, -1))
-        f.create_dataset("error_bars", data=error_bars.reshape(1, -1))
-    print("Done!", flush=True)
-
-    # Next, create noisy versions of the benchmark spectrum
-    # We create 100 noise realizations using the default noise level from
-    # Vasist et al. (2023), i.e., σ = 0.125754 x 10^-16 W / m^2 / µm
-    print("Creating noisy versions...", end=" ", flush=True)
+    # Set up random number generator
     rng = np.random.default_rng(seed=42)
-    noise = rng.normal(scale=SIGMA, size=(100, n_bins)).astype(np.float32)
-    noisy_flux = flux + noise
-    print("Done!", flush=True)
 
-    # Save noisy versions of the benchmark spectrum
-    print("Saving noisy versions...", end=" ", flush=True)
-    file_name = f"with-noise__R-{args.resolution}__pRT-{prt_version}.hdf"
-    file_path = output_dir / file_name
-    with h5py.File(file_path, "w") as f:
-        f.attrs.update(metadata | {"noise_level": SIGMA})
-        f.create_dataset("wlen", data=wlen.reshape(1, -1))
-        f.create_dataset("flux", data=noisy_flux)
-        f.create_dataset("error_bars", data=np.tile(error_bars, (100, 1)))
-        f.create_dataset("noise", data=noise)
-        f.create_dataset("theta", data=np.tile(THETA_0, (100, 1)))
-    print("Done!", flush=True)
+    # Create versions for different noise levels
+    # We use the default noise level from  Vasist et al. (2023), i.e.,
+    # σ = 0.125754 x 10^-16 W / m^2 / µm, as as well as other levels
+    for sigma in [0.1, SIGMA, 0.2, 0.3, 0.4]:
+
+        print(f"Creating files for sigma = {sigma}:", flush=True)
+
+        # Define error bars for the benchmark spectrum
+        error_bars = np.full_like(flux, sigma, dtype=np.float32)
+
+        # First, save the noise-free benchmark spectrum
+        print("--Saving noise-free benchmark spectrum...", end=" ", flush=True)
+        file_name = (
+            f"noise-free__"
+            f"sigma-{sigma}__"
+            f"R-{args.resolution}__"
+            f"pRT-{prt_version}.hdf"
+        )
+        file_path = output_dir / file_name
+        with h5py.File(file_path, "w") as f:
+            f.attrs.update(metadata)
+            f.create_dataset("wlen", data=wlen.reshape(1, -1))
+            f.create_dataset("flux", data=flux.reshape(1, -1))
+            f.create_dataset("theta", data=THETA_0.reshape(1, -1))
+            f.create_dataset("error_bars", data=error_bars.reshape(1, -1))
+        print("Done!", flush=True)
+
+        # Next, create noisy versions of the benchmark spectrum
+        # We create 100 noise realizations using the
+        print("--Creating noisy versions...", end=" ", flush=True)
+        noise = rng.normal(scale=sigma, size=(100, n_bins)).astype(np.float32)
+        noisy_flux = flux + noise
+        print("Done!", flush=True)
+
+        # Save noisy versions of the benchmark spectrum
+        print("--Saving noisy versions...", end=" ", flush=True)
+        file_name = (
+            f"with-noise__"
+            f"sigma-{sigma}__"
+            f"R-{args.resolution}__"
+            f"pRT-{prt_version}.hdf"
+        )
+        file_path = output_dir / file_name
+        with h5py.File(file_path, "w") as f:
+            f.attrs.update(metadata | {"noise_level": SIGMA})
+            f.create_dataset("wlen", data=wlen.reshape(1, -1))
+            f.create_dataset("flux", data=noisy_flux)
+            f.create_dataset("error_bars", data=np.tile(error_bars, (100, 1)))
+            f.create_dataset("noise", data=noise)
+            f.create_dataset("theta", data=np.tile(THETA_0, (100, 1)))
+        print("Done!\n", flush=True)
+
+    print("Results saved to:", output_dir, flush=True)
 
     print(f"\nThis took {time.time() - script_start:.1f} seconds!\n")
