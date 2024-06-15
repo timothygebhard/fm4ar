@@ -40,6 +40,11 @@ def file_path_to_target_spectrum(tmp_path: Path) -> Path:
             dtype=np.float32,
         )
         f.create_dataset(
+            name="error_bars",
+            data=np.ones((1, 947)),
+            dtype=np.float32,
+        )
+        f.create_dataset(
             name="theta",
             data=np.random.normal(0, 1, 16),
             dtype=np.float32,

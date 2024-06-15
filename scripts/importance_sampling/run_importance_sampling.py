@@ -18,7 +18,7 @@ from fm4ar.importance_sampling.config import (
     load_config,
 )
 from fm4ar.importance_sampling.proposals import draw_proposal_samples
-from fm4ar.importance_sampling.target_spectrum import load_target_spectrum
+from fm4ar.target_spectrum import load_target_spectrum
 from fm4ar.importance_sampling.utils import (
     compute_effective_sample_size,
     compute_is_weights,
@@ -324,7 +324,7 @@ if __name__ == "__main__":
         simulator = get_simulator(config=config.simulator)
         likelihood_distribution = get_likelihood_distribution(
             flux_obs=target["flux"],
-            config=config.likelihood,
+            error_bars=target["error_bars"],
         )
 
         # Set up a counter for the number of simulator timeouts, and define

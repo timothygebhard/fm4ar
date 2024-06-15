@@ -8,8 +8,6 @@ from typing import Protocol
 import numpy as np
 from scipy.stats import multivariate_normal
 
-from fm4ar.likelihoods.config import LikelihoodConfig
-
 
 class LikelihoodDistribution(Protocol):
     """
@@ -29,13 +27,12 @@ class LikelihoodDistribution(Protocol):
 
 def get_likelihood_distribution(
     flux_obs: np.ndarray,
-    config: LikelihoodConfig,
+    error_bars: np.ndarray,
 ) -> LikelihoodDistribution:
 
-    # Construct the covariance matrix from the given configuration
-    # TODO: We need to figure out a way to specify generic covariance matrices
-    #   in the configuration file. For now, we just assume that the covariance
-    #   matrix is given as `sigma ** 2 * np.eye(len(x_obs))`.
-    cov = config.sigma**2 * np.eye(len(flux_obs))
+    # Construct the covariance matrix
+    # For now, we simply assume that the errors are uncorrelated and that the
+    # `error_bars` are the standard deviations of the Gaussian noise.
+    cov = np.diag(error_bars ** 2)
 
     return multivariate_normal(mean=flux_obs, cov=cov)  # type: ignore

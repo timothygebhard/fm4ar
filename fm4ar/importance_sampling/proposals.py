@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from fm4ar.datasets.theta_scalers import get_theta_scaler
 from fm4ar.importance_sampling.config import ImportanceSamplingConfig
-from fm4ar.importance_sampling.target_spectrum import load_target_spectrum
+from fm4ar.target_spectrum import load_target_spectrum
 from fm4ar.models.build_model import build_model
 from fm4ar.nn.flows import create_unconditional_flow_wrapper
 from fm4ar.torchutils.general import set_random_seed
@@ -66,18 +66,11 @@ def draw_proposal_samples(
             file_path = args.working_dir / "target_spectrum.npz"
             np.savez(file_path, **target_spectrum)
 
-        # Define shortcuts
-        n_bins = target_spectrum["flux"].shape[0]
-        sigma = config.likelihood.sigma
-
-        # Construct the context for the model from the target spectrum and
-        # add the error bars based on the assumed likelihood function
-        # TODO: We should think about a more general way to handle this!
+        # Construct the context for the model from the target spectrum
         context = {
             k: torch.from_numpy(v).float().reshape(1, -1) for k, v in
-            target_spectrum.items()
+            target_spectrum.items() if k not in ["theta"]
         }
-        context["error_bars"] = sigma * torch.ones(1, n_bins).float()
 
         print(f"Running for ML model ({model_type})!\n")
         results = draw_samples_from_ml_model(

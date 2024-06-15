@@ -20,8 +20,10 @@ from fm4ar.nested_sampling.utils import (
 )
 from fm4ar.priors import get_prior
 from fm4ar.simulators import get_simulator
+from fm4ar.target_spectrum import load_target_spectrum
 from fm4ar.utils.environment import document_environment
 from fm4ar.utils.git_utils import document_git_status
+from fm4ar.utils.hdf import save_to_hdf
 from fm4ar.utils.htcondor import (
     check_if_on_login_node,
     condor_submit_bid,
@@ -168,27 +170,48 @@ if __name__ == "__main__":
 
     log("\nRUN NESTED SAMPLING RETRIEVAL\n")
 
+    # Instantiate the prior distribution
     log("Creating prior distribution...", end=" ")
     config.prior.random_seed += rank
     prior = get_prior(config=config.prior)
     log("Done!")
 
+    # Instantiate the simulator
     log("Creating simulator...", end=" ")
     simulator = get_simulator(config=config.simulator)
     log("Done!")
 
-    log("Simulating ground truth...", end=" ")
-    theta_obs = np.array([config.ground_truth[n] for n in prior.names])
-    if (result := simulator(theta_obs)) is None:
+    # Test the simulator to ensure we are not on a node where all simulations
+    # time out, as this would affect the results of the nested sampling run
+    log("Testing simulator...", end=" ")
+    if simulator(prior.sample()) is None:
         log("Failed!")
         raise RuntimeError(f"[{rank:2d}] Failed to simulate ground truth!")
-    _, flux_obs = result
     log("Done!")
 
+    # Load the target spectrum (including error bars for the likelihood)
+    log("Loading target spectrum...", end=" ")
+    target_spectrum = load_target_spectrum(
+        file_path=config.target_spectrum.file_path,
+        index=config.target_spectrum.index,
+    )
+    log("Done!")
+
+    # Create a backup of the target spectrum in the experiment directory
+    # We only need to do this once on the "root" process
+    if rank == 0 and ~(args.experiment_dir / "target_spectrum.hdf").exists():
+        log("Creating backup of target spectrum...", end=" ")
+        save_to_hdf(
+            file_path=args.experiment_dir / "target_spectrum.hdf",
+            **target_spectrum,
+        )
+        log("Done!")
+
+    # Instantiate the likelihood distribution
     log("Creating likelihood distribution...", end=" ")
     likelihood_distribution = get_likelihood_distribution(
-        flux_obs=flux_obs,
-        config=config.likelihood,
+        flux_obs=target_spectrum["flux"],
+        error_bars=target_spectrum["error_bars"],
     )
     log("Done!")
 
@@ -238,6 +261,8 @@ if __name__ == "__main__":
             return -1e299
 
         # If the simulation timed out, return "-inf"
+        # This should be closely monitored; too many timeouts will affect the
+        # overall result. (But some nodes just have hiccups sometimes...)
         if result is None:
             print("\n\nSimulation timed out!\n", file=sys.stderr)
             return -1e298
@@ -305,7 +330,7 @@ if __name__ == "__main__":
                 np.array(prior.distribution.support()[1][infer_mask]),
             ),
             file_path=args.experiment_dir / "posterior.pdf",
-            ground_truth=theta_obs[infer_mask],
+            ground_truth=target_spectrum["theta"][infer_mask],
         )
         log("Done!")
 

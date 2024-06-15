@@ -2,6 +2,7 @@
 Unit tests for `fm4ar.nested_sampling.samplers`.
 """
 
+import json
 import os
 import time
 from pathlib import Path
@@ -78,7 +79,7 @@ def test__sampler_timeout(
     config.sampler.library = library  # type: ignore
     with open(experiment_dir / "config.yaml", "w") as yaml_file:
         safe_dump(
-            config.dict(),
+            json.loads(config.json()),
             yaml_file,
             default_flow_style=False,
             sort_keys=False,
@@ -115,6 +116,6 @@ def test__sampler_timeout(
     captured = capsys.readouterr()
     assert "stopping sampler!" in captured.out
 
-    # The runtime limitation is not exact (especially for small problems where
+    # The runtime limitation is not exact (especially for problems where
     # we are not dominated by the simulator), so we allow for some slack
     assert runtime < 1.5 * max_runtime

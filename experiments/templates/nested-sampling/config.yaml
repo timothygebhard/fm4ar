@@ -8,28 +8,12 @@ htcondor:
   n_cpus: 96
   memory_cpus: 100_000
 
-# Likelihood (i.e., mostly the noise model)
-likelihood:
-  sigma: 0.125754
-
-# Ground truth values used for simulating the target data
-ground_truth:
-  C/O: 0.55
-  Fe/H: 0.0
-  P_quench: -5.0
-  log_X_Fe: -0.86
-  log_X_MgSiO3: -0.65
-  f_sed: 3.0
-  log_K_zz: 8.5
-  sigma_g: 2.0
-  log_g: 3.75
-  R_P: 1.0
-  T_0: 1063.6
-  T_3/T_connect: 0.26
-  T_2/T_3: 0.29
-  T_1/T_2: 0.32
-  alpha: 1.39
-  log_delta/alpha: 0.48
+# Define target spectrum
+# The file needs to contain the following keys:
+#   "theta, "wlen", "flux", "error_bars" (to specify likelihood)
+target_spectrum:
+  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/benchmark/noise-free__R-400__pRT-2.6.7.hdf"
+  index: 0
 
 # Prior distribution for dataset, and parameter actions
 # For each parameter, there are three possible actions using the given prior:

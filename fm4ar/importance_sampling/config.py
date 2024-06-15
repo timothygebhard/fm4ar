@@ -9,25 +9,10 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from yaml import safe_load
 
-from fm4ar.likelihoods.config import LikelihoodConfig
 from fm4ar.priors.config import PriorConfig
 from fm4ar.simulators.config import SimulatorConfig
+from fm4ar.target_spectrum import TargetSpectrumConfig
 from fm4ar.utils.htcondor import HTCondorConfig
-
-
-class TargetSpectrumConfig(BaseModel):
-    """
-    Configuration for the target spectrum.
-    """
-
-    file_path: Path = Field(
-        ...,
-        description="Path to the file containing the target spectrum.",
-    )
-    index: int = Field(
-        default=0,
-        description="Index of the target spectrum in the file.",
-    )
 
 
 class DrawProposalSamplesConfig(BaseModel):
@@ -109,10 +94,9 @@ class ImportanceSamplingConfig(BaseModel):
         ),
     )
 
-    # Target spectrum, prior, likelihood, and simulator
+    # Target spectrum, prior, and simulator
     target_spectrum: TargetSpectrumConfig
     prior: PriorConfig
-    likelihood: LikelihoodConfig
     simulator: SimulatorConfig
 
     # Configuration for the individual stages

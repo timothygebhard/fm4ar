@@ -17,4 +17,3 @@ def test__load_config() -> None:
 
     # Check that the config is loaded correctly
     assert config.sampler.library == "nautilus"
-    assert config.likelihood.sigma == 0.125754

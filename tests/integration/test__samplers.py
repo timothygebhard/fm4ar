@@ -2,6 +2,7 @@
 Integration tests for `fm4ar.nested_sampling.samplers`.
 """
 
+import json
 import os
 from pathlib import Path
 from shutil import copyfile
@@ -63,7 +64,7 @@ def test__samplers(
     config.sampler.library = library  # type: ignore
     with open(experiment_dir / "config.yaml", "w") as yaml_file:
         safe_dump(
-            config.dict(),
+            json.loads(config.json()),
             yaml_file,
             default_flow_style=False,
             sort_keys=False,

@@ -9,9 +9,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from yaml import safe_load
 
-from fm4ar.likelihoods.config import LikelihoodConfig
 from fm4ar.priors.config import PriorConfig
 from fm4ar.simulators.config import SimulatorConfig
+from fm4ar.target_spectrum import TargetSpectrumConfig
 from fm4ar.utils.htcondor import HTCondorConfig
 
 
@@ -64,12 +64,11 @@ class NestedSamplingConfig(BaseModel):
     Full configuration for a nested sampling run.
     """
 
-    ground_truth: dict[str, float]
-    htcondor: HTCondorConfig
-    likelihood: LikelihoodConfig
+    target_spectrum: TargetSpectrumConfig
+    prior: PriorConfig
     sampler: SamplerConfig
     simulator: SimulatorConfig
-    prior: PriorConfig
+    htcondor: HTCondorConfig
 
 
 def load_config(

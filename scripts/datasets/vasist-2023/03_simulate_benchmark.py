@@ -57,6 +57,10 @@ if __name__ == "__main__":
         flux = flux.astype(np.float32)
         print("Done!", flush=True)
 
+    # Define error bars for the benchmark spectrum
+    # We use the default noise level from Vasist et al. (2023)
+    error_bars = np.full_like(flux, SIGMA, dtype=np.float32)
+
     # Prepare output directory
     output_dir = get_datasets_dir() / "vasist-2023" / "benchmark"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -81,6 +85,7 @@ if __name__ == "__main__":
         f.create_dataset("wlen", data=wlen.reshape(1, -1))
         f.create_dataset("flux", data=flux.reshape(1, -1))
         f.create_dataset("theta", data=THETA_0.reshape(1, -1))
+        f.create_dataset("error_bars", data=error_bars.reshape(1, -1))
     print("Done!", flush=True)
 
     # Next, create noisy versions of the benchmark spectrum
@@ -100,6 +105,7 @@ if __name__ == "__main__":
         f.attrs.update(metadata | {"noise_level": SIGMA})
         f.create_dataset("wlen", data=wlen.reshape(1, -1))
         f.create_dataset("flux", data=noisy_flux)
+        f.create_dataset("error_bars", data=np.tile(error_bars, (100, 1)))
         f.create_dataset("noise", data=noise)
         f.create_dataset("theta", data=np.tile(THETA_0, (100, 1)))
     print("Done!", flush=True)
