@@ -13,7 +13,7 @@ model_kwargs: {}
 #   "theta, "wlen", "flux", "error_bars" (to specify likelihood)
 # If the model is an unconditional flow, this will be ignored.
 target_spectrum:
-  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/benchmark/noise-free__R-400__pRT-2.6.7.hdf"
+  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/benchmark/noise-free__sigma-0.125754__R-400__pRT-2.6.7.hdf"
   index: 0
 
 # Prior settings
