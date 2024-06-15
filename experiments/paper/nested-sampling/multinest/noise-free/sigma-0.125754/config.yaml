@@ -34,7 +34,7 @@ prior:
 
 # Sampler settings
 sampler:
-  library: nautilus
+  library: multinest
   max_runtime: 21_600
   n_livepoints: 4_000
   random_seed: 42
