@@ -124,13 +124,17 @@ markers = [  # deselect tests with -m "not <marker>"
 
 [tool.ruff]
 lint.select = [
-    "E",  # pycodestyle rules
-    "F",  # Pyflakes rules
-    "B",  # flake8-bugbear rules
+    "B",    # flake8-bugbear rules
+    "E",    # pycodestyle rules
+    "F",    # Pyflakes rules
+    "I",    # isort rules
+    "NPY",  # numpy rules
+    "SIM",  # flake8-simplify rules
 ]
 lint.ignore = [
-    "B019",  # "Use of functools.lru_cache can lead to memory leaks"
-    "B028",  # "No explicit `stacklevel` keyword argument found"
+    "B019",    # "Use of functools.lru_cache can lead to memory leaks"
+    "B028",    # "No explicit `stacklevel` keyword argument found"
+    "SIM112",  # "Use capitalized environment variable"
 ]
 line-length = 79
 target-version = "py310"
