@@ -1,6 +1,6 @@
 """
 Run importance sampling using a trained ML model: either a "proper"
-posterior  model (FMPE or NPE), or an unconditional flow model (e.g.,
+posterior model (FMPE or NPE), or an unconditional flow model (e.g.,
 for creating reference posteriors).
 """
 
