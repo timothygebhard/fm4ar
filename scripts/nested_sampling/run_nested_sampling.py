@@ -151,9 +151,6 @@ if __name__ == "__main__":
     comm = None
     rank = 0
 
-    # Set random seed for reproducibility
-    np.random.seed(config.sampler.random_seed + rank)
-
     # Define a simple overloaded print function that flushes the output and
     # limits the output to the root process (rank 0) in case of MPI
     def log(*args: Any, **kwargs: Any) -> None:
