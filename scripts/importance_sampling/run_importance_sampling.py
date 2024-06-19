@@ -37,6 +37,7 @@ from fm4ar.utils.htcondor import (
     create_submission_file,
 )
 from fm4ar.utils.multiproc import get_number_of_available_cores
+from fm4ar.utils.paths import expand_env_variables_in_path
 
 
 def get_cli_arguments() -> argparse.Namespace:
@@ -208,7 +209,7 @@ if __name__ == "__main__":
     # We need to overwrite args because some functions expect args.working_dir
     # to be an absolute path. Not sure if there is a cleaner way to do this?
     if not args.working_dir.is_absolute():
-        args.working_dir = (
+        args.working_dir = expand_env_variables_in_path(
             Path(args.experiment_dir)
             / "importance_sampling"
             / args.working_dir
