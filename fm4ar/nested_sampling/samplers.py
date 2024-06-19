@@ -613,7 +613,7 @@ class MultiNestSampler(Sampler):
                 n_live_points=self.n_livepoints,
                 verbose=verbose,
                 resume=True,
-                seed=self.random_seed,
+                seed=self.random_seed + self.rank,
                 **run_kwargs,
             ),
         )
@@ -766,12 +766,14 @@ class UltraNestSampler(Sampler):
         )
 
         # Set the random seed of numpy's global RNG for reproducibility
-        # We need to very cautious here not to break the sampler by setting
+        # It seems that UltraNest does not use its own RNG, so we need to set
+        # the global seed here, even though this is generally not recommended.
+        # We also need to cautious here not to break the sampler by setting
         # the random seed in a way that all processes generate the same
         # random numbers (in particular: the same live points). This is why
         # we use the `rank` and the number of calls as a seed offset here.
         offset = self.sampler.mpi_rank + self.sampler.ncall
-        np.random.seed(random_seed + offset)
+        np.random.seed(random_seed + offset)  # noqa: NPY002
 
         # Optional: Add step sampler (for now, we only support `SliceSampler`)
         # For more details about step samplers and settings, see:
