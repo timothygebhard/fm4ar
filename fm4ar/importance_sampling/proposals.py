@@ -60,12 +60,6 @@ def draw_proposal_samples(
             index=config.target_spectrum.index,
         )
 
-        # Save a copy of the target spectrum to the working directory
-        # We only need to do this once, not for every parallel GPU job
-        if args.job == 0:
-            file_path = args.working_dir / "target_spectrum.npz"
-            np.savez(file_path, **target_spectrum)
-
         # Construct the context for the model from the target spectrum
         context = {
             k: torch.from_numpy(v).float().reshape(1, -1) for k, v in
