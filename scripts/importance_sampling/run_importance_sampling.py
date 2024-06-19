@@ -187,7 +187,9 @@ def backup_target_spectrum(
     file_path = args.working_dir / "target_spectrum.hdf"
     if args.job == 0 and not file_path.exists():
         target_spectrum = load_from_hdf(
-            file_path=config.target_spectrum.file_path,
+            file_path=expand_env_variables_in_path(
+                config.target_spectrum.file_path
+            ),
             idx=config.target_spectrum.index,
         )
         save_to_hdf(file_path=file_path, **target_spectrum)
