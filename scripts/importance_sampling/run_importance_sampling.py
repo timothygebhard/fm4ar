@@ -100,7 +100,6 @@ def get_cli_arguments() -> argparse.Namespace:
 def prepare_and_launch_dag(
     args: argparse.Namespace,
     config: ImportanceSamplingConfig,
-    working_dir: Path,
 ) -> None:
     """
     Prepare and launch the DAGMan file for running the importance
@@ -109,7 +108,6 @@ def prepare_and_launch_dag(
     Args:
         args: The command line arguments.
         config: The importance sampling configuration.
-        working_dir: The working directory for the IS run.
     """
 
     # Initialize a new DAGMan file
@@ -155,7 +153,7 @@ def prepare_and_launch_dag(
         # Create submission file
         file_path = create_submission_file(
             htcondor_config=htcondor_config,
-            experiment_dir=working_dir,
+            experiment_dir=args.working_dir,
             file_name=f"{i}__{stage}.sub"
         )
 
@@ -168,11 +166,30 @@ def prepare_and_launch_dag(
         )
 
     # Save the DAGMan file
-    file_path = working_dir / "0__importance_sampling.dag"
+    file_path = args.working_dir / "0__importance_sampling.dag"
     dag.save(file_path=file_path)
 
     # Submit the DAGMan file to HTCondor
     condor_submit_dag(file_path=file_path, verbose=True)
+
+
+def backup_target_spectrum(
+    args: argparse.Namespace,
+    config: ImportanceSamplingConfig,
+) -> None:
+    """
+    Backup the target spectrum to the working directory.
+    """
+
+    # Save a copy of the target spectrum to the working directory
+    # We only need to do this once, not for every parallel job
+    file_path = args.working_dir / "target_spectrum.hdf"
+    if args.job == 0 and not file_path.exists():
+        target_spectrum = load_from_hdf(
+            file_path=config.target_spectrum.file_path,
+            idx=config.target_spectrum.index,
+        )
+        save_to_hdf(file_path=file_path, **target_spectrum)
 
 
 if __name__ == "__main__":
@@ -182,43 +199,39 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
 
     script_start = time.time()
-    print("\nRUN IMPORTANCE SAMPLING\n\n")
+    print("\nRUN IMPORTANCE SAMPLING\n")
 
     # Get the command line arguments and define shortcuts
     args = get_cli_arguments()
-    working_dir = Path(args.working_dir)
 
     # Resolve the working directory in case it is not absolute
     # We need to overwrite args because some functions expect args.working_dir
-    # to be an absolute path. FIXME: Maybe this should be handled cleaner?
-    if not working_dir.is_absolute():
-        working_dir = (
+    # to be an absolute path. Not sure if there is a cleaner way to do this?
+    if not args.working_dir.is_absolute():
+        args.working_dir = (
             Path(args.experiment_dir)
             / "importance_sampling"
-            / working_dir
+            / args.working_dir
         )
-    if not working_dir.exists():
-        raise FileNotFoundError(f"Working directory not found: {working_dir}")
-    else:
-        args.working_dir = working_dir
+
+    # Make sure the working directory exists before we proceed
+    if not args.working_dir.exists():
+        raise FileNotFoundError(f"Directory not found: {args.working_dir}")
 
     # Ensure that we do not run compute-heavy jobs on the login node
     check_if_on_login_node(start_submission=args.start_submission)
     print("Running on host:", gethostname(), "\n", flush=True)
 
     # Load the importance sampling config
-    config = load_config(experiment_dir=working_dir)
+    config = load_config(experiment_dir=args.working_dir)
 
     # -------------------------------------------------------------------------
     # If --start-submission: Create DAG file, launch job, and exit
     # -------------------------------------------------------------------------
 
     if args.start_submission:
-        prepare_and_launch_dag(
-            args=args,
-            config=config,
-            working_dir=working_dir,
-        )
+        backup_target_spectrum(args=args, config=config)
+        prepare_and_launch_dag(args=args, config=config)
         sys.exit(0)
 
     # -------------------------------------------------------------------------
@@ -242,7 +255,9 @@ if __name__ == "__main__":
 
         print("\nSaving results to HDF...", end=" ", flush=True)
         save_to_hdf(
-            file_path=working_dir / f"proposal-samples-{args.job:04d}.hdf",
+            file_path=(
+                args.working_dir / f"proposal-samples-{args.job:04d}.hdf"
+            ),
             samples=results["samples"].astype(np.float32),
             log_prob_samples=results["log_prob_samples"].astype(np.float32),
             log_prob_theta_true=results["log_prob_theta_true"],
@@ -262,9 +277,9 @@ if __name__ == "__main__":
         print("Merging HDF files:", flush=True)
         delete_after_merge = config.merge_proposal_samples.delete_after_merge
         merge_hdf_files(
-            target_dir=working_dir,
+            target_dir=args.working_dir,
             name_pattern="proposal-samples-*.hdf",
-            output_file_path=working_dir / "proposal-samples.hdf",
+            output_file_path=args.working_dir / "proposal-samples.hdf",
             keys=["samples", "log_prob_samples"],
             singleton_keys=["log_prob_theta_true"],
             delete_after_merge=delete_after_merge,
@@ -297,7 +312,7 @@ if __name__ == "__main__":
         # Load the theta samples and probabilities and unpack them
         # We also load the log-probability of the ground truth theta value
         proposal_samples = load_from_hdf(
-            file_path=working_dir / "proposal-samples.hdf",
+            file_path=args.working_dir / "proposal-samples.hdf",
             keys=["samples", "log_prob_samples", "log_prob_theta_true"],
             idx=idx,
         )
@@ -410,7 +425,7 @@ if __name__ == "__main__":
         file_name = f"simulations-{args.job:04d}.hdf"
         print("Saving results to HDF...", end=" ", flush=True)
         save_to_hdf(
-            file_path=working_dir / file_name,
+            file_path=args.working_dir / file_name,
             flux=flux.astype(np.float32),
             log_likelihoods=log_likelihoods.astype(np.float32),
             log_prior_values=log_prior_values.astype(np.float32),
@@ -434,8 +449,9 @@ if __name__ == "__main__":
         print("Merging HDF files:")
         delete_after_merge = config.merge_simulation_results.delete_after_merge
         merge_hdf_files(
-            target_dir=working_dir, name_pattern="simulations-*.hdf",
-            output_file_path=working_dir / "simulations.hdf",
+            target_dir=args.working_dir,
+            name_pattern="simulations-*.hdf",
+            output_file_path=args.working_dir / "simulations.hdf",
             keys=[
                 "flux",
                 "log_likelihoods",
@@ -452,7 +468,7 @@ if __name__ == "__main__":
         # Load the merged results
         print("Loading merged results...", end=" ", flush=True)
         merged = load_from_hdf(
-            file_path=working_dir / "simulations.hdf",
+            file_path=args.working_dir / "simulations.hdf",
             keys=[
                 "flux",
                 "log_likelihoods",
@@ -500,7 +516,7 @@ if __name__ == "__main__":
 
         # Save the full results
         print("Saving full results to HDF...", end=" ")
-        save_to_hdf(file_path=working_dir / "results.hdf", **merged)
+        save_to_hdf(file_path=args.working_dir / "results.hdf", **merged)
         print("Done!")
 
         # Drop some quantities that are usually not needed for downstream
@@ -510,7 +526,7 @@ if __name__ == "__main__":
         del merged["log_prior_values"]
         del merged["log_prob_samples"]
         del merged["log_likelihoods"]
-        save_to_hdf(file_path=working_dir / "results.min.hdf", **merged)
+        save_to_hdf(file_path=args.working_dir / "results.min.hdf", **merged)
         print("Done!")
 
     # -------------------------------------------------------------------------
