@@ -182,16 +182,28 @@ def backup_target_spectrum(
     Backup the target spectrum to the working directory.
     """
 
+    # Define shortcuts
+    src_file_path = expand_env_variables_in_path(
+        config.target_spectrum.file_path
+    )
+    idx = config.target_spectrum.index
+
     # Save a copy of the target spectrum to the working directory
     # We only need to do this once, not for every parallel job
     file_path = args.working_dir / "target_spectrum.hdf"
     if args.job == 0 and not file_path.exists():
-        target_spectrum = load_from_hdf(
-            file_path=expand_env_variables_in_path(
-                config.target_spectrum.file_path
-            ),
-            idx=config.target_spectrum.index,
-        )
+
+        # Load the target spectrum and extract the relevant index
+        # This is slightly annoying because the `wlen` key requires special
+        # treatment, since we don't store the wavelength grid for every sample.
+        target_spectrum = load_from_hdf(file_path=src_file_path)
+        for key in target_spectrum:
+            if key != "wlen":
+                target_spectrum[key] = target_spectrum[key][idx]
+            else:
+                target_spectrum[key] = target_spectrum[key].flatten()
+
+        # Save the target spectrum to the working directory
         save_to_hdf(file_path=file_path, **target_spectrum)
 
 
