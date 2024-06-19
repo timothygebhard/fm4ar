@@ -34,7 +34,8 @@ if __name__ == "__main__":
     }
 
     path = os.path.join(
-        os.environ["pRT_input_data_path"], "opacities/lines/corr_k"
+        os.environ["pRT_input_data_path"],
+        "opacities/lines/corr_k"
     )
 
     atmosphere = Radtrans(line_species=species, wlen_bords_micron=[0.1, 251.0])

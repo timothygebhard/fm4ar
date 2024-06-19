@@ -12,9 +12,9 @@ from tqdm import tqdm
 
 from fm4ar.datasets.theta_scalers import get_theta_scaler
 from fm4ar.importance_sampling.config import ImportanceSamplingConfig
-from fm4ar.target_spectrum import load_target_spectrum
 from fm4ar.models.build_model import build_model
 from fm4ar.nn.flows import create_unconditional_flow_wrapper
+from fm4ar.target_spectrum import load_target_spectrum
 from fm4ar.torchutils.general import set_random_seed
 from fm4ar.unconditional_flow.config import load_config as load_flow_config
 from fm4ar.utils.config import load_config as load_experiment_config

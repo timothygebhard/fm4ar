@@ -10,8 +10,8 @@ import pytest
 from pydantic import ValidationError
 
 from fm4ar.utils.htcondor import (
-    HTCondorConfig,
     DAGManFile,
+    HTCondorConfig,
     check_if_on_login_node,
     create_submission_file,
     get_cuda_capability,

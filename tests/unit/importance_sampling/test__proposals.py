@@ -14,9 +14,9 @@ import torch
 from fm4ar.importance_sampling.config import load_config as load_is_config
 from fm4ar.importance_sampling.proposals import draw_proposal_samples
 from fm4ar.models.build_model import build_model
-from fm4ar.utils.config import load_config as load_npe_config
-from fm4ar.unconditional_flow.config import load_config as load_flow_config
 from fm4ar.nn.flows import create_unconditional_flow_wrapper
+from fm4ar.unconditional_flow.config import load_config as load_flow_config
+from fm4ar.utils.config import load_config as load_npe_config
 from fm4ar.utils.paths import get_experiments_dir
 
 
@@ -25,6 +25,8 @@ def file_path_to_target_spectrum(tmp_path: Path) -> Path:
     """
     Create a file with a pseudo target spectrum.
     """
+
+    rng = np.random.default_rng(42)
 
     # Create a file with a pseudo target spectrum
     file_path = tmp_path / "target_spectrum.hdf"
@@ -36,7 +38,7 @@ def file_path_to_target_spectrum(tmp_path: Path) -> Path:
         )
         f.create_dataset(
             name="flux",
-            data=np.random.normal(0, 1, (1, 947)) ** 2,
+            data=rng.normal(0, 1, (1, 947)) ** 2,
             dtype=np.float32,
         )
         f.create_dataset(
@@ -46,7 +48,7 @@ def file_path_to_target_spectrum(tmp_path: Path) -> Path:
         )
         f.create_dataset(
             name="theta",
-            data=np.random.normal(0, 1, 16),
+            data=rng.normal(0, 1, 16),
             dtype=np.float32,
         )
 

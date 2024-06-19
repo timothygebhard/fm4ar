@@ -12,9 +12,11 @@ def test__compute_smoothed_histogram() -> None:
     Test `fm4ar.utils.distributions.compute_smoothed_histogram`.
     """
 
+    rng = np.random.default_rng(42)
+
     # Case 1: No smoothing
     bins = np.linspace(0, 1, 10)
-    samples = np.random.rand(100)
+    samples = rng.random(100)
     weights = None
     bin_centers, hist = compute_smoothed_histogram(
         bins=bins,
@@ -28,7 +30,7 @@ def test__compute_smoothed_histogram() -> None:
 
     # Case 2: Smoothing
     bins = np.linspace(0, 1, 10)
-    samples = np.random.rand(100)
+    samples = rng.random(100)
     weights = None
     bin_centers, hist = compute_smoothed_histogram(
         bins=bins,

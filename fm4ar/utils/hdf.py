@@ -97,7 +97,7 @@ def merge_hdf_files(
     # Open first HDF file to get the (non-singleton) keys, shapes, and dtypes
     keys_shapes_dtypes = {}
     with h5py.File(file_paths[0], "r") as f:
-        for key in f.keys():
+        for key in f:
             if (keys is None or key in keys) and (key not in singleton_keys):
                 keys_shapes_dtypes[key] = (f[key].shape, f[key].dtype)
 
@@ -136,7 +136,7 @@ def merge_hdf_files(
             h5py.File(file_path, "r") as src,
             h5py.File(output_file_path, "a") as dst,
         ):
-            for key in keys_shapes_dtypes.keys():
+            for key in keys_shapes_dtypes:
 
                 # Empty arrays cause problems, so we skip them
                 value = np.array(src[key], dtype=src[key].dtype)

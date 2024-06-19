@@ -12,9 +12,8 @@ import torch
 from tqdm import tqdm
 
 from fm4ar.datasets.theta_scalers import get_theta_scaler
+from fm4ar.models.build_model import FMPEModel, NPEModel, build_model
 from fm4ar.target_spectrum import load_target_spectrum
-from fm4ar.models.build_model import build_model, NPEModel, FMPEModel
-
 
 if __name__ == "__main__":
 

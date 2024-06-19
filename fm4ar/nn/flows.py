@@ -16,15 +16,13 @@ example from https://github.com/bayesiains/nsf.
 
 from typing import Any
 
+import normflows as nf
 import torch
-
 from glasflow.nflows import distributions, flows, transforms, utils
 from glasflow.nflows.nn import nets as nflows_nets
-import normflows as nf
 
 from fm4ar.torchutils.general import get_activation_from_name
 from fm4ar.torchutils.weights import load_and_or_freeze_model_weights
-
 
 # -----------------------------------------------------------------------------
 # Unified interface for both

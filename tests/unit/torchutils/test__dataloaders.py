@@ -2,10 +2,9 @@
 Unit tests for `fm4ar.torchutils.dataloaders`.
 """
 
+import numpy as np
 import pytest
 import torch
-
-import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 
 from fm4ar.torchutils.dataloaders import (

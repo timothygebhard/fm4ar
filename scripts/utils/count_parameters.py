@@ -4,15 +4,14 @@ parameters without starting a training run.
 """
 
 from argparse import ArgumentParser
-from time import time
 from pathlib import Path
+from time import time
 
 import torch
 
+from fm4ar.torchutils.general import get_number_of_parameters
 from fm4ar.training.preparation import prepare_new
 from fm4ar.utils.config import load_config
-from fm4ar.torchutils.general import get_number_of_parameters
-
 
 if __name__ == "__main__":
 

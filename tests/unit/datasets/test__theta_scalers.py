@@ -3,15 +3,15 @@ Unit tests for feature_scaling submodule.
 """
 
 import numpy as np
-import torch
 import pytest
+import torch
 from deepdiff import DeepDiff
 
 from fm4ar.datasets.theta_scalers import (
-    ThetaScaler,
     IdentityScaler,
     MeanStdScaler,
     MinMaxScaler,
+    ThetaScaler,
     get_theta_scaler,
 )
 from fm4ar.datasets.vasist_2023.prior import THETA_0
@@ -45,7 +45,7 @@ def test__theta_scalers() -> None:
     assert isinstance(scaler, MeanStdScaler)
     transformed = scaler.forward(sample)
     assert transformed["theta"].shape == (16,)
-    for key in sample.keys():
+    for key in sample:
         assert np.allclose(scaler.inverse(transformed)[key], sample[key])
 
     # Test the MinMaxScaler
@@ -57,7 +57,7 @@ def test__theta_scalers() -> None:
     assert transformed["theta"].shape == (16,)
     assert np.min(transformed["theta"]) >= 0.0
     assert np.max(transformed["theta"]) <= 1.0
-    for key in sample.keys():
+    for key in sample:
         assert np.allclose(scaler.inverse(transformed)[key], sample[key])
 
     # Test invalid method

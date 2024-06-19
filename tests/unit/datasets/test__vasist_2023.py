@@ -8,9 +8,9 @@ from fm4ar.datasets.vasist_2023.prior import (
     LABELS,
     LOWER,
     NAMES,
-    Prior,
     THETA_0,
     UPPER,
+    Prior,
 )
 from fm4ar.datasets.vasist_2023.simulator import Simulator
 

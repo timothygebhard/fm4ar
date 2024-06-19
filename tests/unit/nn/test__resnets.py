@@ -5,7 +5,7 @@ Tests for `fm4ar.nn.resnets`.
 import pytest
 import torch
 
-from fm4ar.nn.resnets import InitialLayerForZeroInputs, DenseResidualNet
+from fm4ar.nn.resnets import DenseResidualNet, InitialLayerForZeroInputs
 
 
 def test__initial_layer_for_zero_inputs() -> None:

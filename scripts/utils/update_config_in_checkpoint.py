@@ -14,7 +14,6 @@ from deepdiff.diff import DeepDiff
 
 from fm4ar.utils.config import load_config
 
-
 if __name__ == "__main__":
 
     script_start_time = time.time()

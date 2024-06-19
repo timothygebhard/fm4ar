@@ -11,12 +11,11 @@ from importlib.metadata import version
 import h5py
 import numpy as np
 
-from fm4ar.datasets.vasist_2023.prior import THETA_0, SIGMA
+from fm4ar.datasets.vasist_2023.prior import SIGMA, THETA_0
 from fm4ar.datasets.vasist_2023.simulator import Simulator
 from fm4ar.utils.environment import get_packages
 from fm4ar.utils.git_utils import get_git_hash
 from fm4ar.utils.paths import get_datasets_dir
-
 
 if __name__ == "__main__":
 

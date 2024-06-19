@@ -18,7 +18,6 @@ from fm4ar.importance_sampling.config import (
     load_config,
 )
 from fm4ar.importance_sampling.proposals import draw_proposal_samples
-from fm4ar.target_spectrum import load_target_spectrum
 from fm4ar.importance_sampling.utils import (
     compute_effective_sample_size,
     compute_is_weights,
@@ -27,13 +26,14 @@ from fm4ar.importance_sampling.utils import (
 from fm4ar.likelihoods import get_likelihood_distribution
 from fm4ar.priors import get_prior
 from fm4ar.simulators import get_simulator
+from fm4ar.target_spectrum import load_target_spectrum
 from fm4ar.torchutils.general import get_cuda_info
 from fm4ar.utils.hdf import load_from_hdf, merge_hdf_files, save_to_hdf
 from fm4ar.utils.htcondor import (
     DAGManFile,
     HTCondorConfig,
-    condor_submit_dag,
     check_if_on_login_node,
+    condor_submit_dag,
     create_submission_file,
 )
 from fm4ar.utils.multiproc import get_number_of_available_cores

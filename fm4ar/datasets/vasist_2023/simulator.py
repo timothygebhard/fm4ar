@@ -16,9 +16,10 @@ from joblib import Memory
 from petitRADTRANS.nat_cst import r_jup_mean
 
 from fm4ar.simulators.base import BaseSimulator
-from fm4ar.utils.timeout import timelimit, TimeoutException
+from fm4ar.utils.timeout import TimeoutException, timelimit
 
-
+# Cache for the petitRADTRANS atmosphere object
+# Using this cache will significantly speed up the creation of the simulator
 MEMORY = Memory(Path.home(), mmap_mode="c", verbose=0)
 
 

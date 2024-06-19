@@ -12,9 +12,11 @@ def test__resample_spectrum() -> None:
     Test `fm4ar.utils.resampling.resample_spectrum`.
     """
 
+    rng = np.random.default_rng(42)
+
     # Case 1: NaN at the edges
     old_wlen = np.linspace(1, 2, 101)
-    old_flux = np.random.randn(101)
+    old_flux = rng.standard_normal(101)
     new_wlen = np.linspace(1, 2, 51)
     new_wlen, new_flux = resample_spectrum(new_wlen, old_wlen, old_flux)
     assert new_wlen.shape == new_flux.shape
@@ -23,7 +25,7 @@ def test__resample_spectrum() -> None:
 
     # Case 1: No NaN at the edges
     old_wlen = np.linspace(1, 2, 101)
-    old_flux = np.random.randn(101)
+    old_flux = rng.standard_normal(101)
     new_wlen = np.linspace(1.2, 1.8, 51)
     new_wlen, new_flux = resample_spectrum(new_wlen, old_wlen, old_flux)
     assert new_wlen.shape == new_flux.shape
@@ -32,8 +34,8 @@ def test__resample_spectrum() -> None:
 
     # Case 2: With uncertainties
     old_wlen = np.linspace(1, 2, 101)
-    old_flux = np.random.randn(101)
-    old_errs = np.random.rand(101)
+    old_flux = rng.standard_normal(101)
+    old_errs = rng.standard_normal(101)
     new_wlen = np.linspace(1.2, 1.8, 51)
     new_wlen, new_flux, new_errs = resample_spectrum(
         new_wlen, old_wlen, old_flux, old_errs

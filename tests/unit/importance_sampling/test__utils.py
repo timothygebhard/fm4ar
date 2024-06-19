@@ -104,22 +104,22 @@ def test__clip_and_normalize_weights() -> None:
     Test `clip_and_normalize_weights()`.
     """
 
-    np.random.seed(0)
-    raw_log_weights = np.log10(np.random.uniform(0, 1, 10_000))
+    rng = np.random.default_rng(42)
+    raw_log_weights = np.log10(rng.uniform(0, 1, 10_000))
 
     # Case 1
     normalized_weights = clip_and_normalize_weights(
         raw_log_weights=raw_log_weights,
         percentile=None,
     )
-    assert np.allclose(np.max(normalized_weights), 1.4410159268467855)
+    assert np.allclose(np.max(normalized_weights), 1.4382241623505292)
 
     # Case 2
     normalized_weights = clip_and_normalize_weights(
         raw_log_weights=raw_log_weights,
         percentile=0.95,
     )
-    assert np.allclose(np.max(normalized_weights), 1.0031017892839922)
+    assert np.allclose(np.max(normalized_weights), 1.0028639021473102)
 
 
 def test__compute_log_evidence() -> None:

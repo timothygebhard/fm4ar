@@ -6,8 +6,8 @@ import os
 from contextlib import (
     contextmanager,
     nullcontext,
-    redirect_stdout,
     redirect_stderr,
+    redirect_stdout,
 )
 from typing import Generator
 
@@ -29,6 +29,6 @@ def suppress_output(
     with open(os.devnull, "w") as null:
         suppress_stdout = redirect_stdout(null) if stdout else nullcontext()
         suppress_stderr = redirect_stderr(null) if stderr else nullcontext()
-        with suppress_stdout:
+        with suppress_stdout:  # noqa: SIM117
             with suppress_stderr:
                 yield

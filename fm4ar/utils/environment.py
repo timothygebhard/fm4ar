@@ -5,8 +5,8 @@ Utilities for documenting the Python environment.
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
 from importlib import metadata
+from pathlib import Path
 
 
 def get_packages() -> list[str]:

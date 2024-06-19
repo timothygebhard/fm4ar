@@ -2,15 +2,15 @@
 Script to draw samples from the prior and simulate spectra.
 """
 
-from pathlib import Path
 import argparse
 import time
+from pathlib import Path
 
 import h5py
 import numpy as np
 from tqdm import tqdm
 
-from fm4ar.datasets.vasist_2023.prior import Prior, THETA_0
+from fm4ar.datasets.vasist_2023.prior import THETA_0, Prior
 from fm4ar.datasets.vasist_2023.simulator import Simulator
 from fm4ar.utils.paths import expand_env_variables_in_path
 

@@ -5,12 +5,12 @@ Unit tests for `fm4ar.simulators`.
 import pytest
 from pydantic import ValidationError
 
-from fm4ar.simulators import get_simulator
-from fm4ar.simulators.base import BaseSimulator
-from fm4ar.simulators.config import SimulatorConfig
 from fm4ar.datasets.vasist_2023.simulator import (
     Simulator as Vasist2023Simulator,
 )
+from fm4ar.simulators import get_simulator
+from fm4ar.simulators.base import BaseSimulator
+from fm4ar.simulators.config import SimulatorConfig
 
 
 def test__simulator_config() -> None:

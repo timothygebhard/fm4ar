@@ -8,15 +8,15 @@ limit is reached but the training is not complete yet.
 """
 
 import sys
-from socket import gethostname
 from pathlib import Path
+from socket import gethostname
 
 from threadpoolctl import threadpool_limits
 
+from fm4ar.torchutils.general import get_cuda_info
 from fm4ar.training.args import get_cli_arguments
 from fm4ar.training.preparation import prepare_new, prepare_resume
 from fm4ar.training.stages import train_stages
-from fm4ar.torchutils.general import get_cuda_info
 from fm4ar.utils.config import load_config
 from fm4ar.utils.environment import document_environment
 from fm4ar.utils.git_utils import document_git_status
@@ -26,7 +26,6 @@ from fm4ar.utils.htcondor import (
     condor_submit_bid,
     create_submission_file,
 )
-
 
 if __name__ == "__main__":
 

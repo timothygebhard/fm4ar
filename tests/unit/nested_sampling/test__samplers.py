@@ -8,10 +8,10 @@ import time
 from pathlib import Path
 from shutil import copyfile
 from typing import Any
-from yaml import safe_dump
 
 import numpy as np
 import pytest
+from yaml import safe_dump
 
 from fm4ar.nested_sampling.config import load_config
 from fm4ar.nested_sampling.samplers import get_sampler

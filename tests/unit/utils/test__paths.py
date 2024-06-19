@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 
 from fm4ar.utils.paths import (
-    get_path_from_environment_variable,
+    expand_env_variables_in_path,
     get_datasets_dir,
     get_experiments_dir,
+    get_path_from_environment_variable,
     get_root_dir,
-    expand_env_variables_in_path,
 )
 
 

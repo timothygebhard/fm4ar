@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 
 from fm4ar.utils.environment import (
+    document_environment,
     get_packages,
     get_python_version,
     get_virtual_environment,
-    document_environment,
 )
 
 

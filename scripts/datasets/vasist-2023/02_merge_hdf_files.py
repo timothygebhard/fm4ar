@@ -8,8 +8,8 @@ from pathlib import Path
 
 import h5py
 
-from fm4ar.utils.paths import expand_env_variables_in_path
 from fm4ar.utils.hdf import merge_hdf_files
+from fm4ar.utils.paths import expand_env_variables_in_path
 
 
 def get_cli_arguments() -> argparse.Namespace:

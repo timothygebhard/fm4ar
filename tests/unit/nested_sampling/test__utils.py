@@ -5,8 +5,8 @@ Unit tests for `fm4ar.nested_sampling.utils`.
 import numpy as np
 import pytest
 
-from fm4ar.nested_sampling.utils import get_parameter_masks
 from fm4ar.datasets.vasist_2023.prior import Prior as Vasist2023Prior
+from fm4ar.nested_sampling.utils import get_parameter_masks
 from fm4ar.priors.config import PriorConfig
 
 

@@ -6,10 +6,10 @@ from pathlib import Path
 
 import wandb
 
-from fm4ar.datasets import load_dataset, SpectraDataset
+from fm4ar.datasets import SpectraDataset, load_dataset
+from fm4ar.models.build_model import build_model
 from fm4ar.models.fmpe import FMPEModel
 from fm4ar.models.npe import NPEModel
-from fm4ar.models.build_model import build_model
 from fm4ar.torchutils.general import get_number_of_parameters
 from fm4ar.training.wandb import get_wandb_id
 

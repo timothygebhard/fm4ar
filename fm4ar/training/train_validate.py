@@ -9,8 +9,8 @@ import torch
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 
-from fm4ar.torchutils.schedulers import perform_scheduler_step
 from fm4ar.torchutils.general import check_for_nans
+from fm4ar.torchutils.schedulers import perform_scheduler_step
 from fm4ar.training.stages import StageConfig
 from fm4ar.utils.tracking import LossInfo
 

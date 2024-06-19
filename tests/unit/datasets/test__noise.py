@@ -33,7 +33,7 @@ def test__default_noise_generator() -> None:
         random_seed=23,
     )
     error_bars = noise_generator.sample_error_bars(wlen=wlen)
-    assert np.all(0.5 <= error_bars)
+    assert np.all(error_bars >= 0.5)
     assert np.all(error_bars <= 1.0)
     noise = noise_generator.sample_noise(error_bars=error_bars)
     assert np.allclose(np.mean(noise), -0.03235029769558608)

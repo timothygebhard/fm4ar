@@ -2,8 +2,8 @@
 Test that we can construct a flow matching model from a configuration.
 """
 
-from shutil import copyfile
 from pathlib import Path
+from shutil import copyfile
 
 import h5py
 import numpy as np
@@ -12,7 +12,6 @@ import torch
 from deepdiff import DeepDiff
 
 from fm4ar.models.build_model import build_model
-from fm4ar.utils.config import load_config
 from fm4ar.training.preparation import prepare_new, prepare_resume
 from fm4ar.training.stages import StageConfig, initialize_stage, train_stages
 from fm4ar.training.train_validate import (
@@ -20,9 +19,9 @@ from fm4ar.training.train_validate import (
     train_epoch,
     validate_epoch,
 )
+from fm4ar.utils.config import load_config
 from fm4ar.utils.paths import get_experiments_dir
 from fm4ar.utils.tracking import RuntimeLimits
-
 
 # Define some constants for the mock data
 N_TOTAL = 22  # number of samples in the mock dataset
@@ -60,11 +59,11 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
     file_path = tmp_path / "dummy_dataset.hdf"
 
     # Create a dummy dataset
-    np.random.seed(0)
+    rng = np.random.default_rng(42)
     with h5py.File(file_path, "w") as f:
-        f.create_dataset("theta", data=np.random.rand(N_TOTAL, DIM_THETA))
-        f.create_dataset("wlen", data=np.random.rand(N_TOTAL, N_BINS))
-        f.create_dataset("flux", data=np.random.rand(N_TOTAL, N_BINS))
+        f.create_dataset("theta", data=rng.random((N_TOTAL, DIM_THETA)))
+        f.create_dataset("wlen", data=rng.random((N_TOTAL, N_BINS)))
+        f.create_dataset("flux", data=rng.random((N_TOTAL, N_BINS)))
 
     return file_path
 
@@ -82,10 +81,10 @@ def path_to_dummy_dataset(tmp_path: Path) -> Path:
         )
     ),
     [
-        (True, True, 0, 200.03622436523438, 5.195298035939534),
-        (True, False, 1, 172.3665008544922, 4.899760882059733),
-        (False, True, 2, 216.8440704345703, 5.141595045725505),
-        (False, False, 3, 218.73599243164062, 5.029695351918538),
+        (True, True, 0, 200.03622436523438, 5.136022249857585),
+        (True, False, 1, 172.3665008544922, 4.7974575360616045),
+        (False, True, 2, 216.8440704345703, 5.165317376454671),
+        (False, False, 3, 218.73599243164062, 5.206356843312581),
     ],
 )
 @pytest.mark.integration_test
@@ -234,7 +233,7 @@ def test__fmpe_model(
         restored_model.network.state_dict().keys(),
         model.network.state_dict().keys(),
     )
-    for key in model.network.state_dict().keys():
+    for key in model.network.state_dict():
         assert torch.allclose(
             model.network.state_dict()[key],
             restored_model.network.state_dict()[key],

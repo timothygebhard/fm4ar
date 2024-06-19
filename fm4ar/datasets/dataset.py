@@ -8,8 +8,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from fm4ar.datasets.theta_scalers import ThetaScaler, IdentityScaler
 from fm4ar.datasets.data_transforms import DataTransform
+from fm4ar.datasets.theta_scalers import IdentityScaler, ThetaScaler
 
 
 class SpectraDataset(Dataset):

@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
+from fm4ar.datasets.vasist_2023.prior import Prior as Vasist2023Prior
 from fm4ar.priors import get_prior
 from fm4ar.priors.base import BasePrior
 from fm4ar.priors.config import PriorConfig
-from fm4ar.datasets.vasist_2023.prior import Prior as Vasist2023Prior
 
 
 def test__prior_config() -> None:
@@ -37,6 +37,8 @@ def test__get_prior() -> None:
     Test `get_prior()`.
     """
 
+    rng = np.random.default_rng(42)
+
     # -------------------------------------------------------------------------
     # Case 1: vasist_2023 prior
     # -------------------------------------------------------------------------
@@ -58,14 +60,14 @@ def test__get_prior() -> None:
         atol=1e-10,
     )
 
-    u = np.random.uniform(0, 1, 16)
+    u = rng.uniform(0, 1, 16)
     assert np.isclose(
         prior.evaluate(prior.transform(u=u, mask=None), mask=None),
         1.887564381187481e-09,
         atol=1e-10,
     )
 
-    u = np.random.uniform(0, 1, 8)
+    u = rng.uniform(0, 1, 8)
     mask = np.array(8 * [0, 1], dtype=bool)
     assert np.isclose(
         prior.evaluate(prior.transform(u=u, mask=mask), mask=mask),

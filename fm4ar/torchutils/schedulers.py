@@ -11,7 +11,6 @@ from torch.optim import lr_scheduler as lrs
 
 from fm4ar.torchutils.optimizers import get_lr
 
-
 # Define joint type for learning rate schedulers
 Scheduler = lrs.LRScheduler | lrs.ReduceLROnPlateau
 

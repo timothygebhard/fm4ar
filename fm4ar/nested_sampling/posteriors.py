@@ -12,7 +12,6 @@ from fm4ar.nested_sampling.config import load_config
 from fm4ar.utils.hdf import load_from_hdf
 from fm4ar.utils.misc import suppress_output
 
-
 # Define shorthand for more readable code
 SAMPLER_TYPE = Literal["nautilus", "dynesty", "multinest", "ultranest"]
 

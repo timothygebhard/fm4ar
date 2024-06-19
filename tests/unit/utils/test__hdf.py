@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from fm4ar.utils.hdf import save_to_hdf, load_from_hdf, merge_hdf_files
+from fm4ar.utils.hdf import load_from_hdf, merge_hdf_files, save_to_hdf
 
 
 def test__save_to_hdf__load_from_hdf(tmp_path: Path) -> None:

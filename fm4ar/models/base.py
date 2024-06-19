@@ -15,14 +15,12 @@ import wandb
 from threadpoolctl import threadpool_limits
 from torch.utils.data import DataLoader
 
-from fm4ar.training.stages import ExitStatus, StageConfig
-from fm4ar.training.train_validate import validate_epoch, train_epoch
 from fm4ar.torchutils.early_stopping import early_stopping_criterion_reached
 from fm4ar.torchutils.general import resolve_device
 from fm4ar.torchutils.optimizers import (
     OptimizerConfig,
-    get_optimizer_from_config,
     get_lr,
+    get_optimizer_from_config,
 )
 from fm4ar.torchutils.schedulers import (
     Scheduler,
@@ -30,6 +28,8 @@ from fm4ar.torchutils.schedulers import (
     get_scheduler_from_config,
     perform_scheduler_step,
 )
+from fm4ar.training.stages import ExitStatus, StageConfig
+from fm4ar.training.train_validate import train_epoch, validate_epoch
 from fm4ar.utils.tracking import RuntimeLimits
 
 

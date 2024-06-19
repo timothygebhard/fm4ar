@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from fm4ar.datasets.data_transforms import (
-    DataTransformConfig,
     AddNoise,
+    DataTransformConfig,
     Subsample,
     get_data_transforms,
 )

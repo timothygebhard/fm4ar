@@ -13,7 +13,6 @@ from fm4ar.utils.config import load_config
 from fm4ar.utils.environment import document_environment
 from fm4ar.utils.git_utils import document_git_status
 
-
 if __name__ == "__main__":
 
     print("\nTRAIN MODEL ON LOCAL MACHINE\n")

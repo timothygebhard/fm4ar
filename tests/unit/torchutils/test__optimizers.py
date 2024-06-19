@@ -2,8 +2,8 @@
 Unit tests for `fm4ar.torchutils.optimizers`.
 """
 
-import torch
 import pytest
+import torch
 
 from fm4ar.torchutils.optimizers import (
     OptimizerConfig,

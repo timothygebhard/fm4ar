@@ -2,8 +2,8 @@
 Methods for handling timeouts (= limiting the runtime of a function).
 """
 
-from signal import alarm, signal, SIGALRM
 from contextlib import contextmanager
+from signal import SIGALRM, alarm, signal
 from typing import Any, Iterator
 
 

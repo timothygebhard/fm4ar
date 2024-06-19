@@ -10,12 +10,8 @@ from copy import deepcopy
 from pathlib import Path
 from subprocess import run
 
-import h5py
-import numpy as np
-
 from fm4ar.importance_sampling.config import load_config
 from fm4ar.utils.config import save_config
-from fm4ar.utils.hdf import save_to_hdf
 
 
 def get_cli_arguments() -> argparse.Namespace:
@@ -88,20 +84,10 @@ if __name__ == "__main__":
 
         print(f"Creating config for index {idx}...", end=" ", flush=True)
 
-        # Load the target spectrum and all associated information
-        target_spectrum = {}
-        with h5py.File(args.target_file_path, "r") as f:
-            target_spectrum["wlen"] = np.array(f["wlen"][0])
-            target_spectrum["flux"] = np.array(f["flux"][idx])
-            target_spectrum["noise"] = np.array(f["noise"][idx])
-            target_spectrum["theta"] = np.array(f["theta"][idx])
-            target_spectrum["sigma"] = np.array(f["sigma"][idx])
-
         # Create a new configuration
         config = deepcopy(base_config)
         config.target_spectrum.file_path = args.target_file_path.as_posix()
         config.target_spectrum.index = idx
-        config.likelihood.sigma = float(target_spectrum["sigma"])
 
         # Create the directory for the run
         target_stem = args.target_file_path.stem
@@ -113,12 +99,6 @@ if __name__ == "__main__":
             config=config.dict(),
             experiment_dir=run_dir,
             file_name="importance_sampling.yaml",
-        )
-
-        # Save a backup of the target spectrum
-        save_to_hdf(
-            file_path=run_dir / "target_spectrum.hdf",
-            **target_spectrum,
         )
 
         print("Done!", flush=True)

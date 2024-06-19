@@ -3,7 +3,7 @@ Methods for preparing a stage and running the training for it.
 """
 
 from enum import Enum
-from typing import Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from zlib import adler32
 
 import torch
@@ -11,11 +11,11 @@ from pydantic import BaseModel, Field
 from torch.utils.data import DataLoader
 
 from fm4ar.datasets import DatasetConfig
-from fm4ar.datasets.dataset import SpectraDataset
 from fm4ar.datasets.data_transforms import (
     DataTransformConfig,
     get_data_transforms,
 )
+from fm4ar.datasets.dataset import SpectraDataset
 from fm4ar.torchutils.dataloaders import (
     build_dataloaders,
     get_number_of_workers,
