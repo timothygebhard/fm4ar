@@ -66,6 +66,7 @@ dev = [
     "ruff",
     "toml~=0.10.2",
     "types-pyyaml",
+    "types-tabulate",
     "types-toml",
 ]
 
