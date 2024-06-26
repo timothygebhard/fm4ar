@@ -1,16 +1,21 @@
 """
-Create a test set for the `vasist_2023` dataset.
+Create different types of test sets for the `vasist_2023` dataset.
 """
 
 import argparse
+import datetime
+import sys
 import time
+from importlib.metadata import version
 
+import h5py
 import numpy as np
 from tqdm import tqdm
 
 from fm4ar.datasets.vasist_2023.prior import THETA_0, Prior
 from fm4ar.datasets.vasist_2023.simulator import Simulator
-from fm4ar.utils.hdf import save_to_hdf
+from fm4ar.utils.environment import get_packages
+from fm4ar.utils.git_utils import get_git_hash
 from fm4ar.utils.paths import get_datasets_dir
 
 if __name__ == "__main__":
@@ -27,7 +32,7 @@ if __name__ == "__main__":
         choices=["default", "gaussian", "contracted", "benchmark"],
         help=(
             "Mode for sampling theta. There are four options available:"
-            "  1. 'default': Sample directly from prior. "
+            "  1. 'default': Sample directly from prior."
             "  2. 'gaussian': Sample from a Gaussian distribution centered "
             "       at the location of the benchmark spectrum."
             "  3. 'contracted': Sample from a contracted version of the "
@@ -59,7 +64,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n-spectra",
         type=int,
-        default=100,
+        default=1000,
         help="Number of spectra to simulate. Default: 1000.",
     )
     parser.add_argument(
@@ -77,8 +82,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Set up prior
+    # Note: The random seed here does not matter, because we do not call the
+    # `sample()` method of the prior, but instead sample from a unit cube and
+    # call `transform()` to get the atmospheric parameters.
     print("Setting up prior...", end=" ", flush=True)
-    prior = Prior(random_seed=args.random_seed)
+    prior = Prior(random_seed=0)
     print("Done!")
 
     # Set up simulator
@@ -86,8 +94,8 @@ if __name__ == "__main__":
     simulator = Simulator(R=args.resolution, time_limit=args.time_limit)
     print("Done!\n")
 
-    # Create RNG for sampling sigma
-    rng = np.random.default_rng(seed=args.random_seed + 1)
+    # Create RNG for sampling both the parameters and the noise
+    rng = np.random.default_rng(seed=args.random_seed)
 
     # Keep track of the results
     wlen = np.empty(0)
@@ -147,6 +155,22 @@ if __name__ == "__main__":
             # Update progress bar
             progressbar.update(1)
 
+    # Construct error bars from the noise level for each spectrum
+    error_bars = np.array(
+        [np.full_like(wlen, sigma, dtype=np.float32) for sigma in sigmas]
+    )
+
+    # Gather meta-information to save to HDF file (as attributes)
+    n_bins = len(wlen)
+    prt_version = version("petitRADTRANS")
+    metadata = vars(args) | {
+        "HEAD of fm4ar": get_git_hash(),
+        "Timestamp (UTC)": datetime.datetime.utcnow().isoformat(),
+        "Python version": sys.version,
+        "petitRADTRANS version": version("petitRADTRANS"),
+        "packages": "\n".join(get_packages()),
+    }
+
     # Prepare the output directory
     output_dir = get_datasets_dir() / "vasist-2023" / "test"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -155,14 +179,16 @@ if __name__ == "__main__":
     print("\nSaving results...", end=" ", flush=True)
     prefix = f"test-{args.theta_mode}__R-{args.resolution}"
     file_path = output_dir / f"{prefix}__seed-{args.random_seed}.hdf"
-    save_to_hdf(
-        file_path=file_path,
-        wlen=wlen.reshape(1, -1).astype(np.float32),
-        flux=np.array(fluxes).astype(np.float32),
-        noise=np.array(noises).astype(np.float32),
-        theta=np.array(thetas).astype(np.float32),
-        sigma=np.array(sigmas).astype(np.float32),
-    )
-    print("Done!")
+    with h5py.File(file_path, "w") as f:
+        f.attrs.update(metadata)
+        f.create_dataset("wlen", data=wlen.reshape(1, -1))
+        f.create_dataset("flux", data=np.array(fluxes), dtype=np.float32)
+        f.create_dataset("error_bars", data=error_bars, dtype=np.float32)
+        f.create_dataset("noise", data=np.array(noises), dtype=np.float32)
+        f.create_dataset("theta", data=np.array(thetas), dtype=np.float32)
+        f.create_dataset("sigma", data=np.array(sigmas), dtype=np.float32)
+    print("Done!\n")
+
+    print("Results saved to:\n", file_path, flush=True)
 
     print(f"\nThis took {time.time() - script_start:.1f} seconds!\n")
