@@ -167,7 +167,7 @@ if __name__ == "__main__":
         sync_mpi_processes(comm)
 
     log("\nRUN NESTED SAMPLING RETRIEVAL\n")
-    log("Running on host:", gethostname(), "\n", flush=True)
+    log("Running on host:", gethostname(), "\n")
 
     # Instantiate the prior distribution
     log("Creating prior distribution...", end=" ")
