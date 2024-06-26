@@ -7,6 +7,7 @@ import os
 import sys
 from functools import partial
 from pathlib import Path
+from socket import gethostname
 from typing import Any
 
 import numpy as np
@@ -166,6 +167,7 @@ if __name__ == "__main__":
         sync_mpi_processes(comm)
 
     log("\nRUN NESTED SAMPLING RETRIEVAL\n")
+    log("Running on host:", gethostname(), "\n", flush=True)
 
     # Instantiate the prior distribution
     log("Creating prior distribution...", end=" ")
