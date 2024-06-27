@@ -4,6 +4,7 @@ the corresponding runs.
 """
 
 import argparse
+import json
 import sys
 import time
 from copy import deepcopy
@@ -90,6 +91,9 @@ if __name__ == "__main__":
     file_name = args.base_config_path.name
     base_config = load_config(runs_dir, file_name)
 
+    # Determine the resolved path to the target file
+    resolved_path = expand_env_variables_in_path(args.target_file_path)
+
     # Loop over indices
     for idx in range(args.start_idx, args.end_idx + 1):
 
@@ -97,9 +101,7 @@ if __name__ == "__main__":
 
         # Create a new configuration
         config = deepcopy(base_config)
-        config.target_spectrum.file_path = expand_env_variables_in_path(
-            args.target_file_path
-        )
+        config.target_spectrum.file_path = resolved_path
         config.target_spectrum.index = idx
 
         # Create the directory for the run
@@ -108,8 +110,10 @@ if __name__ == "__main__":
         run_dir.mkdir(exist_ok=True)
 
         # Save the configuration
+        # The JSON hack is needed because we cannot write a Path object to
+        # a YAML file, so we need to serialize it to a string first.
         save_config(
-            config=config.dict(),
+            config=json.loads(config.json()),
             experiment_dir=run_dir,
             file_name="importance_sampling.yaml",
         )
