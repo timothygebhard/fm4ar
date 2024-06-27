@@ -218,7 +218,7 @@ class FMPEModel(Base):
         with torch.enable_grad():  # type: ignore
             theta_t.requires_grad_(True)
             vf = self.evaluate_vectorfield(t, theta_t, context)
-            div_vf = self.compute_divergence(vf, theta_t)
+            div_vf = self.compute_divergence(vf=vf, theta_t=theta_t)
         return torch.cat((vf, -div_vf), dim=1)
 
     def sample_and_log_prob_batch(
@@ -229,11 +229,13 @@ class FMPEModel(Base):
         method: str = "dopri5",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Returns conditional samples and their likelihoods for a batch
-        of contexts by solving the joint ODE forwards in time. This is
-        more efficient than calling sample_batch and log_prob_batch
-        separately.
+        Draw posterior samples and return them together with their log-
+        probability (or rather, the log-density under the model.
 
+        Sampling and evaluating the log-probability can be achieved by
+        solving a joint ODE forwards in time, which is more efficient
+        than first drawing samples and evaluating the log-probability
+        separately:
         If d/dt [phi(t), f(t)] = rhs joint with initial conditions
         [theta_0, log p(theta_0)], where theta_0 ~ p_0(theta_0), then
         [phi(1), f(1)] = [theta_1, log p(theta_0) + log p_1(theta_1) -
@@ -355,7 +357,10 @@ class FMPEModel(Base):
         return torch.randn(num_samples, self.dim_theta, device=self.device)
 
     @staticmethod
-    def compute_divergence(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    def compute_divergence(
+        vf: torch.Tensor,
+        theta_t: torch.Tensor,
+    ) -> torch.Tensor:
         """
         Compute the divergence.
 
@@ -365,13 +370,13 @@ class FMPEModel(Base):
 
         div: float | torch.Tensor = 0.0
         with torch.enable_grad():  # type: ignore
-            y.requires_grad_(True)
-            x.requires_grad_(True)
-            for i in range(y.shape[-1]):
+            vf.requires_grad_(True)
+            theta_t.requires_grad_(True)
+            for i in range(vf.shape[-1]):
                 div += torch.autograd.grad(
-                    y[..., i],
-                    x,
-                    torch.ones_like(y[..., i]),
+                    vf[..., i],
+                    theta_t,
+                    torch.ones_like(vf[..., i]),
                     create_graph=True,
                 )[0][..., i : i + 1]
 
