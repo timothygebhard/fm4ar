@@ -94,8 +94,18 @@ if __name__ == "__main__":
     simulator = Simulator(R=args.resolution, time_limit=args.time_limit)
     print("Done!\n")
 
+    # Determine offset for the random seed
+    # This is to ensure, e.g., that different theta modes do not end up
+    # with the same noise realizations
+    offset = [
+        "default",
+        "gaussian",
+        "contracted",
+        "benchmark",
+    ].index(args.theta_mode)
+
     # Create RNG for sampling both the parameters and the noise
-    rng = np.random.default_rng(seed=args.random_seed)
+    rng = np.random.default_rng(seed=args.random_seed + offset)
 
     # Keep track of the results
     wlen = np.empty(0)
@@ -138,10 +148,9 @@ if __name__ == "__main__":
             wlen = wlen.astype(np.float32)
             flux = flux.astype(np.float32)
 
-            # Add noise to the spectrum
+            # Sample noise to add to the spectrum
             sigma = rng.uniform(args.min_sigma, args.max_sigma)
-            noise = sigma * rng.standard_normal(size=flux.shape)
-            noise = noise.astype(np.float32)
+            noise = rng.normal(0, sigma, size=flux.shape).astype(np.float32)
 
             # Add noise to the spectrum
             noisy_flux = flux + noise
