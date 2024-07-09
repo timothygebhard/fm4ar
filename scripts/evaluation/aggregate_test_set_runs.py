@@ -9,7 +9,11 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-from tqdm import tqdm
+from p_tqdm import p_map
+from scipy.spatial.distance import jensenshannon
+
+from fm4ar.datasets.vasist_2023.prior import Prior
+from fm4ar.utils.distributions import compute_smoothed_histogram
 
 
 def get_cli_arguments() -> argparse.Namespace:
@@ -24,6 +28,12 @@ def get_cli_arguments() -> argparse.Namespace:
         type=str,
         required=True,
         help="Pattern for the name of the run directories to include."
+    )
+    parser.add_argument(
+        "--n-processes",
+        type=int,
+        default=16,
+        help="Number of processes to use for parallelization."
     )
     parser.add_argument(
         "--runs-dir",
@@ -68,6 +78,107 @@ def get_quantile(
     return quantile
 
 
+def get_results_for_run_dir(run_dir: Path) -> dict:
+    """
+    Aggregate the results for a single run directory.
+    """
+
+    # Read in the true parameter values
+    with h5py.File(run_dir / "target_spectrum.hdf", "r") as f:
+        sigma = float(np.array(f["sigma"]))
+        theta = np.array(f["theta"])
+        flux = np.array(f["flux"])
+
+    # Read in the importance sampling results
+    with h5py.File(run_dir / "results.hdf", "r") as f:
+        samples = np.array(f["samples"])
+        weights = np.array(f["weights"])
+        log_prob_samples = np.array(f["log_prob_samples"])
+        log_prob_theta_true = np.array(f["log_prob_theta_true"])
+        sampling_efficiency = np.array(f["sampling_efficiency"])
+        simulation_efficiency = np.array(f["simulation_efficiency"])
+        log_evidence = np.array(f["log_evidence"])
+        log_evidence_std = np.array(f["log_evidence_std"])
+
+    # Compute the rank for the ground truth theta value
+    rank_without_is = np.mean(log_prob_samples < log_prob_theta_true)
+    rank_with_is = np.average(
+        log_prob_samples < log_prob_theta_true,
+        weights=weights,
+    )
+
+    # Loop over the parameters to compute the quantiles
+    quantiles_without_is = []
+    quantiles_with_is = []
+    for i in range(len(theta)):
+
+        # Construct the bins
+        # Going from the minimum to the maximum sample is probably fine,
+        # because all other bins would be empty anyway and thus add 0
+        bins = np.linspace(
+            np.min(samples[:, i]),
+            np.max(samples[:, i]),
+            101,
+        )
+
+        # Compute the quantiles with and without importance sampling
+        quantiles_without_is.append(
+            get_quantile(
+                value=float(theta[i]),
+                array=samples[:, i],
+                weights=np.ones(len(samples)),
+                bins=bins,
+            )
+        )
+        quantiles_with_is.append(
+            get_quantile(
+                value=float(theta[i]),
+                array=samples[:, i],
+                weights=weights,
+                bins=bins,
+            )
+        )
+
+    # Compute the JSD (in mnat) between the marginal posterior distributions
+    # with and
+    # without importance sampling
+    jsd_with_without_is = []
+    prior = Prior()
+    for i in range(len(theta)):
+
+        bins = np.linspace(prior.lower[i], prior.upper[i], 101)
+        _, hist_without_is = compute_smoothed_histogram(
+            bins=bins,
+            samples=samples[:, i],
+            weights=np.ones(len(samples)),
+            sigma=3,  # note: smoothing sigma!
+        )
+        _, hist_with_is = compute_smoothed_histogram(
+            bins=bins,
+            samples=samples[:, i],
+            weights=weights,
+            sigma=3,  # note: smoothing sigma!
+        )
+        jsd = 1000 * jensenshannon(hist_without_is, hist_with_is)
+        jsd_with_without_is.append(jsd)
+
+    return {
+        "flux": flux,
+        "jsd_with_without_is": jsd_with_without_is,
+        "log_evidence": log_evidence,
+        "log_evidence_std": log_evidence_std,
+        "quantiles_with_is": quantiles_with_is,
+        "quantiles_without_is": quantiles_without_is,
+        "rank_with_is": rank_with_is,
+        "rank_without_is": rank_without_is,
+        "run_dir": run_dir.as_posix(),
+        "sampling_efficiency": sampling_efficiency,
+        "sigma": sigma,
+        "simulation_efficiency": simulation_efficiency,
+        "theta": theta,
+    }
+
+
 if __name__ == "__main__":
 
     script_start = time.time()
@@ -90,104 +201,27 @@ if __name__ == "__main__":
     )
     print("Done!\n", flush=True)
 
-    # Initialize variables that will hold the results that we collect
-    results: dict[str, list] = {
-        "run_dir": [],
-        "log_evidence": [],
-        "log_evidence_std": [],
-        "sampling_efficiency": [],
-        "simulation_efficiency": [],
-        "quantiles_without_is": [],
-        "quantiles_with_is": [],
-        "theta": [],
-        "sigma": [],
-        "flux": [],
-        "rank_with_is": [],
-        "rank_without_is": [],
+    # Loop over the run directories and collect the results in parallel
+    print("Collecting quantile information:", flush=True)
+    list_of_dicts = p_map(
+        get_results_for_run_dir,
+        run_dirs,
+        num_cpus=args.n_processes,
+        ncols=80,
+    )
+
+    # Convert list of dicts to dict of lists (for easier HDF saving)
+    dict_of_lists = {
+        key: [item[key] for item in list_of_dicts]
+        for key in list_of_dicts[0]
     }
 
-    # Loop over the run directories
-    print("Collecting quantile information:", flush=True)
-    for run_dir in tqdm(run_dirs, ncols=80, total=len(run_dirs)):
-
-        # Read in the true parameter values
-        with h5py.File(run_dir / "target_spectrum.hdf", "r") as f:
-            sigma = float(np.array(f["sigma"]))
-            theta = np.array(f["theta"])
-            flux = np.array(f["flux"])
-
-        # Read in the importance sampling results
-        with h5py.File(run_dir / "results.hdf", "r") as f:
-            samples = np.array(f["samples"])
-            weights = np.array(f["weights"])
-            raw_log_weights = np.array(f["raw_log_weights"])
-            log_prob_samples = np.array(f["log_prob_samples"])
-            log_prob_theta_true = np.array(f["log_prob_theta_true"])
-            sampling_efficiency = np.array(f["sampling_efficiency"])
-            simulation_efficiency = np.array(f["simulation_efficiency"])
-            log_evidence = np.array(f["log_evidence"])
-            log_evidence_std = np.array(f["log_evidence_std"])
-
-        # Compute the rank for the ground truth theta value
-        rank_without_is = np.mean(log_prob_samples < log_prob_theta_true)
-        rank_with_is = np.average(
-            log_prob_samples < log_prob_theta_true,
-            weights=weights,
-        )
-        results["rank_without_is"].append(rank_without_is)
-        results["rank_with_is"].append(rank_with_is)
-
-        # Loop over the parameters to compute the quantiles
-        quantiles_without_is = []
-        quantiles_with_is = []
-        for i in range(len(theta)):
-
-            # Construct the bins
-            # Going from the minimum to the maximum sample is probably fine,
-            # because all other bins would be empty anyway and thus add 0
-            bins = np.linspace(
-                np.min(samples[:, i]),
-                np.max(samples[:, i]),
-                100,
-            )
-
-            # Compute the quantiles with and without importance sampling
-            quantiles_without_is.append(
-                get_quantile(
-                    value=float(theta[i]),
-                    array=samples[:, i],
-                    weights=np.ones(len(samples)),
-                    bins=bins,
-                )
-            )
-            quantiles_with_is.append(
-                get_quantile(
-                    value=float(theta[i]),
-                    array=samples[:, i],
-                    weights=weights,
-                    bins=bins,
-                )
-            )
-
-        # Store the quantiles
-        results["run_dir"].append(run_dir.as_posix())
-        results["log_evidence"].append(log_evidence)
-        results["log_evidence_std"].append(log_evidence_std)
-        results["theta"].append(theta)
-        results["sigma"].append(sigma)
-        results["flux"].append(flux)
-        results["sampling_efficiency"].append(sampling_efficiency)
-        results["simulation_efficiency"].append(simulation_efficiency)
-        results["quantiles_without_is"].append(quantiles_without_is)
-        results["quantiles_with_is"].append(quantiles_with_is)
-
-    print("\nSaving results to HDF...", end=" ", flush=True)
-
     # Save the results to an HDF file
+    print("\nSaving results to HDF...", end=" ", flush=True)
     file_name = "aggregated__" + args.name_pattern.replace("*", "X") + ".hdf"
     file_path = args.runs_dir / file_name
     with h5py.File(file_path, "w") as f:
-        for key, value in results.items():
+        for key, value in dict_of_lists.items():
             if key != "run_dir":
                 f.create_dataset(
                     name=key,
@@ -202,7 +236,7 @@ if __name__ == "__main__":
                 )
                 dataset[:] = value
 
-    print("Done!", flush=True)
-    print("Results saved to:", file_path, flush=True)
+    print("Done!\n", flush=True)
+    print("Results saved to:\n", file_path, flush=True)
 
     print(f"\nThis took {time.time() - script_start:.2f} seconds!\n")
