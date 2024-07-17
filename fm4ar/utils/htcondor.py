@@ -8,7 +8,7 @@ from pathlib import Path
 from subprocess import run
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, Extra, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class HTCondorConfig(BaseModel):
@@ -21,7 +21,7 @@ class HTCondorConfig(BaseModel):
     # value for `memory_cpu` (instead of `memory_cpus`), and this typo then
     # being silently ignored and the model using the default for `memory_cpus`
     class Config:
-        extra = Extra.forbid
+        extra = "forbid"
 
     executable: str = Field(
         default=sys.executable,
