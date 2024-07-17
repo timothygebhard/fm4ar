@@ -1,0 +1,55 @@
+#
+# Configuration file for the script that creates the plots of the 1D marginals
+#
+
+# Results to include
+results:
+  0.1:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.1/results.min.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.1/results.min.hdf"
+    nautilus: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/nautilus/noise-free/sigma-0.1/posterior.hdf"
+  0.2:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.2/results.min.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.2/results.min.hdf"
+    nautilus: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/nautilus/noise-free/sigma-0.2/posterior.hdf"
+  0.3:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.3/results.min.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.3/results.min.hdf"
+    nautilus: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/nautilus/noise-free/sigma-0.3/posterior.hdf"
+  0.4:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.4/results.min.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.4/results.min.hdf"
+    nautilus: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/nautilus/noise-free/sigma-0.4/posterior.hdf"
+
+# Parameters to include and ground truth values
+parameters:
+  C/O: 0.55
+  Fe/H: 0.0
+  P_quench: -5.0
+  log_X_Fe: -0.86
+  log_X_MgSiO3: -0.65
+  f_sed: 3.0
+  log_K_zz: 8.5
+  sigma_g: 2.0
+  log_g: 3.75
+  R_P: 1.0
+  T_0: 1063.0
+  T_3/T_connect: 0.26
+  T_2/T_3: 0.29
+  T_1/T_2: 0.32
+  alpha: 1.39
+  log_delta/alpha: 0.48
+
+# General settings
+cmap: "inferno"
+dataset: "vasist_2023"
+figsize: [4, 6]
+fontsize_labels: 8
+fontsize_ticks: 8
+linewidth: 1
+n_bins: 101
+smoothing: 3
+linestyles:
+  fmpe: "-"
+  npe: "--"
+  nautilus: ":"
