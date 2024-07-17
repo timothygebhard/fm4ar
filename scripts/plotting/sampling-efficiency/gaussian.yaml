@@ -1,0 +1,17 @@
+#
+# Configuration file for sampling efficiency for the "default" test set
+#
+
+# Results to include
+results:
+  fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+  npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+
+# General plot settings
+font_family: "Gillius ADF"
+figsize: [9, 9]
+fontsize_labels: 8
+fontsize_ticks: 6
+marker_size: 1
+color: "#964a8b"
+output_file_name: sampling-efficiencies-gaussian.pdf
