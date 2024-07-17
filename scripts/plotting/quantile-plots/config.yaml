@@ -1,0 +1,20 @@
+#
+# Configuration file for sampling efficiency for the "default" test set
+#
+
+# Results to include (note: this current
+results:
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/test-default/aggregated__test-default_X.hdf"
+    label: "FMPE"
+    color: "#5790fc"
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/test-default/aggregated__test-default_X.hdf"
+    label: "NPE"
+    color: "#e42536"
+
+# General plot settings
+dataset: "vasist_2023"
+font_family: "Gillius ADF"
+figsize: [4.2, 4.2]
+fontsize_labels: 8
+fontsize_ticks: 6
+add_legend: false
