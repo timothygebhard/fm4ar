@@ -1,0 +1,51 @@
+#
+# Configuration file for the cornerplot script.
+#
+
+# Results to include
+results:
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/nautilus/noise-free/sigma-0.125754/posterior.hdf"
+    label: "nautilus"
+    color: "#f3ac3f"
+    use_weights: true
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/multinest/noise-free/sigma-0.125754/posterior.hdf"
+    label: "MultiNest"
+    color: "#ba54a5"
+    use_weights: true
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
+    label: "FMPE without IS"
+    color: "#618df7"
+    use_weights: false
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
+    label: "FMPE with IS"
+    color: "#1e4bf1"
+    use_weights: true
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
+    label: "NPE without IS"
+    color: "#ec682d"
+    use_weights: false
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
+    label: "NPE with IS"
+    color: "#b93224"
+    use_weights: true
+
+# Parameters to include and ground truth values
+parameters:
+  C/O: 0.55
+  P_quench: -5.0
+  log_X_Fe: -0.86
+  f_sed: 3.0
+  log_K_zz: 8.5
+  T_2/T_3: 0.29
+
+# General settings
+dataset: "vasist_2023"
+figsize: [15, 15]
+fontsize_labels: 8
+fontsize_ticks: 6
+label_offset_x: -0.4
+label_offset_y: -0.4
+linewidth: 0.75
+n_bins: 100
+smoothing: 3
+output_file_name: subset-noise-free.pdf
