@@ -1,0 +1,45 @@
+#
+# Configuration file the determine_tolerance.py script
+#
+
+# Define tolerances
+tolerances:
+  - 5.0e-5  # Baseline: Required for sample_and_logprob_batch() [based on IS efficiency]
+  - 2.0e-4  # Candidate: This might suffice for sample_batch()
+
+# Define the target spectrum to use for the context
+target_spectrum:
+  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/benchmark/noise-free__sigma-0.125754__R-400__pRT-2.6.7.hdf"
+  index: 0
+
+# Define FMPE model
+fmpe_model:
+  file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/model__best.pt"
+  use_amp: true
+
+# Define dataset (i.e., samples that will be drawn from the FMPE model)
+dataset:
+  n_samples: 1_048_576
+  chunk_size: 8_192
+  train_test_split: [0.75, 0.25]
+
+# Define discriminator model
+discriminator_model:
+  input_dim: 16
+  hidden_dims:
+    - 1024
+    - 1024
+    - 1024
+    - 1024
+    - 1024
+  output_dim: 1
+  activation: "LeakyReLU"
+  dropout: 0.5
+  batch_norm: true
+
+# Define training settings
+training:
+  batch_size: 8192
+  n_epochs: 100
+  lr: 1.0e-4
+  n_workers: "auto"
