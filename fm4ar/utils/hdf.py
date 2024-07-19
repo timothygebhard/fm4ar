@@ -38,7 +38,7 @@ def load_from_hdf(
     idx: int | slice | np.ndarray | None = None,
 ) -> dict[str, np.ndarray]:
     """
-    Load the given arrays from an HDF5 file.
+    Load the given keys from an HDF file.
 
     Args:
         file_path: Path to the HDF file.
@@ -54,6 +54,9 @@ def load_from_hdf(
         if keys is None:
             keys = sorted(list(f.keys()))
         for key in keys:
+            if key not in f:
+                print(f"Warning: Key '{key}' not found in HDF file!")
+                data[key] = np.empty(shape=())
             if idx is None:
                 data[key] = np.array(f[key], dtype=f[key].dtype)
             else:
