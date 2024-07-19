@@ -57,6 +57,7 @@ def load_from_hdf(
             if key not in list(f.keys()):
                 print(f"Warning: Key '{key}' not found in HDF file!")
                 data[key] = np.empty(shape=())
+                continue
             if idx is None:
                 data[key] = np.array(f[key], dtype=f[key].dtype)
             else:
