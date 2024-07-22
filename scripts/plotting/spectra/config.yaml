@@ -1,0 +1,26 @@
+#
+# Configuration file for plotting benchmark spectrum
+#
+
+# Define target spectrum for plotting
+target_spectrum:
+  file_path: "$FM4AR_DATASETS_DIR/vasist-2023/benchmark/noise-free__sigma-0.125754__R-400__pRT-2.6.7.hdf"
+  index: 0
+
+# Define sigmas for plotting uncertainty bands
+sigmas:
+  - 0.1
+  - 0.2
+  - 0.3
+  - 0.4
+  - 0.5
+
+# General plot settings
+color: "#964a8b"
+figsize: [18.4, 5]
+font_family: "Gillius ADF"
+fontsize_labels: 8
+fontsize_ticks: 6
+marker_size: 1
+output_file_name: benchmark-spectrum.pdf
+unit: "$10^{-16}$ W / m$^2$ / µm"
