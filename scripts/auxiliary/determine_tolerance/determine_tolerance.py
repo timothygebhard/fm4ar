@@ -203,6 +203,7 @@ def train_discriminator_model(
     max_valid_accuracy = 0.0
 
     # Run training for the given number of epochs
+    print("\n\nTraining the discriminator model:\n")
     for epoch in range(config["training"]["n_epochs"]):
 
         epoch_start = time()
@@ -273,17 +274,14 @@ def store_max_accuracies(
 
     # Load the existing data, append the new data, and sort by tolerance
     df = pd.read_csv(file_path)
-    df = df.append(
-        {
-            "tol_1": config["tolerances"][0],
-            "tol_2": config["tolerances"][1],
-            "max_train_acc": max_train_accuracy,
-            "max_valid_acc": max_valid_accuracy,
-            "timestamp": datetime.utcnow().isoformat(),
-        },
-        ignore_index=True,
-    )
-    df = df.sort_values(by=["tolerance_1", "tolerance_2"])
+    df.loc[-1] = [
+        config["tolerances"][0],
+        config["tolerances"][1],
+        max_train_accuracy,
+        max_valid_accuracy,
+        datetime.utcnow().isoformat(),
+    ]
+    df = df.sort_values(by=["tol_1", "tol_2"]).reset_index(drop=True)
 
     # Save the updated data to the CSV file
     df.to_csv(file_path, index=False)
@@ -324,12 +322,15 @@ if __name__ == "__main__":
     discriminator = MLP(**config["discriminator_model"]).to("cuda")
 
     # Train the discriminator model
+    # Somehow, the explicit `del` statement is necessary to terminate properly;
+    # without it, the script seems to get stuck in a `_clean_up_worker` call?
     max_train_accuracy, max_valid_accuracy = train_discriminator_model(
         config=config,
         discriminator=discriminator,
         train_loader=train_loader,
         valid_loader=valid_loader,
     )
+    del train_loader, valid_loader
 
     # Store the maximum accuracies in a CSV file
     store_max_accuracies(
