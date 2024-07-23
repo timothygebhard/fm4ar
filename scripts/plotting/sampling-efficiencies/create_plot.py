@@ -94,7 +94,7 @@ if __name__ == "__main__":
     # Add marginal histograms at the top
     axes[0, 0].axis("off")
     axes[0, 0].set_xlim(-2, 102)
-    axes[0, 0].hist(
+    hist_fmpe, *_ = axes[0, 0].hist(
         100 * results["fmpe"]["sampling_efficiency"],
         bins=bins,
         color="k",
@@ -104,13 +104,18 @@ if __name__ == "__main__":
     # Add marginal histograms on the right
     axes[1, 1].axis("off")
     axes[1, 1].set_ylim(-2, 102)
-    axes[1, 1].hist(
+    hist_npe, *_ = axes[1, 1].hist(
         100 * results["npe"]["sampling_efficiency"],
         bins=bins,
         color="k",
         histtype="bar",
         orientation="horizontal"
     )
+
+    # Ensure the histograms have the same scale to allow direct comparison
+    max_count = max(max(hist_fmpe), max(hist_npe))
+    axes[0, 0].set_ylim(0, max_count)
+    axes[1, 1].set_xlim(0, max_count)
 
     print("Done!", flush=True)
 
