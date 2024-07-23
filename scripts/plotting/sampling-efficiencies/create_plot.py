@@ -114,9 +114,17 @@ if __name__ == "__main__":
 
     print("Done!", flush=True)
 
+    # Compute and print the correlation coefficient
+    corr_coeff = np.corrcoef(
+        results["fmpe"]["sampling_efficiency"],
+        results["npe"]["sampling_efficiency"],
+    )[0, 1]
+    print(f"\nCorrelation coefficient: {corr_coeff:.3f}\n")
+
     # Save the figure
     print("Saving plot...", end=" ", flush=True)
     plt.subplots_adjust(wspace=0.02, hspace=0.02)
+    fig.tight_layout(pad=0)
     plt.savefig(
         Path(__file__).parent / config["output_file_name"],
         dpi=300,
