@@ -9,9 +9,14 @@ results:
 
 # General plot settings
 color: "#f89c20"
-figsize: [9, 9]
+figsize: [8.5, 8.5]
 font_family: "Gillius ADF"
 fontsize_labels: 8
 fontsize_ticks: 6
 marker_size: 1
 output_file_name: sampling-efficiencies-gaussian.pdf
+subplots_adjust:
+  bottom: 0.13
+  top: 0.995
+  left: 0.13
+  right: 0.995
