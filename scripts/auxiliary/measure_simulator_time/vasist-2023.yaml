@@ -1,0 +1,14 @@
+# Define the prior
+prior:
+  dataset: "vasist_2023"
+  random_seed: 42
+
+# Define the simulator
+simulator:
+  dataset: "vasist_2023"
+  kwargs:
+    R: 400
+    time_limit: 10
+
+# Define number of times to repeat the experiment
+n_repeats: 10
