@@ -33,7 +33,7 @@ parameters:
   sigma_clouds: 2.0
   log_g: 3.75
   R_P: 1.0
-  T_0: 1063.0
+  T_int: 1063.0
   T_3: 0.26
   T_2: 0.29
   T_1: 0.32
