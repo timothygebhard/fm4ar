@@ -39,7 +39,7 @@ def get_processor_name() -> str:
                     repl="",
                     string=line,
                     count=1,
-                )
+                ).strip()
 
     raise NotImplementedError("Unsupported platform!")
 
