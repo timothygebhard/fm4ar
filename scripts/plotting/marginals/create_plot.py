@@ -156,12 +156,13 @@ if __name__ == "__main__":
         ax.set_ylim(0, None)
         ax.set_xticks(np.linspace(lower[i], upper[i], 5)[1:-1])
         ax.set_yticks([])
+        ax.spines[["left", "right", "top"]].set_visible(False)
         ax.tick_params(
             axis="x",
             length=2,
             labelsize=config["fontsize_ticks"],
         )
-        ax.axvline(x=true_values[i], lw=0.5, ls="--", color="gray")
+        ax.axvline(x=float(true_values[i]), lw=0.5, ls="--", color="gray")
 
         # Replace special characters in the parameter name
         file_name = (
