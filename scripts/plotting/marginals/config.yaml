@@ -44,6 +44,7 @@ parameters:
 cmap: "inferno"
 dataset: "vasist_2023"
 figsize: [4, 6]
+font_family: "Gillius ADF"
 fontsize_labels: 8
 fontsize_ticks: 8
 linewidth: 1
