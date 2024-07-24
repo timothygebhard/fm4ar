@@ -13,12 +13,13 @@ experiments/**/*
 # jupyter notebooks
 jupyter/
 
-# Data files
+# Data and result files
 *.hdf
 *.h5
 *.hdf5
 *.npy
 *.npz
+*.pdf
 
 # PyCharm project folder
 .idea/
