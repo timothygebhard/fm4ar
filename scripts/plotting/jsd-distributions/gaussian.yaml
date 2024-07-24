@@ -1,0 +1,26 @@
+#
+# Configuration file for JSDs on the Gaussian test set
+#
+
+# Results to include
+results:
+  fmpe:
+    file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+    color: "#5790fc"
+  npe:
+    file_path: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+    color: "#e42536"
+
+# General plot settings
+dataset: "vasist_2023"
+figsize: [18.2, 5]
+font_family: "Gillius ADF"
+fontsize_labels: 8
+fontsize_ticks: 6
+linewidth: 1
+output_file_name: jsd-distributions-gaussian.pdf
+subplots_adjust:
+  bottom: 0.24
+  top: 0.99
+  left: 0.055
+  right: 0.999
