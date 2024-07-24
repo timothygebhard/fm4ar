@@ -32,11 +32,11 @@ results:
 # Parameters to include and ground truth values
 parameters:
   C/O: 0.55
-  P_quench: -5.0
-  log_X_Fe: -0.86
+  log_P_quench: -5.0
+  S_eq_Fe: -0.86
   f_sed: 3.0
   log_K_zz: 8.5
-  T_2/T_3: 0.29
+  T_2: 0.29
 
 # General settings
 dataset: "vasist_2023"
