@@ -4,6 +4,7 @@ Measure the time for sampling the prior and running the simulator.
 
 import argparse
 from pathlib import Path
+from socket import gethostname
 from time import time
 
 import pandas as pd
@@ -11,6 +12,8 @@ from yaml import safe_load
 
 from fm4ar.priors import PriorConfig, get_prior
 from fm4ar.simulators import SimulatorConfig, get_simulator
+from fm4ar.utils.misc import get_processor_name
+from fm4ar.utils.multiproc import get_number_of_available_cores
 
 if __name__ == "__main__":
 
@@ -28,6 +31,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config, "r") as f:
         config = safe_load(f)
+
+    # Print information about the host system
+    print("Host system information:")
+    print(f"  Hostname: {gethostname()}")
+    print(f"  CPU type: {get_processor_name()}")
+    print(f"  # cores:  {get_number_of_available_cores()}\n")
 
     # Load the prior and the simulator
     print("Loading prior and simulator...", end=" ", flush=True)
