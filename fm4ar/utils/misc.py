@@ -3,6 +3,9 @@ Miscellaneous functions that don't fit anywhere else.
 """
 
 import os
+import platform
+import re
+import subprocess
 from contextlib import (
     contextmanager,
     nullcontext,
@@ -10,6 +13,35 @@ from contextlib import (
     redirect_stdout,
 )
 from typing import Generator
+
+
+def get_processor_name() -> str:
+    """
+    Auxiliary function to get the name of the processor.
+    Source: https://stackoverflow.com/a/13078519/4100721
+    """
+
+    if platform.system() == "Windows":
+        return platform.processor()
+
+    elif platform.system() == "Darwin":
+        os.environ['PATH'] = os.environ['PATH'] + os.pathsep + '/usr/sbin'
+        cmd = ["sysctl", "-n", "machdep.cpu.brand_string"]
+        return str(subprocess.check_output(cmd).strip().decode())
+
+    elif platform.system() == "Linux":
+        cmd = ["cat", "/proc/cpuinfo"]
+        all_info = subprocess.check_output(cmd, shell=True).decode().strip()
+        for line in all_info.split("\n"):
+            if "model name" in line:
+                return re.sub(
+                    pattern=r".*model name.*:",
+                    repl="",
+                    string=line,
+                    count=1,
+                )
+
+    raise NotImplementedError("Unsupported platform!")
 
 
 @contextmanager
