@@ -1,6 +1,6 @@
 """
 Aggregate information from test set runs (e.g., quantile information,
-but also ranks, log evidence, ...) and save it to a single HDF file.
+ranks, log evidence, ...) and save it to a single HDF file.
 """
 
 import argparse
@@ -12,8 +12,9 @@ import numpy as np
 from p_tqdm import p_map
 from scipy.spatial.distance import jensenshannon
 
-from fm4ar.datasets.vasist_2023.prior import Prior
+from fm4ar.priors.base import BasePrior
 from fm4ar.utils.distributions import compute_smoothed_histogram
+from fm4ar.utils.hdf import load_from_hdf
 
 
 def get_cli_arguments() -> argparse.Namespace:
@@ -23,6 +24,12 @@ def get_cli_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
 
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="vasist_2023",
+        help="Name of the dataset (needed for prior boundaries)."
+    )
     parser.add_argument(
         "--name-pattern",
         type=str,
@@ -78,105 +85,103 @@ def get_quantile(
     return quantile
 
 
-def get_results_for_run_dir(run_dir: Path) -> dict:
+def get_results_for_run_dir(
+    run_dir: Path,
+    prior: BasePrior,
+) -> dict[str, np.ndarray]:
     """
-    Aggregate the results for a single run directory.
+    Aggregate the results for a single run directory. The `prior` is
+    required to construct the bins for the JSD calculation.
     """
+
+    # Read in the importance sampling results
+    results = load_from_hdf(
+        file_path=run_dir / "results.hdf",
+        keys=[
+            "log_evidence",
+            "log_evidence_std",
+            "log_prob_samples",
+            "log_prob_theta_true",
+            "samples",
+            "sampling_efficiency",
+            "simulation_efficiency",
+            "sigma",
+            "weights",
+        ]
+    )
+    results["run_dir"] = np.array(run_dir.as_posix(), dtype=object)
 
     # Read in the true parameter values
     with h5py.File(run_dir / "target_spectrum.hdf", "r") as f:
-        sigma = float(np.array(f["sigma"]))
-        theta = np.array(f["theta"])
-        flux = np.array(f["flux"])
-
-    # Read in the importance sampling results
-    with h5py.File(run_dir / "results.hdf", "r") as f:
-        samples = np.array(f["samples"])
-        weights = np.array(f["weights"])
-        log_prob_samples = np.array(f["log_prob_samples"])
-        log_prob_theta_true = np.array(f["log_prob_theta_true"])
-        sampling_efficiency = np.array(f["sampling_efficiency"])
-        simulation_efficiency = np.array(f["simulation_efficiency"])
-        log_evidence = np.array(f["log_evidence"])
-        log_evidence_std = np.array(f["log_evidence_std"])
+        results["flux"] = np.array(f["flux"])
+        results["sigma"] = np.array(f["sigma"])
+        results["theta"] = np.array(f["theta"])
 
     # Compute the rank for the ground truth theta value
-    rank_without_is = np.mean(log_prob_samples < log_prob_theta_true)
-    rank_with_is = np.average(
-        log_prob_samples < log_prob_theta_true,
-        weights=weights,
+    results["rank_without_is"] = np.array(
+        np.mean(results["log_prob_samples"] < results["log_prob_theta_true"])
+    )
+    results["rank_with_is"] = np.array(
+        np.average(
+            results["log_prob_samples"] < results["log_prob_theta_true"],
+            weights=results["weights"],
+        )
     )
 
     # Loop over the parameters to compute the quantiles
-    quantiles_without_is = []
-    quantiles_with_is = []
-    for i in range(len(theta)):
+    results["quantiles_without_is"] = np.full(prior.ndim, np.nan)
+    results["quantiles_with_is"] = np.full(prior.ndim, np.nan)
+    for i in range(prior.ndim):
 
         # Construct the bins
         # Going from the minimum to the maximum sample is probably fine,
         # because all other bins would be empty anyway and thus add 0
         bins = np.linspace(
-            np.min(samples[:, i]),
-            np.max(samples[:, i]),
+            np.min(results["samples"][:, i]),
+            np.max(results["samples"][:, i]),
             101,
         )
 
         # Compute the quantiles with and without importance sampling
-        quantiles_without_is.append(
-            get_quantile(
-                value=float(theta[i]),
-                array=samples[:, i],
-                weights=np.ones(len(samples)),
-                bins=bins,
-            )
+        results["quantiles_without_is"][i] = get_quantile(
+            value=float(results["theta"][i]),
+            array=results["samples"][:, i],
+            weights=np.ones_like(results["weights"]),
+            bins=bins,
         )
-        quantiles_with_is.append(
-            get_quantile(
-                value=float(theta[i]),
-                array=samples[:, i],
-                weights=weights,
-                bins=bins,
-            )
+        results["quantiles_with_is"][i] = get_quantile(
+            value=float(results["theta"][i]),
+            array=results["samples"][:, i],
+            weights=results["weights"],
+            bins=bins,
         )
 
     # Compute the JSD (in mnat) between the marginal posterior distributions
-    # with and
-    # without importance sampling
-    jsd_with_without_is = []
-    prior = Prior()
-    for i in range(len(theta)):
+    # with and without importance sampling
+    results["jsd_with_without_is"] = np.full(prior.ndim, np.nan)
+    for i in range(prior.ndim):
 
+        # Construct the bins
+        # We use the full prior range here because otherwise the results
+        # might not be properly comparable between different runs
         bins = np.linspace(prior.lower[i], prior.upper[i], 101)
+
         _, hist_without_is = compute_smoothed_histogram(
             bins=bins,
-            samples=samples[:, i],
-            weights=np.ones(len(samples)),
+            samples=results["samples"][:, i],
+            weights=np.ones_like(results["weights"]),
             sigma=3,  # note: smoothing sigma!
         )
         _, hist_with_is = compute_smoothed_histogram(
             bins=bins,
-            samples=samples[:, i],
-            weights=weights,
+            samples=results["samples"][:, i],
+            weights=results["weights"],
             sigma=3,  # note: smoothing sigma!
         )
         jsd = 1000 * jensenshannon(hist_without_is, hist_with_is)
-        jsd_with_without_is.append(jsd)
+        results["jsd_with_without_is"][i] = jsd
 
-    return {
-        "flux": flux,
-        "jsd_with_without_is": jsd_with_without_is,
-        "log_evidence": log_evidence,
-        "log_evidence_std": log_evidence_std,
-        "quantiles_with_is": quantiles_with_is,
-        "quantiles_without_is": quantiles_without_is,
-        "rank_with_is": rank_with_is,
-        "rank_without_is": rank_without_is,
-        "run_dir": run_dir.as_posix(),
-        "sampling_efficiency": sampling_efficiency,
-        "sigma": sigma,
-        "simulation_efficiency": simulation_efficiency,
-        "theta": theta,
-    }
+    return results
 
 
 if __name__ == "__main__":
@@ -186,6 +191,12 @@ if __name__ == "__main__":
 
     # Get the command line arguments
     args = get_cli_arguments()
+
+    # Load the prior for the dataset
+    if args.dataset == "vasist_2023":
+        from fm4ar.datasets.vasist_2023.prior import Prior
+    else:
+        raise ValueError("Unknown dataset!")
 
     # Determine the directories to include
     print("Collecting run directories...", end=" ", flush=True)
@@ -202,10 +213,11 @@ if __name__ == "__main__":
     print("Done!\n", flush=True)
 
     # Loop over the run directories and collect the results in parallel
-    print("Collecting quantile information:", flush=True)
+    print("Aggregating results:", flush=True)
     list_of_dicts = p_map(
         get_results_for_run_dir,
         run_dirs,
+        kwargs={"prior": Prior(random_seed=0)},
         num_cpus=args.n_processes,
         ncols=80,
     )
