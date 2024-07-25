@@ -24,7 +24,7 @@ LOWER, UPPER, NAMES, LABELS = zip(
         [-2.3, 1.0, "S_eq_MgSiO3", r"$S_{\rm eq,MgSiO_3}$"],
         [0.0, 10.0, "f_sed", r"$f_{\rm sed}$"],
         [5.0, 13.0, "log_K_zz", r"$\log K_{zz}$"],
-        [1.05, 3.0, "sigma_clouds", r"$\sigma_{\rm clouds}$"],
+        [1.05, 3.0, "sigma_g", r"$\sigma_g$"],
         [2.0, 5.5, "log_g", r"$\log g$"],
         [0.9, 2.0, "R_P", r"$R_P$"],
         [300.0, 2300.0, "T_int", r"$T_{\rm int}$"],
@@ -43,10 +43,10 @@ LOWER, UPPER, NAMES, LABELS = zip(
 THETA_0 = np.array(
     [
         0.55,    # C/0
-        0.0,     # Fe/H
+        0.0,     # [Fe/H]
         -5.0,    # log_P_quench
-        -0.86,   # log_X_cb_Fe(c)
-        -0.65,   # log_X_cb_MgSiO3(c)
+        -0.86,   # S_eq_Fe
+        -0.65,   # S_eq_MgSiO3
         3.0,     # f_sed
         8.5,     # log_K_zz
         2.0,     # sigma_g

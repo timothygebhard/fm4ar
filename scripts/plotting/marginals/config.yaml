@@ -30,7 +30,7 @@ parameters:
   S_eq_MgSiO3: -0.65
   f_sed: 3.0
   log_K_zz: 8.5
-  sigma_clouds: 2.0
+  sigma_g: 2.0
   log_g: 3.75
   R_P: 1.0
   T_int: 1063.0
