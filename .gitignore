@@ -14,8 +14,9 @@ experiments/**/*
 jupyter/
 
 # Data and result files
-*.hdf
+*.csv
 *.h5
+*.hdf
 *.hdf5
 *.npy
 *.npz
