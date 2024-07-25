@@ -52,6 +52,7 @@ def test__get_prior() -> None:
 
     assert isinstance(prior, BasePrior)
     assert isinstance(prior, Vasist2023Prior)
+    assert prior.ndim == 16
     assert prior.sample().shape == (16,)
 
     assert np.isclose(

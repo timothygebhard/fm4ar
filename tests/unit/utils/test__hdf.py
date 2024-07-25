@@ -5,11 +5,15 @@ Tests for `fm4ar.utils.hdf`.
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from fm4ar.utils.hdf import load_from_hdf, merge_hdf_files, save_to_hdf
 
 
-def test__save_to_hdf__load_from_hdf(tmp_path: Path) -> None:
+def test__save_to_hdf__load_from_hdf(
+    capsys: pytest.CaptureFixture,
+    tmp_path: Path,
+) -> None:
     """
     Test `save_to_hdf()` and `load_from_hdf()`.
     """
@@ -39,6 +43,12 @@ def test__save_to_hdf__load_from_hdf(tmp_path: Path) -> None:
     # Case 4: Load arrays with indices
     loaded = load_from_hdf(file_path=file_path, keys=["a1"], idx=1)
     assert np.array_equal(loaded["a1"], a1[1])
+
+    # Case 5: Load key that does not exist
+    loaded = load_from_hdf(file_path=file_path, keys=["invalid"])
+    out, err = capsys.readouterr()
+    assert "Warning: Key 'invalid' not found in HDF file!" in out
+    assert np.array_equal(loaded["invalid"], np.empty(shape=()))
 
 
 def test__merge_hdf_file(tmp_path: Path) -> None:
