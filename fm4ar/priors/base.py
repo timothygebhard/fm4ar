@@ -13,12 +13,22 @@ class BasePrior(ABC):
     Common base class for all priors.
     """
 
+    # TODO: Maybe the more thorough way here would be to use `@abstractmethod`
+    #   for the attributes to enforce that they are defined in the subclasses?
+    #   For now, the following are basically just type hints...
+
     # Every prior must define a base distribution, e.g. `scipy.stats.uniform`
     distribution: rv_continuous | rv_discrete
 
     # Every prior must define the names (and labels) of the parameters
     names: tuple[str]
     labels: tuple[str]
+
+    # Every prior needs to define the lower and upper bounds of the parameters
+    # TODO: Handle cases where the prior has infinite support (e.g., Gaussian).
+    #   This is mostly an issue for things like plotting or computing the JSD.
+    lower: np.ndarray
+    upper: np.ndarray
 
     # Every prior must also define a random state for reproducibility
     random_state: np.random.Generator
@@ -33,6 +43,14 @@ class BasePrior(ABC):
 
         # Use random seed to initialize the random number generator
         self.random_state = np.random.default_rng(random_seed)
+
+    @property
+    def ndim(self) -> int:
+        """
+        Return the number of dimensions of the parameter space.
+        """
+
+        return len(self.names)
 
     def evaluate(
         self,
