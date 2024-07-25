@@ -75,6 +75,19 @@ def test__create_submission_file(tmp_path: Path) -> None:
         HTCondorConfig(this_field_does_not_exist="some_value")  # type: ignore
     assert "Extra inputs are not permitted" in str(validation_error)
 
+    # Case 5: With retry_on_different_node
+    file_path = create_submission_file(
+        htcondor_config=HTCondorConfig(
+            arguments="arguments as string",
+            n_gpus=1,
+            retry_on_different_node=True,
+            retry_on_exit_code=13,
+        ),
+        experiment_dir=tmp_path,
+        file_name="run.sub",
+    )
+    assert file_path.exists()
+
 
 def test__dagman_file(tmp_path: Path) -> None:
     """

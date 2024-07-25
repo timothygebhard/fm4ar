@@ -15,9 +15,10 @@ from contextlib import (
 from typing import Generator
 
 
-def get_processor_name() -> str:
+def get_processor_name() -> str:  # pragma: no cover
     """
     Auxiliary function to get the name of the processor.
+    Note: This function cannot reasonably be tested.
     Source: https://stackoverflow.com/a/13078519/4100721
     """
 
