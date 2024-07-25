@@ -17,20 +17,20 @@ prior:
   parameters:
     C/O: infer
     Fe/H: infer
-    P_quench: infer
-    log_X_Fe: infer
-    log_X_MgSiO3: infer
+    log_P_quench: infer
+    S_eq_Fe: infer
+    S_eq_MgSiO3: infer
     f_sed: infer
     log_K_zz: infer
     sigma_g: infer
     log_g: infer
     R_P: infer
-    T_0: infer
-    T_3/T_connect: infer
-    T_2/T_3: infer
-    T_1/T_2: infer
+    T_int: infer
+    T_3: infer
+    T_2: infer
+    T_1: infer
     alpha: infer
-    log_delta/alpha: infer
+    log_delta: infer
 
 # Sampler settings
 sampler:
