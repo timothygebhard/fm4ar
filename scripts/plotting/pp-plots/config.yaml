@@ -1,8 +1,8 @@
 #
-# Configuration file for sampling efficiency for the "default" test set
+# Configuration file for P-P plots
 #
 
-# Results to include (note: this current
+# Results to include (note: P-P plots only work for the default test set)
 results:
   - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/test-default/aggregated__test-default_X.hdf"
     label: "FMPE"
@@ -13,8 +13,13 @@ results:
 
 # General plot settings
 dataset: "vasist_2023"
+figsize: [4.2, 4.0]
 font_family: "Gillius ADF"
-figsize: [4.2, 4.2]
 fontsize_labels: 8
 fontsize_ticks: 6
 add_legend: false
+subplots_adjust:
+  bottom: 0.19
+  top: 0.995
+  left: 0.25
+  right: 0.99
