@@ -1,15 +1,25 @@
 """
 Create P-P plots for each atmospheric parameter.
 
-This is essentially the empirical CDF of the quantile of the ground
-truth value for each parameter, that is, as a function of `q in [0, 1]`
-the fraction of test set retrievals where `q(theta_gt) <= q`, where
-`q(theta_gt)` is the quantile of the ground truth parameter value.
+The quantiles `q(theta_gt)` of the ground truth parameters should follow
+a uniform distribution over [0, 1] if the model is well-calibrated and
+when the test set is drawn directly from the prior ("default" case). To
+test this, we can draw their empirical CDF against the CDF of a uniform
+distribution on [0, 1] in what is called a P-P plot. If the posteriors
+are well-calibrated, the result should be a diagonal line.
 
-Note: In the current implementation, quantile plots can only be created
-for the `default` test set (which is drawn directly from the box-uniform
-prior). Generating the same plots for the `gaussian` test set would
-require additional adjustments to account for the modified "prior".
+The ECDF can be estimated by computing the fraction of test set
+retrievals where `q(theta_gt) <= q` for `q` in [0, 1], although we
+use the `ecdf()` function from `scipy.stats` for this purpose because
+it is faster and comes with a way to estimate the confidence intervals.
+
+For other test sets, this does not hold: Consider, for example, the
+parameter `T_1`, which is poorly constrained from a spectrum and for
+which the posterior will almost always be close to the prior. If we
+draw `theta` not from the prior (but, e.g., a Gaussian distribution
+around  `theta_0`), the ground truth values will not span the full prior
+range. Consequently, their quantiles under the estimated posterior
+(which is approximately the prior) will not be uniformly distributed.
 """
 
 import argparse
@@ -20,7 +30,7 @@ from warnings import catch_warnings, filterwarnings
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import ecdf
+from scipy.stats import ecdf, uniform
 from yaml import safe_load
 
 from fm4ar.utils.hdf import load_from_hdf
@@ -46,12 +56,12 @@ if __name__ == "__main__":
     with open(args.config, "r") as f:
         config = safe_load(f)
 
-    # Load the quantile data
+    # Load the quantiles of the ground truth values for the estimated posterior
     results = {}
     for result in config["results"]:
         results[result["label"]] = load_from_hdf(
             file_path=expand_path(result["file_path"]),
-            keys=["quantiles_without_is", "quantiles_with_is"],
+            keys=["quantiles_without_is"],
         )
         results[result["label"]] |= result
 
@@ -68,19 +78,20 @@ if __name__ == "__main__":
     plots_dir = Path(__file__).parent / "plots"
     plots_dir.mkdir(exist_ok=True)
 
-    # Loop over the atmospheric parameters and create the quantile plots
+    # Loop over the atmospheric parameters and create the P-P plots
     for i, name in enumerate(NAMES):
 
-        print(f"Creating plot for {name}...", end=" ", flush=True)
+        print(f"Creating P-P plot for {name}...", end=" ", flush=True)
 
         # Prepare the figure
         pad_inches = 0.01
         fig, ax = plt.subplots(
             figsize=(
-                config["figsize"][0] / 2.54 - 2 * pad_inches,
-                config["figsize"][1] / 2.54 - 2 * pad_inches,
+                config["figsize"][0] / 2.54,
+                config["figsize"][1] / 2.54,
             )
         )
+        fig.subplots_adjust(**config["subplots_adjust"])
 
         # Loop over the different methods to include
         for result in results.values():
@@ -98,14 +109,19 @@ if __name__ == "__main__":
             # intervals around the empirical CDF.
             empirical_cdf = ecdf(quantiles).cdf
 
-            # Manually plot the ECDF: The built-in `plot()` function from
-            # `result.cdf` uses some odd hack with a `delta` that results in
-            # a plot that exceeds beyond 0 and 1 on the x-axis.
-            q = np.array([0] + list(empirical_cdf.quantiles) + [1])
-            y = empirical_cdf.evaluate(q)
+            # Define target CDF: For a well-calibrated model, the quantiles
+            # should follow a uniform distribution on [0, 1].
+            uniform_cdf = uniform(loc=0, scale=1).cdf
+
+            # Evaluate both CDFs to plot them against each other
+            z = np.linspace(0, 1, 1000)
+            x = uniform_cdf(z)
+            y = empirical_cdf.evaluate(z)
+
+            # Plot the CDFs against each other
             ax.step(
-                q,  # quantile
-                y,  # value of the ECDF
+                x,  # uniform CDF
+                y,  # ECDF of the quantiles
                 lw=1,
                 label=result["label"],
                 color=result["color"],
@@ -120,9 +136,9 @@ if __name__ == "__main__":
                 filterwarnings("ignore", "The confidence interval is ")
                 ci = empirical_cdf.confidence_interval(0.95)
                 ax.fill_between(
-                    q,
-                    ci.low.evaluate(q),
-                    ci.high.evaluate(q),
+                    z,
+                    ci.low.evaluate(z),
+                    ci.high.evaluate(z),
                     fc=result["color"],
                     ec="none",
                     alpha=0.25,
@@ -131,12 +147,15 @@ if __name__ == "__main__":
         # Adjust the axis: labels, limits, ticks, ...
         ax.set_box_aspect(1)
         ax.axline((0, 0), slope=1, color="black", ls="--", lw=0.5)
-        ax.set_xlim(-0.06, 1.06)
-        ax.set_ylim(-0.06, 1.06)
+        ax.set_xlim(-0.05, 1.05)
+        ax.set_ylim(-0.05, 1.05)
         ax.set_xticks(np.linspace(0, 1, 6))
         ax.set_yticks(np.linspace(0, 1, 6))
-        ax.set_xlabel(r"Quantile $q$", fontsize=config["fontsize_labels"])
-        ax.set_ylabel("ECDF", fontsize=config["fontsize_labels"])
+        ax.set_xlabel(r"Uniform CDF", fontsize=config["fontsize_labels"])
+        ax.set_ylabel(
+            r"ECDF of $q(\theta_\mathrm{{gt}}^i)$",
+            fontsize=config["fontsize_labels"],
+        )
         ax.tick_params(
             axis="both",
             length=2,
@@ -152,14 +171,8 @@ if __name__ == "__main__":
             )
 
         # Save the figure
-        fig.tight_layout(pad=0)
         file_name = f"{i:02d}_" + re.sub(r"\W+", "-", str(name)) + ".pdf"
-        plt.savefig(
-            plots_dir / file_name,
-            dpi=300,
-            bbox_inches="tight",
-            pad_inches=pad_inches,
-        )
+        plt.savefig(plots_dir / file_name)
         plt.close(fig)
 
         print("Done!")
