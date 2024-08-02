@@ -1,5 +1,5 @@
 """
-Create quantile plots for each atmospheric parameter.
+Create P-P plots for each atmospheric parameter.
 
 This is essentially the empirical CDF of the quantile of the ground
 truth value for each parameter, that is, as a function of `q in [0, 1]`
@@ -30,7 +30,7 @@ from fm4ar.utils.plotting import set_font_family
 if __name__ == "__main__":
 
     script_start = time.time()
-    print("\nCREATE QUANTILE PLOTS\n", flush=True)
+    print("\nCREATE P-P PLOTS\n", flush=True)
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
