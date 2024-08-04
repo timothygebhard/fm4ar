@@ -4,7 +4,7 @@
 
 # Results to include
 results:
-  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/nautilus/noise-free/sigma-0.125754/posterior.hdf"
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/nautilus/noise-free/random-seed-42/sigma-0.125754/posterior.hdf"
     label: "nautilus"
     color: "#f3ac3f"
     use_weights: true
