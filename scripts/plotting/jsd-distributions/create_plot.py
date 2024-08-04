@@ -111,10 +111,11 @@ if __name__ == "__main__":
 
         # Set colors for the different parts of the violin plot
         color = str(results[method]["color"])
-        for partname in ('cbars', 'cmins', 'cmaxes', 'cmedians'):
-            vp = violin[partname]
-            vp.set_edgecolor(color)
-            vp.set_linewidth(line_width)
+        for partname in ('cbars', 'cmedians'):
+            violin[partname].set_edgecolor(color)
+            violin[partname].set_linewidth(line_width)
+        for partname in ('cmins', 'cmaxes'):
+            violin[partname].set_linewidth(0)
         for vp in violin['bodies']:
             vp.set_facecolor(color)
             vp.set_edgecolor("none")
