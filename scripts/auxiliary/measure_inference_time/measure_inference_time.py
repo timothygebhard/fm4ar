@@ -78,33 +78,45 @@ if __name__ == "__main__":
     # Use automatic mixed precision for the FMPE model
     use_amp = isinstance(model, FMPEModel)
 
-    # Benchmark the `sample_batch()` method
+    # Benchmark the `sample()` and `sample_and_logprob()` method
+    # We always skip the first run to avoid any initialization overhead
     times: dict[str, list[float]] = {}
     for label, method, kwargs in [
         (
             "sample",
             model.sample_batch,
-            config["model"]["sample_kwargs"]),
+            config["model"]["sample_kwargs"],
+        ),
         (
             "sample_and_log_prob",
             model.sample_and_log_prob_batch,
-            config["model"]["sample_and_logprob_kwargs"]
-         ),
+            config["model"]["sample_and_logprob_kwargs"],
+        ),
     ]:
         print(f"Benchmarking `{label}()`:\n", flush=True)
         times[label] = []
         with torch.no_grad():
-            for i in range(config["n_repeats"]):
+            for i in range(config["n_repeats"] + 1):
                 start_time = time()
                 for _ in range(0, config["n_samples"], config["chunksize"]):
                     with autocast(enabled=use_amp):
                         method(context=chunk_context, **kwargs)
+                    if i == 0:
+                        break
+                if i == 0:
+                    print("Ignoring first run!", flush=True)
+                    continue
                 total_time = time() - start_time
                 times[label].append(total_time)
                 print(f"[{i:2d}] Total time: {total_time:.2f} s", flush=True)
-            mean = np.median(times[label])
-            std = np.std(times[label])
-            print(f"\nAverage: {mean:.2f} +- {std:.2f}s\n\n", flush=True)
+            print(
+                (
+                    f"\nMean: {np.mean(times[label]):.2f}\n"
+                    f"Median: {np.median(times[label]):.2f}\n"
+                    f"Std.:   {np.std(times[label]):.2f}\n"
+                ),
+                flush=True,
+            )
 
     # Construct data frame and save results to disk
     df = pd.DataFrame(times)
