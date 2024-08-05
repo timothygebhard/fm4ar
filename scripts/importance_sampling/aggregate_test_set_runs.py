@@ -251,7 +251,7 @@ if __name__ == "__main__":
                     shape=(len(value),),
                     dtype=h5py.special_dtype(vlen=str),
                 )
-                dataset[:] = value
+                dataset[:] = list(map(str, value))
 
     print("Done!\n", flush=True)
     print("Results saved to:\n", file_path, flush=True)
