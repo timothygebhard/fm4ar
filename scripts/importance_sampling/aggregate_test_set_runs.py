@@ -5,6 +5,7 @@ ranks, log evidence, ...) and save it to a single HDF file.
 
 import argparse
 import time
+from functools import partial
 from pathlib import Path
 
 import h5py
@@ -215,9 +216,11 @@ if __name__ == "__main__":
     # Loop over the run directories and collect the results in parallel
     print("Aggregating results:", flush=True)
     list_of_dicts = p_map(
-        get_results_for_run_dir,
+        partial(
+            get_results_for_run_dir,
+            prior=Prior(random_seed=0),
+        ),
         run_dirs,
-        kwargs={"prior": Prior(random_seed=0)},
         num_cpus=args.n_processes,
         ncols=80,
     )
