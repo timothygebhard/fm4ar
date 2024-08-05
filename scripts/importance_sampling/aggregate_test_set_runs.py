@@ -180,6 +180,10 @@ def get_results_for_run_dir(
         jsd = 1000 * jensenshannon(hist_without_is, hist_with_is)
         results["jsd_with_without_is"][i] = jsd
 
+    # Drop keys that we do not need for the aggregated results
+    del results["samples"]
+    del results["weights"]
+
     return results
 
 
