@@ -113,7 +113,6 @@ def get_results_for_run_dir(
 
     # Read in the true parameter values
     with h5py.File(run_dir / "target_spectrum.hdf", "r") as f:
-        results["flux"] = np.array(f["flux"])
         results["sigma"] = np.array(f["sigma"])
         results["theta"] = np.array(f["theta"])
 
