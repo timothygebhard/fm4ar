@@ -106,7 +106,6 @@ def get_results_for_run_dir(
             "samples",
             "sampling_efficiency",
             "simulation_efficiency",
-            "sigma",
             "weights",
         ]
     )
