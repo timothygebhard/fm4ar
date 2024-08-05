@@ -108,12 +108,12 @@ if __name__ == "__main__":
                     continue
                 total_time = time() - start_time
                 times[label].append(total_time)
-                print(f"[{i:2d}] Total time: {total_time:.2f} s", flush=True)
+                print(f"[{i:2d}] Total time: {total_time:.3f} s", flush=True)
             print(
                 (
-                    f"\nMean: {np.mean(times[label]):.2f}\n"
-                    f"Median: {np.median(times[label]):.2f}\n"
-                    f"Std.:   {np.std(times[label]):.2f}\n"
+                    f"\nMean: {np.mean(times[label]):.3f}\n"
+                    f"Median: {np.median(times[label]):.3f}\n"
+                    f"Std.:   {np.std(times[label]):.3f}\n"
                 ),
                 flush=True,
             )
