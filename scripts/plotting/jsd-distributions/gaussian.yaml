@@ -6,14 +6,14 @@
 results:
   fmpe:
     file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
-    color: "#5790fc"
+    color: "#699CFC"
   npe:
     file_path: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
-    color: "#e42536"
+    color: "#77C56D"
 
 # General plot settings
 dataset: "vasist_2023"
-figsize: [18.2, 5]
+figsize: [18.3, 5]
 font_family: "Gillius ADF"
 fontsize_labels: 8
 fontsize_ticks: 6
