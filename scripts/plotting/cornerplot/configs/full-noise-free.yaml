@@ -6,27 +6,27 @@
 results:
   - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/nautilus/noise-free/random-seed-42/sigma-0.125754/posterior.hdf"
     label: "nautilus"
-    color: "#f3ac3f"
+    color: "#F3AC3F"
     use_weights: true
   - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/nested-sampling/multinest/noise-free/sigma-0.125754/posterior.hdf"
     label: "MultiNest"
-    color: "#ba54a5"
-    use_weights: true
-  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
-    label: "FMPE without IS"
-    color: "#618df7"
-    use_weights: false
-  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
-    label: "FMPE with IS"
-    color: "#1e4bf1"
+    color: "#BA54A5"
     use_weights: true
   - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
     label: "NPE without IS"
-    color: "#ec682d"
+    color: "#77C56D"
     use_weights: false
   - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/npe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
     label: "NPE with IS"
-    color: "#b93224"
+    color: "#1E7B3E"
+    use_weights: true
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
+    label: "FMPE without IS"
+    color: "#699CFC"
+    use_weights: false
+  - file_path: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/noise-conditional/importance_sampling/benchmark/noise-free/sigma-0.125754/results.min.hdf"
+    label: "FMPE with IS"
+    color: "#033696"
     use_weights: true
 
 # Parameters to include and ground truth values
@@ -50,12 +50,18 @@ parameters:
 
 # General settings
 dataset: "vasist_2023"
-figsize: [17.5, 17.5]
-fontsize_labels: 6.5
-fontsize_ticks: 5.5
+figsize: [18.3, 18.3]
+font_family: "Gillius ADF"
+fontsize_labels: 8
+fontsize_ticks: 6
 label_offset_x: -0.9
 label_offset_y: -0.9
-linewidth: 0.5
+linewidth: 0.75
 n_bins: 100
 smoothing: 3
 output_file_name: full-noise-free.pdf
+subplots_adjust:
+  left: 0.07
+  right: 0.999
+  bottom: 0.07
+  top: 0.999
