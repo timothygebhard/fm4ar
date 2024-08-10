@@ -18,6 +18,7 @@ from fm4ar.utils.config import load_config
 from fm4ar.utils.distributions import compute_smoothed_histogram
 from fm4ar.utils.hdf import load_from_hdf
 from fm4ar.utils.paths import expand_env_variables_in_path
+from fm4ar.utils.plotting import set_font_family
 
 
 def get_cli_arguments() -> argparse.Namespace:
@@ -150,22 +151,16 @@ if __name__ == "__main__":
     )
     print(f"Parameters:\n\n{table}\n\n", flush=True)
 
-    # Set up a different default font
-    font = 'Gillius ADF'
-    plt.rcParams['font.sans-serif'] = font
-    plt.rcParams['mathtext.fontset'] = 'custom'
-    plt.rcParams['mathtext.it'] = f'{font}:italic'
-    plt.rcParams['mathtext.bf'] = f'{font}:bold'
-    plt.rcParams['mathtext.cal'] = f'{font}:italic'
+    # Set the font family (globally)
+    set_font_family(config.get("font_family"))
 
     # Prepare the figure
     print("Preparing figure...", end=" ", flush=True)
     N = len(names)
-    pad_inches = 0.01
     fig = plt.figure(
         figsize=(
-            config["figsize"][0] / 2.54 - 2 * pad_inches,
-            config["figsize"][1] / 2.54 - 2 * pad_inches,
+            config["figsize"][0] / 2.54,
+            config["figsize"][1] / 2.54,
         ),
     )
     print("Done!", flush=True)
@@ -336,14 +331,12 @@ if __name__ == "__main__":
         )
 
     # Save the figure to PDF
-    plt.subplots_adjust(wspace=0, hspace=0)
-    fig.tight_layout(pad=0)
-    plt.savefig(
-        fname=output_dir / config["output_file_name"],
-        dpi=300,
-        bbox_inches="tight",
-        pad_inches=pad_inches,
+    plt.subplots_adjust(
+        wspace=0,
+        hspace=0,
+        **config["subplots_adjust"],
     )
+    plt.savefig(output_dir / config["output_file_name"])
 
     print("Done!", flush=True)
     print(f"\nThis took {time.time() - script_start:,.1f} seconds!\n")
