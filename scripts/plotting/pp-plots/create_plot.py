@@ -30,7 +30,7 @@ from warnings import catch_warnings, filterwarnings
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import ecdf, uniform
+from scipy.stats import ecdf, ks_1samp, uniform
 from yaml import safe_load
 
 from fm4ar.utils.hdf import load_from_hdf
@@ -62,6 +62,7 @@ if __name__ == "__main__":
         results[result["label"]] = load_from_hdf(
             file_path=expand_path(result["file_path"]),
             keys=["quantiles_without_is"],
+            idx=slice(0, result.get("n_retrievals", None)),
         )
         results[result["label"]] |= result
 
@@ -97,11 +98,25 @@ if __name__ == "__main__":
         for result in results.values():
 
             # Unpack the results
-            use_weights = config.get("use_weights", False)
-            quantiles = sorted(
-                result["quantiles_with_is"][:, i] if use_weights
-                else result["quantiles_without_is"][:, i]
-            )
+            quantiles = result["quantiles_without_is"][:, i]
+
+            # Compute KS test
+            if config.get("add_p_values", False):
+                ks_result = ks_1samp(
+                    x=quantiles,
+                    cdf=uniform(loc=0, scale=1).cdf,
+                    alternative="two-sided",
+                    method="exact",
+                )
+
+                # Add the p-value to the plot legend
+                ax.plot(
+                    [],
+                    markersize=0,
+                    ls="",
+                    color=result["color"],
+                    label=f"p={ks_result.pvalue:.2f}",
+                )
 
             # Use scipy's `ecdf()` function instead of manually computing the
             # the fraction via `[np.mean(quantiles <= q) for q in q_values]`.
@@ -123,7 +138,6 @@ if __name__ == "__main__":
                 x,  # uniform CDF
                 y,  # ECDF of the quantiles
                 lw=1,
-                label=result["label"],
                 color=result["color"],
                 ls=result.get("ls", "-"),
                 where="post",
@@ -141,19 +155,19 @@ if __name__ == "__main__":
                     ci.high.evaluate(z),
                     fc=result["color"],
                     ec="none",
-                    alpha=0.25,
+                    alpha=0.3,
                 )
 
         # Adjust the axis: labels, limits, ticks, ...
         ax.set_box_aspect(1)
         ax.axline((0, 0), slope=1, color="black", ls="--", lw=0.5)
-        ax.set_xlim(-0.05, 1.05)
-        ax.set_ylim(-0.05, 1.05)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
         ax.set_xticks(np.linspace(0, 1, 6))
         ax.set_yticks(np.linspace(0, 1, 6))
         ax.set_xlabel(r"Uniform CDF", fontsize=config["fontsize_labels"])
         ax.set_ylabel(
-            r"ECDF of $q(\theta_\mathrm{{gt}}^i)$",
+            r"ECDF of $Q(\theta_\mathrm{{gt}}^i)$",
             fontsize=config["fontsize_labels"],
         )
         ax.tick_params(
@@ -162,12 +176,12 @@ if __name__ == "__main__":
             labelsize=config["fontsize_ticks"],
         )
 
-        # Add legend, if desired
-        if config.get("add_legend", False):
+        if config.get("add_p_values", False):
             ax.legend(
-                loc="lower right",
-                fontsize=config["fontsize_labels"],
                 frameon=False,
+                loc="lower right",
+                labelcolor='markerfacecolor',
+                fontsize=config["fontsize_ticks"],
             )
 
         # Save the figure
