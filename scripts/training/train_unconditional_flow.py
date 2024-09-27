@@ -14,7 +14,6 @@ import h5py
 import numpy as np
 import torch
 import wandb
-from dynesty.utils import resample_equal
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
@@ -72,15 +71,24 @@ def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
 
         print(f"Loading samples from {input_file.file_path.name}...", end=" ")
 
+        # TODO: We might want to think about a better way to handle the
+        #   weights of the samples. Right now, we just ignore them, which
+        #   should should produce a conservative estimate (because we place
+        #   probability mass on samples that have very low weight).
+        #   Simply re-sampling everything to the same weight is also not
+        #   trivial, because re-sampling might add the same sample multiple
+        #   times, and that gives the model a way to cheat by placing a lot
+        #   of probability mass on these duplicated samples. We could try to
+        #   add noise to the samples, but that gets complicated quickly,
+        #   because the amount of noise would probably need to be fine-tuned
+        #   for each parameter / dimension.
+
         # We need to distinguish between samples from nested sampling (which
         # we can load using the `load_posterior()` convenience function) and
         # samples from FMPE or NPE (which we can load using `h5py`).
         if input_file.file_type == "ns":
             experiment_dir = input_file.file_path.parent
-            samples, weights = load_posterior(experiment_dir=experiment_dir)
-            weights = weights / weights.sum()
-            samples = resample_equal(samples, weights)
-            samples = samples[: input_file.n_samples]
+            samples, _ = load_posterior(experiment_dir=experiment_dir)
         elif input_file.file_type == "ml":
             with h5py.File(input_file.file_path, "r") as f:
                 samples = np.array(f["theta"][: input_file.n_samples])
@@ -109,7 +117,7 @@ def prepare_and_launch_job(
     log_dir.mkdir(exist_ok=True)
 
     # Collect the arguments for the job
-    htcondor_config = config.htcondor.copy()
+    htcondor_config = config.htcondor.model_copy()
     htcondor_config.arguments = [
         Path(__file__).as_posix(),
         f"--experiment-dir {args.experiment_dir}",
@@ -231,7 +239,7 @@ def prepare_wandb(
     # Initialize Weights & Biases and define metrics, if desired
     if use_wandb:
         wandb.init(
-            config=config.model.dict(),
+            config=config.model.model_dump(),
             dir=args.experiment_dir,
             **config.wandb,
         )
