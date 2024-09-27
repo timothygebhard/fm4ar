@@ -117,13 +117,20 @@ if __name__ == "__main__":
 
         print(f"Creating plot for {names[i]}...", end=" ", flush=True)
 
+        # Check if we want to put each noise level in a separate axis
+        split_noiselevels = config.get("split_noiselevels", False)
+        height_factor = 1.5 if split_noiselevels else 1
+
         # Prepare the figure
         pad_inches = 0.01
-        fig, ax = plt.subplots(
+        fig, axes = plt.subplots(
             figsize=(
-                config["figsize"][0] / 2.54 - 2 * pad_inches,
-                config["figsize"][1] / 2.54 - 2 * pad_inches,
-            )
+                config["figsize"][0] / 2.54,
+                config["figsize"][1] / 2.54 * height_factor,
+            ),
+            nrows=1 if not split_noiselevels else len(results),
+            sharex="all",
+            sharey="all",
         )
 
         # Determine the bins for the current parameter
@@ -132,6 +139,9 @@ if __name__ == "__main__":
         # Plot the posterior estimates
         for j, sigma in enumerate(results.keys()):
             for method in results[sigma]:
+
+                # Select the axis for plotting
+                ax = axes[j] if split_noiselevels else axes  # type: ignore
 
                 # Compute the smoothed histogram
                 bin_centers, smoothed_hist = compute_smoothed_histogram(
@@ -151,18 +161,19 @@ if __name__ == "__main__":
                 )
 
         # Adjust the axis: limits, ticks, ground truth, ...
-        ax.set_box_aspect(1)
-        ax.set_xlim(lower[i], upper[i])
-        ax.set_ylim(0, None)
-        ax.set_xticks(np.linspace(lower[i], upper[i], 5)[1:-1])
-        ax.set_yticks([])
-        ax.spines[["left", "right", "top"]].set_visible(False)
-        ax.tick_params(
-            axis="x",
-            length=2,
-            labelsize=config["fontsize_ticks"],
-        )
-        ax.axvline(x=float(true_values[i]), lw=0.5, ls="--", color="gray")
+        ax_list = [axes] if not split_noiselevels else axes
+        for ax in ax_list:  # type: ignore
+            ax.set_xlim(lower[i], upper[i])
+            ax.set_ylim(0, None)
+            ax.set_xticks(np.linspace(lower[i], upper[i], 5)[1:-1])
+            ax.set_yticks([])
+            ax.spines[["left", "right", "top"]].set_visible(False)
+            ax.tick_params(
+                axis="x",
+                length=2,
+                labelsize=config["fontsize_ticks"],
+            )
+            ax.axvline(x=float(true_values[i]), lw=0.5, ls="--", color="gray")
 
         # Replace special characters in the parameter name
         file_name = (
@@ -172,13 +183,8 @@ if __name__ == "__main__":
         )
 
         # Save the figure
-        fig.tight_layout(pad=0)
-        plt.savefig(
-            plots_dir / file_name,
-            dpi=300,
-            bbox_inches="tight",
-            pad_inches=pad_inches,
-        )
+        plt.subplots_adjust(**config["subplots_adjust"])
+        plt.savefig(plots_dir / file_name, dpi=300)
         plt.close(fig)
 
         print("Done!", flush=True)
