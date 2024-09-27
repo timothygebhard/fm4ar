@@ -89,9 +89,10 @@ def load_samples(input_files: list[InputFileConfig]) -> torch.Tensor:
         if input_file.file_type == "ns":
             experiment_dir = input_file.file_path.parent
             samples, _ = load_posterior(experiment_dir=experiment_dir)
+            samples = samples[:input_file.n_samples]
         elif input_file.file_type == "ml":
             with h5py.File(input_file.file_path, "r") as f:
-                samples = np.array(f["theta"][: input_file.n_samples])
+                samples = np.array(f["samples"][:input_file.n_samples])
         else:
             raise ValueError(f"Unknown file type: {input_file.file_type}!")
         all_samples.append(samples)
