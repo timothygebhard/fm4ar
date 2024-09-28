@@ -312,143 +312,160 @@ if __name__ == "__main__":
         print("(3) Simulate spectra for theta_i", flush=True)
         print(80 * "-" + "\n", flush=True)
 
-        # Construct the slice of indices for the current job: The current
-        # job will process every `n_jobs`-th sample from the proposal samples,
-        # starting at an index of `job`. This is useful for parallelization.
-        idx = slice(args.job, None, args.n_jobs)
+        # Construct path for the expected output file
+        # If the file already exists, we don't need to simulate the spectra.
+        # This can happen if another part of the DAG has failed (e.g., too
+        # many timeouts) and the job is resubmitted.
+        output_file_path = args.working_dir / f"simulations-{args.job:04d}.hdf"
+        if output_file_path.exists():
+            print(f"{output_file_path.name} exists already, skipping!\n")
 
-        # Print some information about the number of samples to process
-        n_total = config.draw_proposal_samples.n_samples
-        n_for_job = len(np.arange(args.job, n_total, args.n_jobs))
-        print(f"Total number of samples to process:             {n_total:,}")
-        print(f"Number of samples to process for current job:   {n_for_job:,}")
-        print()
+        # Otherwise, we need to simulate the spectra
+        # TODO: Obviously, it would be cleaner to wrap all of this this in a
+        #   separate function, but this isn't trivial because of the parallel
+        #   processing which requires to pickle the simulator...
+        else:
 
-        # Load the theta samples and probabilities and unpack them
-        # We also load the log-probability of the ground truth theta value
-        proposal_samples = load_from_hdf(
-            file_path=args.working_dir / "proposal-samples.hdf",
-            keys=["samples", "log_prob_samples", "log_prob_theta_true"],
-            idx=idx,
-        )
-        samples = proposal_samples["samples"]
-        log_prob_samples = proposal_samples["log_prob_samples"]
+            # Construct the slice of indices for the current job: The current
+            # job will process every `n_jobs`-th sample from the proposal
+            # samples, starting at an index of `job`.
+            idx = slice(args.job, None, args.n_jobs)
 
-        # Sanity check: Are there any duplicate samples? (This can happen if
-        # there are issues with setting the random seed for each proposal job)
-        n_duplicates = len(np.unique(samples, axis=0)) - len(samples)
-        if n_duplicates > 0:
-            raise ValueError(
-                f"Found {n_duplicates:,} duplicate samples in the proposal!"
+            # Print some information about the number of samples to process
+            n_total = config.draw_proposal_samples.n_samples
+            n_for_job = len(np.arange(args.job, n_total, args.n_jobs))
+            print(f"Total number of samples:             {n_total:,}")
+            print(f"Number of samples for current job:   {n_for_job:,}")
+            print()
+
+            # Load the theta samples and probabilities and unpack them
+            # We also load the log-probability of the ground truth theta value
+            proposal_samples = load_from_hdf(
+                file_path=args.working_dir / "proposal-samples.hdf",
+                keys=["samples", "log_prob_samples", "log_prob_theta_true"],
+                idx=idx,
+            )
+            samples = proposal_samples["samples"]
+            log_prob_samples = proposal_samples["log_prob_samples"]
+
+            # Sanity check: Are there any duplicate samples? (This can happen
+            # if there are issues with the random seed for each proposal job)
+            n_duplicates = len(np.unique(samples, axis=0)) - len(samples)
+            if n_duplicates > 0:
+                raise ValueError(
+                    f"Found {n_duplicates:,} duplicates in the proposal!"
+                )
+
+            # Load the target spectrum
+            target = load_target_spectrum(
+                file_path=config.target_spectrum.file_path,
+                index=config.target_spectrum.index,
+            )
+            n_bins = len(target["flux"])
+
+            # Set up prior, simulator, and likelihood distribution
+            prior = get_prior(config=config.prior)
+            simulator = get_simulator(config=config.simulator)
+            likelihood_distribution = get_likelihood_distribution(
+                flux_obs=target["flux"],
+                error_bars=target["error_bars"],
             )
 
-        # Load the target spectrum
-        target = load_target_spectrum(
-            file_path=config.target_spectrum.file_path,
-            index=config.target_spectrum.index,
-        )
-        n_bins = len(target["flux"])
+            # Set up a counter for the number of simulator timeouts, and define
+            # an upper limit for the number of timeouts before we restart the
+            # job on a different node.
+            n_timeouts = 0
+            max_timeouts = 1
 
-        # Set up prior, simulator, and likelihood distribution
-        prior = get_prior(config=config.prior)
-        simulator = get_simulator(config=config.simulator)
-        likelihood_distribution = get_likelihood_distribution(
-            flux_obs=target["flux"],
-            error_bars=target["error_bars"],
-        )
+            # Define a function that processes a single `theta_i`
+            def process_theta_i(
+                theta_i: np.ndarray,
+            ) -> tuple[np.ndarray, float, float]:
+                """
+                Returns the flux, the log-likelihood, and the log-prior
+                values for the given `theta_i`.
+                """
 
-        # Set up a counter for the number of simulator timeouts, and define
-        # an upper limit for the number of timeouts before we restart the job
-        # on a different node.
-        n_timeouts = 0
-        max_timeouts = 1
+                # Evaluate the prior at theta_i
+                # If the prior is 0, we don't really need to run the simulator
+                # since the importance sampling weight will be 0 anyway.
+                if (prior_value := prior.evaluate(theta_i)) <= 0:
+                    return np.full(n_bins, np.nan), -np.inf, -np.inf
+                log_prior_value = np.log(prior_value)
 
-        # Define a function that processes a single `theta_i`
-        def process_theta_i(
-            theta_i: np.ndarray,
-        ) -> tuple[np.ndarray, float, float]:
-            """
-            Returns the flux, the log-likelihood, and the log-prior
-            values for the given `theta_i`.
-            """
+                # Simulate the spectrum that belongs to theta_i
+                # If we get `None` here, it means the simulator has timed out,
+                # which usually only happens when running on a node that is
+                # experiencing some issues. If the number of timeouts across
+                # all parallel processes exceeds a certain threshold, we raise
+                # an error, which will trigger a resubmission of the job on a
+                # different node. We cannot directly call `sys.exit()` inside
+                # this function because this will cause the script to hang.
+                # Instead, we need to raise an exception and handle the exit
+                # code in __main__.
+                result = simulator(theta_i)
+                if result is None:
+                    print("Simulator timed out!", file=sys.stderr, flush=True)
+                    global n_timeouts  # access the counter defined outside
+                    n_timeouts += 1
+                    if n_timeouts >= max_timeouts:
+                        raise RuntimeError("Too many timeouts!")
+                    return np.full(n_bins, np.nan), -np.inf, -np.inf
+                else:
+                    _, flux = result
 
-            # Evaluate the prior at theta_i
-            # If the prior is 0, we do not actually need to run the simulator
-            # since the importance sampling weight will be 0 anyway.
-            if (prior_value := prior.evaluate(theta_i)) <= 0:
-                return np.full(n_bins, np.nan), -np.inf, -np.inf
-            log_prior_value = np.log(prior_value)
+                # Compute the log-likelihood
+                # We use the log-likelihood to avoid numerical issues, because
+                # the likelihood can take on values on the order of 10^-1000.
+                # In cases where the `flux` contains NaNs, the log-likelihood
+                # will also be NaN, which will result in a weight of 0.
+                log_likelihood = likelihood_distribution.logpdf(flux)
+                if np.isnan(log_likelihood):
+                    print("NaN in loglikelihood!", file=sys.stderr, flush=True)
+                    return np.full(n_bins, np.nan), -np.inf, -np.inf
 
-            # Simulate the spectrum that belongs to theta_i
-            # If we get `None` here, it means the simulator has timed out,
-            # which usually only happens when running on a node that is
-            # experiencing some issues. If the number of timeouts across
-            # all parallel processes exceeds a certain threshold, we raise
-            # an error, which will trigger a resubmission of the job on a
-            # different node. We cannot directly call `sys.exit()` inside this
-            # function because this will cause the script to hang. Instead, we
-            # need to raise an exception and handle the exit code in __main__.
-            result = simulator(theta_i)
-            if result is None:
-                print("Simulator timed out!", file=sys.stderr, flush=True)
-                global n_timeouts  # access the counter defined outside
-                n_timeouts += 1
-                if n_timeouts >= max_timeouts:
-                    raise RuntimeError("Too many timeouts!")
-                return np.full(n_bins, np.nan), -np.inf, -np.inf
-            else:
-                _, flux = result
+                return flux, log_likelihood, log_prior_value
 
-            # Compute the log-likelihood
-            # We use the log-likelihood to avoid numerical issues, because
-            # the likelihood can take on values on the order of 10^-1000.
-            # In cases where the `flux` contains NaNs, the log-likelihood will
-            # also be NaN, which will result in a weight of 0.
-            log_likelihood = likelihood_distribution.logpdf(flux)
-            if np.isnan(log_likelihood):
-                print("NaN in log-likelihood!", file=sys.stderr, flush=True)
-                return np.full(n_bins, np.nan), -np.inf, -np.inf
+            # Compute spectra, likelihoods and prior values in parallel
+            # If we encounter too many timeouts, we exit with code 13, which
+            # will trigger a resubmission of the job on a different node.
+            print("Simulating spectra (in parallel):", flush=True)
+            num_cpus = get_number_of_available_cores()
+            try:
+                results = p_map(
+                    process_theta_i,
+                    samples,
+                    num_cpus=num_cpus,
+                    ncols=80,
+                )
+            except RuntimeError as e:
+                if "Too many timeouts!" in str(e):
+                    sys.exit(13)
+                else:
+                    raise e
+            print()
 
-            return flux, log_likelihood, log_prior_value
-
-        # Compute spectra, likelihoods and prior values in parallel
-        # If we encounter too many timeouts, we exit the script with code 13
-        # which will trigger a resubmission of the job on a different node.
-        print("Simulating spectra (in parallel):", flush=True)
-        num_cpus = get_number_of_available_cores()
-        try:
-            results = p_map(
-                process_theta_i,
-                samples,
-                num_cpus=num_cpus,
-                ncols=80,
+            # Unpack the results from the parallel map and convert to arrays
+            _flux, _log_likelihoods, _log_prior_values = zip(
+                *results,
+                strict=True,
             )
-        except RuntimeError as e:
-            if "Too many timeouts!" in str(e):
-                sys.exit(13)
-            else:
-                raise e
-        print()
+            flux = np.array(_flux)
+            log_likelihoods = np.array(_log_likelihoods).flatten()
+            log_prior_values = np.array(_log_prior_values).flatten()
 
-        # Unpack the results from the parallel map and convert to arrays
-        _flux, _log_likelihoods, _log_prior_values = zip(*results, strict=True)
-        flux = np.array(_flux)
-        log_likelihoods = np.array(_log_likelihoods).flatten()
-        log_prior_values = np.array(_log_prior_values).flatten()
-
-        # Save the results for the current job
-        file_name = f"simulations-{args.job:04d}.hdf"
-        print("Saving results to HDF...", end=" ", flush=True)
-        save_to_hdf(
-            file_path=args.working_dir / file_name,
-            flux=flux.astype(np.float32),
-            log_likelihoods=log_likelihoods.astype(np.float32),
-            log_prior_values=log_prior_values.astype(np.float32),
-            log_prob_samples=log_prob_samples.astype(np.float32),
-            log_prob_theta_true=proposal_samples["log_prob_theta_true"],
-            samples=samples.astype(np.float32),
-        )
-        print("Done!\n\n")
+            # Save the results for the current job
+            print("Saving results to HDF...", end=" ", flush=True)
+            save_to_hdf(
+                file_path=output_file_path,
+                flux=flux.astype(np.float32),
+                log_likelihoods=log_likelihoods.astype(np.float32),
+                log_prior_values=log_prior_values.astype(np.float32),
+                log_prob_samples=log_prob_samples.astype(np.float32),
+                log_prob_theta_true=proposal_samples["log_prob_theta_true"],
+                samples=samples.astype(np.float32),
+            )
+            print("Done!\n\n")
 
     # -------------------------------------------------------------------------
     # Stage 4: Merge the simulations from all jobs and compute the weights
