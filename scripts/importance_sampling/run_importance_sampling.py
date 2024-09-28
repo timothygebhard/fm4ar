@@ -59,6 +59,15 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Job number for parallel processing; must be in [0, n_jobs).",
     )
     parser.add_argument(
+        "--max-timeouts",
+        type=int,
+        default=0,
+        help=(
+            "Maximum number of timeouts before the job is resubmitted on a "
+            "different node. Default: 0 (= no timeouts allowed)."
+        ),
+    )
+    parser.add_argument(
         "--n-jobs",
         type=int,
         default=1,
@@ -371,11 +380,9 @@ if __name__ == "__main__":
                 error_bars=target["error_bars"],
             )
 
-            # Set up a counter for the number of simulator timeouts, and define
-            # an upper limit for the number of timeouts before we restart the
-            # job on a different node.
+            # Set up a counter for the number of simulator timeouts.
+            # The upper limit is defined in the command line arguments.
             n_timeouts = 0
-            max_timeouts = 1
 
             # Define a function that processes a single `theta_i`
             def process_theta_i(
@@ -408,7 +415,7 @@ if __name__ == "__main__":
                     print("Simulator timed out!", file=sys.stderr, flush=True)
                     global n_timeouts  # access the counter defined outside
                     n_timeouts += 1
-                    if n_timeouts >= max_timeouts:
+                    if n_timeouts > args.max_timeouts:
                         raise RuntimeError("Too many timeouts!")
                     return np.full(n_bins, np.nan), -np.inf, -np.inf
                 else:
