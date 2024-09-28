@@ -342,6 +342,8 @@ if __name__ == "__main__":
         output_file_path = args.working_dir / f"simulations-{args.job:04d}.hdf"
         if output_file_path.exists():
             print(f"{output_file_path.name} exists already, skipping!\n")
+        elif (args.working_dir / "simulations.hdf").exists():
+            print("Merged simulation results exist already, skipping!\n")
 
         # Otherwise, we need to simulate the spectra
         # TODO: Obviously, it would be cleaner to wrap all of this this in a
