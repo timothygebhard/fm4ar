@@ -426,12 +426,21 @@ if __name__ == "__main__":
                 # code in __main__.
                 result = simulator(theta_i)
                 if result is None:
-                    print("Simulator timed out!", file=sys.stderr, flush=True)
+
+                    # Increment the counter and check if limit is reached
                     global n_timeouts  # access the counter defined outside
                     n_timeouts += 1
                     if n_timeouts > args.max_timeouts:
                         raise RuntimeError("Too many timeouts!")
+
+                    # Print a debug message to stderr and return NaNs
+                    print(
+                        f"Simulator timed out! ({n_timeouts=})",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                     return np.full(n_bins, np.nan), -np.inf, -np.inf
+
                 else:
                     _, flux = result
 
