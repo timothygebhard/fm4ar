@@ -83,6 +83,14 @@ class HTCondorConfig(BaseModel):
             "will be added (e.g., if the code is used for checkpointing)."
         ),
     )
+    n_retries: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Number of retries to allow for the job. Only used if "
+            "`retry_on_different_node` is True."
+        ),
+    )
     log_file_name: str = Field(
         default="log",
         description="Base name for the log files.",
@@ -338,9 +346,10 @@ def create_submission_file(
         # a history of the nodes on which the job has run. For now, we just
         # hardcode the value to 5, but this could be made configurable.
         if htcondor_config.retry_on_different_node:
+            n_retries = htcondor_config.n_retries
             lines.append("job_machine_attrs = Machine\n")
-            lines.append("job_machine_attrs_history_length = 5\n")
-            lines.append("NumRetries = 5\n\n")
+            lines.append(f"job_machine_attrs_history_length = {n_retries}\n")
+            lines.append(f"NumRetries = {n_retries}\n\n")
 
         # Set the exit code on which to retry
         lines.append(f"on_exit_hold = (ExitCode =?= {exit_code})\n")
