@@ -268,25 +268,39 @@ if __name__ == "__main__":
         print("(1) Draw samples from proposal distribution", flush=True)
         print(80 * "-" + "\n", flush=True)
 
-        # Document the CUDA setup
-        print("CUDA information:")
-        for key, value in get_cuda_info().items():
-            print(f"  {key + ':':<16}{value}")
-        print()
-
-        # Draw samples (this comes with its own progress bar)
-        results = draw_proposal_samples(args=args, config=config)
-
-        print("\nSaving results to HDF...", end=" ", flush=True)
-        save_to_hdf(
-            file_path=(
-                args.working_dir / f"proposal-samples-{args.job:04d}.hdf"
-            ),
-            samples=results["samples"].astype(np.float32),
-            log_prob_samples=results["log_prob_samples"].astype(np.float32),
-            log_prob_theta_true=results["log_prob_theta_true"],
+        # Check if the output file or the merged proposals file already exists
+        output_file_path = (
+            args.working_dir / f"proposal-samples-{args.job:04d}.hdf"
         )
-        print("Done!\n\n")
+        if output_file_path.exists():
+            print(f"{output_file_path.name} exists already, skipping!\n")
+        elif (args.working_dir / f"proposal-samples.hdf").exists():
+            print("Merged proposal samples exist already, skipping!\n")
+
+        # Otherwise, we need to draw the proposal samples
+        else:
+
+            # Document the CUDA setup
+            print("CUDA information:")
+            for key, value in get_cuda_info().items():
+                print(f"  {key + ':':<16}{value}")
+            print()
+
+            # Draw samples (this comes with its own progress bar)
+            results = draw_proposal_samples(args=args, config=config)
+
+            # Convert some arrays to float32 to save space
+            for key in ("samples", "log_prob_samples"):
+                results[key] = results[key].astype(np.float32)
+
+            print("\nSaving results to HDF...", end=" ", flush=True)
+            save_to_hdf(
+                file_path=output_file_path,
+                samples=results["samples"],
+                log_prob_samples=results["log_prob_samples"],
+                log_prob_theta_true=results["log_prob_theta_true"],
+            )
+            print("Done!\n\n")
 
     # -------------------------------------------------------------------------
     # Stage 2: Merge samples from the proposal distribution
