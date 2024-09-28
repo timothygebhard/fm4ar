@@ -98,6 +98,11 @@ def merge_hdf_files(
     # Collect the HDF files
     file_paths = sorted(target_dir.glob(name_pattern))
 
+    # If there are no files to merge, we can return early
+    if len(file_paths) == 0:
+        print("No files to merge.")
+        return
+
     # Open first HDF file to get the (non-singleton) keys, shapes, and dtypes
     keys_shapes_dtypes = {}
     with h5py.File(file_paths[0], "r") as f:
