@@ -243,7 +243,7 @@ if __name__ == "__main__":
                 f.create_dataset(
                     name=key,
                     data=np.array(value),
-                    dtype=np.float32
+                    dtype=np.float32,
                 )
             else:
                 dataset = f.create_dataset(
