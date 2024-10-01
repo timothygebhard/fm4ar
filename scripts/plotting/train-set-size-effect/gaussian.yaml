@@ -32,7 +32,7 @@ fontsize_labels: 8
 fontsize_ticks: 6
 output_file_name: gaussian.pdf
 subplots_adjust:
-  bottom: 0.19
+  bottom: 0.175
   top: 0.975
   left: 0.115
   right: 0.999
