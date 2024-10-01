@@ -88,7 +88,7 @@ if __name__ == "__main__":
     # Plot the violins
     for offset, method in [(-1, "fmpe"), (1, "npe")]:
 
-        # Mask out the methods with very low sampling efficiency
+        # Mask out the retrievals with very low sampling efficiency
         # For these examples, the IS-based posterior is not reliable
         mask = results[method]["sampling_efficiency"] >= 0.01
 
