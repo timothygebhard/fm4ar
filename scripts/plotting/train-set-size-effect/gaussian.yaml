@@ -1,0 +1,38 @@
+# Results to include
+results:
+  1M:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/scaling/1M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/scaling/1M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+  2M:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/scaling/2M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/scaling/2M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+  4M:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/scaling/4M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/scaling/4M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+  8M:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/scaling/8M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/scaling/8M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+  16M:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/scaling/16M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/scaling/16M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+  32M:
+    fmpe: "$FM4AR_EXPERIMENTS_DIR/paper/fmpe/scaling/32M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+    npe: "$FM4AR_EXPERIMENTS_DIR/paper/npe/scaling/32M/importance_sampling/test-gaussian/aggregated__test-gaussian_X.hdf"
+
+# Number of retrieval results to load
+n_retrievals: 100
+
+# General plot settings
+colors:
+  fmpe: "#699CFC"
+  npe: "#77C56D"
+figsize: [8, 5]
+font_family: "Gillius ADF"
+fontsize_labels: 8
+fontsize_ticks: 8
+output_file_name: gaussian.pdf
+subplots_adjust:
+  bottom: 0.19
+  top: 0.975
+  left: 0.115
+  right: 0.999
