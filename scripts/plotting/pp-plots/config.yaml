@@ -23,5 +23,5 @@ fontsize_ticks: 6
 subplots_adjust:
   bottom: 0.19
   top: 0.995
-  left: 0.25
+  left: 0.24
   right: 0.97
