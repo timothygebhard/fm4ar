@@ -40,9 +40,17 @@ if __name__ == "__main__":
     for key, file_path in config["results"].items():
         results[key] = load_from_hdf(
             file_path=expand_path(file_path),
-            keys=["sampling_efficiency"],
+            keys=["sampling_efficiency", "theta"],
         )
     print("Done!", flush=True)
+
+    # Assert that the `theta` array is the same for both methods
+    # This is an extra sanity check to ensure that the sampling efficiencies
+    # really refer to the same retrieval setup
+    assert np.array_equal(
+        results["fmpe"]["theta"],
+        results["npe"]["theta"],
+    )
 
     # Set the font family (globally)
     set_font_family(config.get("font_family"))
