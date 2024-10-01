@@ -29,7 +29,7 @@ colors:
 figsize: [8, 5]
 font_family: "Gillius ADF"
 fontsize_labels: 8
-fontsize_ticks: 8
+fontsize_ticks: 6
 output_file_name: gaussian.pdf
 subplots_adjust:
   bottom: 0.19
