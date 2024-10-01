@@ -17,7 +17,7 @@ figsize: [18.3, 5]
 font_family: "Gillius ADF"
 fontsize_labels: 8
 fontsize_ticks: 6
-linewidth: 1
+linewidth: 1.25
 output_file_name: jsd-distributions-gaussian.pdf
 subplots_adjust:
   bottom: 0.24
