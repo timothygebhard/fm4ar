@@ -51,7 +51,10 @@ def test__save_to_hdf__load_from_hdf(
     assert np.array_equal(loaded["invalid"], np.empty(shape=()))
 
 
-def test__merge_hdf_file(tmp_path: Path) -> None:
+def test__merge_hdf_file(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
     """
     Test `merge_hdf_files()`.
     """
@@ -83,3 +86,14 @@ def test__merge_hdf_file(tmp_path: Path) -> None:
     # Check if the original files were deleted
     assert not file1.exists()
     assert not file2.exists()
+
+    # Test case where there are no files to merge
+    output_file = tmp_path / "should-not-be-created.hdf"
+    merge_hdf_files(
+        target_dir=tmp_path,
+        name_pattern="this-pattern-does-not-match-any-file",
+        output_file_path=output_file,
+    )
+    out, err = capsys.readouterr()
+    assert "No files to merge.\n" in out
+    assert not output_file.exists()
