@@ -1,0 +1,98 @@
+# -----------------------------------------------------------------------------
+# DATASET AND THETA SCALER
+# -----------------------------------------------------------------------------
+
+dataset:
+  file_path: "data.hdf"
+  n_train_samples: 524_288
+  n_valid_samples: 0
+  random_seed: 42
+
+theta_scaler:
+  method: "IdentityScaler"
+  kwargs: {}
+
+# -----------------------------------------------------------------------------
+# MODEL ARCHITECTURE
+# -----------------------------------------------------------------------------
+
+model:
+
+  # General settings
+  model_type: "fmpe"
+  random_seed: 42
+  t_theta_with_glu: True
+  context_with_glu: False
+  sigma_min: 0.0001
+  time_prior_exponent: 2.0
+
+  # Embedding network for context
+  context_embedding_net:
+    - block_type: "Concatenate"
+      kwargs:
+        keys: ["flux"]
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [8]
+        activation: "GELU"
+        output_dim: 16
+        dropout: 0.0
+
+  # Embedding network for (t, theta)
+  t_theta_embedding_net:
+    - block_type: "PositionalEncoding"
+      kwargs:
+        n_freqs: 8
+        encode_theta: True
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [256, 256]
+        activation: "GELU"
+        output_dim: 16
+        dropout: 0.0
+
+  # Vector field network
+  vectorfield_net:
+    network_type: "DenseResidualNet"
+    kwargs:
+      hidden_dims: [256, 256, 256, 256, 256]
+      activation: "GELU"
+      dropout: 0.0
+
+# -----------------------------------------------------------------------------
+# TRAINING
+# -----------------------------------------------------------------------------
+
+training:
+
+  stage_0:
+    backup_interval: 100
+    batch_size: 4096
+    data_transforms: []
+    early_stopping:
+      stage_patience: 100
+    epochs: 16
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      enabled: True
+      max_norm: 1.0
+    logprob_evaluation:
+      interval: null
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 5.0e-4
+    scheduler:
+      type: "CosineAnnealingLR"
+      kwargs:
+        T_max: 16
+    use_amp: False
+
+# -----------------------------------------------------------------------------
+# LOCAL SETTINGS
+# -----------------------------------------------------------------------------
+
+local:
+
+  # Device ("cpu" or "cuda"; or "auto")
+  device: "auto"
