@@ -21,6 +21,7 @@ jupyter/
 *.npy
 *.npz
 *.pdf
+*.pt
 
 # PyCharm project folder
 .idea/
