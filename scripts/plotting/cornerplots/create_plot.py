@@ -74,7 +74,7 @@ def load_results(config: dict) -> dict:
         )
         results[label]["info"] = {  # type: ignore
             "n_total": n_total,
-            "n_eff": round(n_eff, 1),
+            "n_eff": round(float(n_eff), 1),
             "sampling_efficiency": round(float(sampling_efficiency), 3),
             "log_Z": log_Z,
         }
