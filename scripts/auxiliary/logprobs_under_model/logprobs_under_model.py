@@ -123,10 +123,7 @@ def load_model(
     theta_scaler = get_theta_scaler(config=experiment_config["theta_scaler"])
 
     # Construct keyword arguments for the model's log_prob method
-    if model_type == "fmpe":
-        model_kwargs = {"tolerance": 5e-5}
-    else:
-        model_kwargs = {}
+    model_kwargs = {"tolerance": 5e-5} if model_type == "fmpe" else {}
 
     return model_type, model, model_kwargs, theta_scaler
 
@@ -163,7 +160,7 @@ if __name__ == "__main__":
         device=device,
     )
     use_amp = model_type == "fmpe"
-    print(f"Done!)\n", flush=True)
+    print("Done!)\n", flush=True)
 
     # -------------------------------------------------------------------------
     # Load the samples whose log-probabilities we want to evaluate

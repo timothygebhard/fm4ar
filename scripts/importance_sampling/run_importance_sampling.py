@@ -274,7 +274,7 @@ if __name__ == "__main__":
         )
         if output_file_path.exists():
             print(f"{output_file_path.name} exists already, skipping!\n")
-        elif (args.working_dir / f"proposal-samples.hdf").exists():
+        elif (args.working_dir / "proposal-samples.hdf").exists():
             print("Merged proposal samples exist already, skipping!\n")
 
         # Otherwise, we need to draw the proposal samples
