@@ -67,15 +67,15 @@ def load_results(config: dict) -> dict:
         # Construct extra dict with information of ESS, log evidence, etc.
         sampling_efficiency = results[label].get("sampling_efficiency", np.nan)
         n_total = len(results[label]["samples"])
-        n_eff = n_total * sampling_efficiency
+        n_eff = results[label].get("n_eff", np.nan)
         log_Z = (
             f"{results[label]['log_evidence']:.4f} +/- "
             f"{results[label]['log_evidence_std']:.4f}"
         )
         results[label]["info"] = {  # type: ignore
             "n_total": n_total,
-            "n_eff": n_eff,
-            "sampling_efficiency": float(sampling_efficiency),
+            "n_eff": round(n_eff, 1),
+            "sampling_efficiency": round(float(sampling_efficiency), 3),
             "log_Z": log_Z,
         }
 
