@@ -69,14 +69,18 @@ def load_results(config: dict) -> dict:
         n_total = len(results[label]["samples"])
         n_eff = results[label].get("n_eff", np.nan)
         log_Z = (
-            f"{results[label]['log_evidence']:.4f} +/- "
-            f"{results[label]['log_evidence_std']:.4f}"
+            f"{results[label]['log_evidence']:.3f} +/- "
+            f"{results[label]['log_evidence_std']:.3f}"
+        )
+        total_runtime = round(
+            results[label].get("total_runtime", np.nan) / 3600, 1
         )
         results[label]["info"] = {  # type: ignore
             "n_total": n_total,
             "n_eff": round(float(n_eff), 1),
             "sampling_efficiency": round(float(sampling_efficiency), 3),
             "log_Z": log_Z,
+            "total_runtime": total_runtime,
         }
 
         print(f"Done! ({n_total:,} samples)", flush=True)
