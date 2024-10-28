@@ -9,7 +9,7 @@ This repository contains the code for the research paper:
 
 > T. D. Gebhard, J. Wildberger, M. Dax, A. Kofler, D. Angerhausen, S. P. Quanz, B. Schölkopf (2024). 
 > "Flow Matching for Atmospheric Retrieval of Exoplanets: Where Reliability meets Adaptive Noise Levels." 
-> _Accepted for publication at Astronomy & Astrophysics._
+> Accepted for publication in _Astronomy & Astrophysics._
 
 
 ---
