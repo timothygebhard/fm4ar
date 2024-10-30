@@ -4,12 +4,14 @@
 ![Python 3.10](https://img.shields.io/badge/python-3.10+-blue)
 [![Checked with MyPy](https://img.shields.io/badge/mypy-checked-blue)](https://github.com/python/mypy)
 [![Data availability](https://img.shields.io/badge/Data-Available_on_Edmond-31705e)](https://doi.org/10.17617/3.LYSSVN)
+[![arXiv](https://img.shields.io/badge/arXiv-2410.21477-b31b1b.svg)](https://arxiv.org/abs/2410.21477) 
 
 This repository contains the code for the research paper:
 
 > T. D. Gebhard, J. Wildberger, M. Dax, A. Kofler, D. Angerhausen, S. P. Quanz, B. Schölkopf (2024). 
 > "Flow Matching for Atmospheric Retrieval of Exoplanets: Where Reliability meets Adaptive Noise Levels." 
 > Accepted for publication in _Astronomy & Astrophysics._
+> Available on [arXiv](https://arxiv.org/abs/2410.21477).
 
 
 ---
@@ -64,11 +66,13 @@ If you find this code useful, please consider citing our paper:
 
 ```bibtex
 @article{Gebhard_2024,
-  author   = {Gebhard, Timothy D. and Wildberger, Jonas and Dax, Maximilian and Angerhausen, Daniel and Quanz, Sascha P. and Schölkopf, Bernhard},
-  title    = {Flow Matching for Atmospheric Retrieval of Exoplanets: Where Reliability meets Adaptive Noise Levels},
-  year     = 2024,
-  journal  = {Astronomy \& Astrophysics},
-  addendum = {(Accepted)},
+  author     = {Gebhard, Timothy D. and Wildberger, Jonas and Dax, Maximilian and Angerhausen, Daniel and Quanz, Sascha P. and Schölkopf, Bernhard},
+  title      = {Flow Matching for Atmospheric Retrieval of Exoplanets: Where Reliability meets Adaptive Noise Levels},
+  year       = 2024,
+  journal    = {Astronomy \& Astrophysics},
+  eprint     = {2410.21477},
+  eprinttype = {arXiv},
+  addendum   = {(Accepted)},
 }
 ```
 
