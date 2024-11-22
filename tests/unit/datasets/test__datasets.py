@@ -46,6 +46,23 @@ def path_to_dataset_2(tmp_path: Path) -> Path:
     return file_path
 
 
+@pytest.fixture
+def path_to_dataset_3(tmp_path: Path) -> Path:
+    """
+    Create a dummy dataset with 16 parameters so that we can use the
+    theta scalers for the Vasist-2023 dataset for testing.
+    """
+
+    # Create a dummy dataset
+    file_path = tmp_path / "dummy_dataset_3.hdf"
+    with h5py.File(file_path, "w") as f:
+        f.create_dataset("theta", data=np.arange(112).reshape(7, 16))
+        f.create_dataset("flux", data=np.arange(861).reshape(7, 123))
+        f.create_dataset("wlen", data=np.arange(123))
+
+    return file_path
+
+
 def test__load_dataset_1(path_to_dataset_1: Path) -> None:
     """
     Unit test for `fm4ar.datasets.load_dataset`.
@@ -110,3 +127,40 @@ def test__load_dataset_2(path_to_dataset_2: Path) -> None:
     assert dataset[0]["theta"].shape == torch.Size([5])
     assert dataset[0]["flux"].shape == torch.Size([5])
     assert dataset[0]["wlen"].shape == torch.Size([5])
+
+
+def test__load_dataset_3(path_to_dataset_3: Path) -> None:
+    """
+    Unit test for `fm4ar.datasets.load_dataset`.
+
+    This test checks if we can load only a subset of the dataset.
+    """
+
+    # Create the configuration
+    config = {
+        "dataset": {
+            "file_path": path_to_dataset_3,
+            "n_train_samples": 4,
+            "n_valid_samples": 3,
+            "random_seed": 42,
+            "parameters": [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        },
+        "theta_scaler": {
+            "method": "MinMaxScaler",
+            "kwargs": {"dataset": "vasist_2023"},
+        },
+    }
+
+    # Load the dataset
+    dataset = load_dataset(config)
+
+    # Basic check of the dataset
+    assert len(dataset) == 7
+    assert dataset.theta.shape == torch.Size([7, 8])
+    assert dataset.flux.shape == torch.Size([7, 123])
+    assert dataset.wlen.shape == torch.Size([1, 123])
+    assert isinstance(dataset[0], dict)
+    assert sorted(dataset[0].keys()) == ["flux", "theta", "wlen"]
+    assert dataset[0]["theta"].shape == torch.Size([8])
+    assert dataset[0]["flux"].shape == torch.Size([123])
+    assert dataset[0]["wlen"].shape == torch.Size([123])
