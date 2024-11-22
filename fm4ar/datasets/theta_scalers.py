@@ -8,6 +8,7 @@ transforms can change between different stages of training.
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -104,7 +105,11 @@ class MinMaxScaler(ThetaScaler):
 
         self.minimum = minimum
         self.maximum = maximum
-        self.difference = self.maximum - self.minimum
+
+    @property
+    @lru_cache
+    def difference(self):
+        return self.maximum - self.minimum
 
     def forward(self, x: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
         output = dict(x)
