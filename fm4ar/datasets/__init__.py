@@ -9,7 +9,11 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from fm4ar.datasets.dataset import SpectraDataset
-from fm4ar.datasets.theta_scalers import get_theta_scaler
+from fm4ar.datasets.theta_scalers import (
+    MeanStdScaler,
+    MinMaxScaler,
+    get_theta_scaler,
+)
 from fm4ar.utils.paths import expand_env_variables_in_path
 
 
@@ -39,6 +43,13 @@ class DatasetConfig(BaseModel):
             "initialization of the model weights."
         ),
     )
+    parameters: list[int] | None = Field(
+        None,
+        description=(
+            "Binary mask indicating which parameters to use. "
+            "If None, all parameters are used (default)."
+        ),
+    )
 
 
 def load_dataset(config: dict) -> SpectraDataset:
@@ -65,6 +76,18 @@ def load_dataset(config: dict) -> SpectraDataset:
             f["wlen"] if len(f["wlen"].shape) == 1 else f["wlen"][:n_samples]
         )
 
+    # Select only the parameters that we want to use
+    if dataset_config.parameters is not None:
+        if len(dataset_config.parameters) != theta.shape[1]:
+            raise ValueError(  # pragma: no cover
+                "The number of parameters in the dataset does not match the "
+                "number of parameters specified in the configuration!"
+            )
+        mask = np.array(dataset_config.parameters, dtype=bool)
+        theta = theta[:, mask]
+    else:
+        mask = np.ones(theta.shape[1], dtype=bool)
+
     # TODO: Add support for filtering the dataset, e.g., based on mean flux
 
     # Ensure that wlen is 2D
@@ -90,6 +113,14 @@ def load_dataset(config: dict) -> SpectraDataset:
     # Construct the feature scaling transforms
     theta_scaler_config = config.get("theta_scaler", {})
     theta_scaler = get_theta_scaler(theta_scaler_config)
+
+    # Apply the parameter mask also to the theta scaler, if necessary
+    if isinstance(theta_scaler, MeanStdScaler):
+        theta_scaler.mean = theta_scaler.mean[mask]
+        theta_scaler.std = theta_scaler.std[mask]
+    elif isinstance(theta_scaler, MinMaxScaler):
+        theta_scaler.minimum = theta_scaler.minimum[mask]
+        theta_scaler.maximum = theta_scaler.maximum[mask]
 
     # Construct the dataset with the theta scaler
     dataset = SpectraDataset(
