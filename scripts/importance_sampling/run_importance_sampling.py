@@ -74,6 +74,14 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Number of parallel jobs. Default: 1.",
     )
     parser.add_argument(
+        "--no-importance-sampling",
+        action="store_true",
+        help=(
+            "If True, skip the importance sampling and only draw proposal "
+            "samples. This is useful, e.g., when training partial models."
+        ),
+    )
+    parser.add_argument(
         "--stage",
         type=str,
         choices=[
@@ -133,6 +141,11 @@ def prepare_and_launch_dag(
         ],
         start=1,
     ):
+
+        # Skip stages that are not requested: If we are not actually running
+        # the importance sampling, we can skip the third and fourth stage.
+        if args.no_importance_sampling and i >= 3:
+            continue
 
         # Collect HTCondorSettings for the stage
         htcondor_config: HTCondorConfig = getattr(config, stage).htcondor

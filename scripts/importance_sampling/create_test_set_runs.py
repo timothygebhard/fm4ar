@@ -47,6 +47,14 @@ def get_cli_arguments() -> argparse.Namespace:
         help="Path to the directory that holds the trained model."
     )
     parser.add_argument(
+        "--no-importance-sampling",
+        action="store_true",
+        help=(
+            "If True, skip the importance sampling and only draw proposal "
+            "samples. This is useful, e.g., when training partial models."
+        ),
+    )
+    parser.add_argument(
         "--no-launch",
         action="store_true",
         help="If set, create but do not launch the runs."
@@ -113,12 +121,17 @@ if __name__ == "__main__":
         # The JSON hack is needed because we cannot write a Path object to
         # a YAML file, so we need to serialize it to a string first.
         save_config(
-            config=json.loads(config.json()),
+            config=json.loads(config.model_dump_json()),
             experiment_dir=run_dir,
             file_name="importance_sampling.yaml",
         )
 
         print("Done!", flush=True)
+
+        # Define importance sampling flag
+        importance_sampling_flag = (
+            "--no-importance-sampling" if args.no_importance_sampling else ""
+        )
 
         # Launch the run
         if not args.no_launch:
@@ -127,6 +140,7 @@ if __name__ == "__main__":
                 sys.executable,
                 launch_script.as_posix(),
                 "--start-submission",
+                importance_sampling_flag,
                 "--experiment-dir",
                 args.experiment_dir.as_posix(),
                 "--working-dir",
