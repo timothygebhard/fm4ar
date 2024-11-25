@@ -122,7 +122,10 @@ class MinMaxScaler(ThetaScaler):
         return output
 
 
-def get_theta_scaler(config: dict[str, Any]) -> ThetaScaler:
+def get_theta_scaler(
+    theta_scaler_config: dict[str, Any],
+    dataset_config: dict[str, Any] | None = None,
+) -> ThetaScaler:
     """
     Get the scaler for theta specified in the given `config` (which is
     only the config for the feature scaler for theta, not the entire
@@ -130,13 +133,13 @@ def get_theta_scaler(config: dict[str, Any]) -> ThetaScaler:
     """
 
     # Case 1: No feature scaling defined for theta
-    if not config:
+    if not theta_scaler_config:
         return IdentityScaler()
 
     # Case 2: Feature scaling defined
     scaler: ThetaScaler
-    method = config["method"]
-    kwargs = config.get("kwargs", {})
+    method = theta_scaler_config["method"]
+    kwargs = theta_scaler_config.get("kwargs", {})
     match method:
         case "mean_std" | "MeanStdScaler":
             mean, std = get_mean_and_std(**kwargs)
@@ -148,6 +151,16 @@ def get_theta_scaler(config: dict[str, Any]) -> ThetaScaler:
             scaler = IdentityScaler()
         case _:
             raise ValueError(f"Unknown feature scaling method: {method}")
+
+    # Create mask for the parameters, if necessary
+    if dataset_config is not None and dataset_config["parameters"] is not None:
+        mask = np.array(dataset_config["parameters"], dtype=bool)
+        if isinstance(scaler, MeanStdScaler):
+            scaler.mean = scaler.mean[mask]
+            scaler.std = scaler.std[mask]
+        elif isinstance(scaler, MinMaxScaler):
+            scaler.minimum = scaler.minimum[mask]
+            scaler.maximum = scaler.maximum[mask]
 
     return scaler
 
