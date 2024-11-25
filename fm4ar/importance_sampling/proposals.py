@@ -60,6 +60,18 @@ def draw_proposal_samples(
             index=config.target_spectrum.index,
         )
 
+        # Select the subsect of theta that was used to train the model
+        # This is needed in case where we only train a partial model (i.e.,
+        # a model that only infers a subset of the parameters)
+        mask = np.array(
+            experiment_config["dataset"].get(
+                "parameters",
+                np.ones(target_spectrum["theta"].shape[0]),
+            ),
+            dtype=bool,
+        )
+        target_spectrum["theta"] = target_spectrum["theta"][mask]
+
         # Construct the context for the model from the target spectrum
         context = {
             k: torch.from_numpy(v).float().reshape(1, -1) for k, v in
@@ -156,7 +168,10 @@ def draw_samples_from_ml_model(
     # Load experiment config and construct a standardizer for the data
     print("Creating standardizer...", end=" ")
     config = load_experiment_config(experiment_dir=experiment_dir)
-    theta_scaler = get_theta_scaler(config=config["theta_scaler"])
+    theta_scaler = get_theta_scaler(
+        theta_scaler_config=config["theta_scaler"],
+        dataset_config=config["dataset"],
+    )
     print("Done!\n")
 
     # If desired, compute the log-probability of the ground truth theta
@@ -253,7 +268,7 @@ def draw_samples_from_unconditional_flow(
 
     # Create the scaler for `theta`
     print("Creating standardizer...", end=" ")
-    theta_scaler = get_theta_scaler(config=config.theta_scaler)
+    theta_scaler = get_theta_scaler(theta_scaler_config=config.theta_scaler)
     print("Done!")
 
     # Load the model checkpoint
