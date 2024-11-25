@@ -50,10 +50,10 @@ def load_target_spectrum(
 
     target = dict()
     with h5py.File(file_path, "r") as f:
-        target["wlen"] = np.array(f["wlen"]).flatten()
-        target["flux"] = np.array(f["flux"][index]).flatten()
-        target["error_bars"] = np.array(f["error_bars"][index]).flatten()
-        target["theta"] = np.array(f["theta"][index]).flatten()
+        target["wlen"] = np.array(f["wlen"])
+        target["flux"] = np.atleast_2d(f["flux"])[index]
+        target["error_bars"] = np.atleast_2d(f["error_bars"])[index]
+        target["theta"] = np.atleast_2d(f["theta"])[index]
 
     for key, value in target.items():
         target[key] = value.astype(np.float32)
