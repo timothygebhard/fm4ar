@@ -106,10 +106,44 @@ class ImportanceSamplingConfig(BaseModel):
     merge_simulation_results: MergeSimulationResultsConfig
 
 
+class DrawOnlyProposalsConfig(BaseModel):
+    """
+    Configuration for drawing proposal samples only.
+    """
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    # General settings
+    checkpoint_file_name: str = Field(
+        default="model__best.pt",
+        description="Name of the model checkpoint file to use.",
+    )
+    random_seed: int = Field(
+        default=42,
+        description="Random seed to use.",
+    )
+    model_kwargs: dict[str, Any] = Field(
+        default={},
+        description=(
+            "Additional keyword arguments for the posterior model. "
+            "Usually, this should only be necessary for FMPE models to "
+            "control the settings of the ODE solver (e.g., `tolerance`)."
+        ),
+    )
+
+    # File with target spectra
+    target_spectrum: TargetSpectrumConfig
+
+    # Configuration for the individual stages
+    draw_proposal_samples: DrawProposalSamplesConfig
+    merge_proposal_samples: MergeProposalSamplesConfig
+
+
 def load_config(
     experiment_dir: Path,
     name: str = "importance_sampling.yaml",
-) -> ImportanceSamplingConfig:
+    only_proposals: bool = False,
+) -> ImportanceSamplingConfig | DrawOnlyProposalsConfig:
     """
     Load the configuration inside the given experiment directory.
     """
@@ -120,4 +154,6 @@ def load_config(
         config_dict = safe_load(file)
 
     # Construct the configuration object
+    if only_proposals:
+        return DrawOnlyProposalsConfig(**config_dict)
     return ImportanceSamplingConfig(**config_dict)
