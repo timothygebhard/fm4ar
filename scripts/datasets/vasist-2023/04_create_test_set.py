@@ -68,6 +68,19 @@ if __name__ == "__main__":
         help="Number of spectra to simulate. Default: 1000.",
     )
     parser.add_argument(
+        "--parameters",
+        type=str,
+        default=None,
+        help=(
+            "String with the parameters that are randomly drawn according "
+            "to the --theta-mode. Parameters that are not selected are fixed "
+            "to the values of the benchmark spectrum. None means that all "
+            "parameters are drawn randomly. Default: None."
+            "The format is, e.g., '1111111100000000' to randomly draw the "
+            "first 8 parameters and fix the last 8 to the benchmark values."
+        ),
+    )
+    parser.add_argument(
         "--random-seed",
         type=int,
         default=42,
@@ -104,6 +117,15 @@ if __name__ == "__main__":
         "benchmark",
     ].index(args.theta_mode)
 
+    # Create a mask for the parameters which will be overwritten by the
+    # respective values from the benchmark spectrum
+    if args.parameters is not None:
+        mask = np.array([int(p) for p in args.parameters]).astype(bool)
+        mask = np.logical_not(mask)
+        assert len(mask) == len(THETA_0)
+    else:
+        mask = np.zeros_like(THETA_0).astype(bool)
+
     # Create RNG for sampling both the parameters and the noise
     rng = np.random.default_rng(seed=args.random_seed + offset)
 
@@ -135,6 +157,9 @@ if __name__ == "__main__":
 
             # Transform the random numbers to the parameter space
             theta = prior.transform(u).astype(np.float32)
+
+            # Fix some parameters to the benchmark values
+            theta[mask] = THETA_0[mask]
 
             # Simulate target spectrum
             result = simulator(theta)
@@ -174,7 +199,7 @@ if __name__ == "__main__":
     prt_version = version("petitRADTRANS")
     metadata = vars(args) | {
         "HEAD of fm4ar": get_git_hash(),
-        "Timestamp (UTC)": datetime.datetime.utcnow().isoformat(),
+        "Timestamp (UTC)": datetime.datetime.now(datetime.UTC).isoformat(),
         "Python version": sys.version,
         "petitRADTRANS version": version("petitRADTRANS"),
         "packages": "\n".join(get_packages()),
