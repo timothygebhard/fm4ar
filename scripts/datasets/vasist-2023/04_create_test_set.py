@@ -3,9 +3,9 @@ Create different types of test sets for the `vasist_2023` dataset.
 """
 
 import argparse
-import datetime
 import sys
 import time
+from datetime import datetime, timezone
 from importlib.metadata import version
 from pathlib import Path
 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     prt_version = version("petitRADTRANS")
     metadata = vars(args) | {
         "HEAD of fm4ar": get_git_hash(),
-        "Timestamp (UTC)": datetime.datetime.now(datetime.UTC).isoformat(),
+        "Timestamp (UTC)": datetime.now(timezone.utc).isoformat(),
         "Python version": sys.version,
         "petitRADTRANS version": version("petitRADTRANS"),
         "packages": "\n".join(get_packages()),
