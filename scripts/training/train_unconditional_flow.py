@@ -152,7 +152,7 @@ def prepare_data(
 
     # Get the theta scaler and scale the samples
     print("Rescaling the samples...", end=" ", flush=True)
-    scaler = get_theta_scaler(config=config.theta_scaler)
+    scaler = get_theta_scaler(theta_scaler_config=config.theta_scaler)
     samples = scaler.forward_tensor(samples)
     print("Done!")
 
