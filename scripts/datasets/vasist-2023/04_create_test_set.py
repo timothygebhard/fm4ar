@@ -222,6 +222,9 @@ if __name__ == "__main__":
         output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Fix output directory in arguments (otherwise it breaks the HDF export)
+    args.output_dir = str(output_dir)
+
     # Save target data to HDF file
     print("\nSaving results...", end=" ", flush=True)
     prefix = f"test-{args.theta_mode}__R-{args.resolution}"
