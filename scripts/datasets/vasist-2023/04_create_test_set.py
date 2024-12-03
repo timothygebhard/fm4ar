@@ -7,6 +7,7 @@ import datetime
 import sys
 import time
 from importlib.metadata import version
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -66,6 +67,15 @@ if __name__ == "__main__":
         type=int,
         default=1000,
         help="Number of spectra to simulate. Default: 1000.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the output directory. None defaults to the 'test' "
+            "subdirectory of the 'vasist-2023' dataset directory."
+        ),
     )
     parser.add_argument(
         "--parameters",
@@ -206,7 +216,10 @@ if __name__ == "__main__":
     }
 
     # Prepare the output directory
-    output_dir = get_datasets_dir() / "vasist-2023" / "test"
+    if args.output_dir is None:
+        output_dir = get_datasets_dir() / "vasist-2023" / "test"
+    else:
+        output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Save target data to HDF file
