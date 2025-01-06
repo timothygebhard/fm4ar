@@ -64,9 +64,9 @@ if __name__ == "__main__":
 
     # Construct the basic context (with batch size = 1)
     context = {
-        "wlen": torch.from_numpy(target_spectrum["wlen"]).float(),
-        "flux": torch.from_numpy(target_spectrum["flux"]).float(),
-        "error_bars": torch.from_numpy(target_spectrum["error_bars"]).float(),
+        "wlen": torch.from_numpy(target_spectrum.wlen).float(),
+        "flux": torch.from_numpy(target_spectrum.flux).float(),
+        "error_bars": torch.from_numpy(target_spectrum.error_bars).float(),
     }
 
     # Repeat the context to match the desired chunk size and move it to the GPU

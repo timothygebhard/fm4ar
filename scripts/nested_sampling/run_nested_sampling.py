@@ -202,15 +202,15 @@ if __name__ == "__main__":
         log("Creating backup of target spectrum...", end=" ")
         save_to_hdf(
             file_path=args.experiment_dir / "target_spectrum.hdf",
-            **target_spectrum,
+            **target_spectrum.__dict__,
         )
         log("Done!")
 
     # Instantiate the likelihood distribution
     log("Creating likelihood distribution...", end=" ")
     likelihood_distribution = get_likelihood_distribution(
-        flux_obs=target_spectrum["flux"],
-        error_bars=target_spectrum["error_bars"],
+        flux_obs=target_spectrum.flux,
+        error_bars=target_spectrum.error_bars,
     )
     log("Done!")
 
@@ -329,7 +329,10 @@ if __name__ == "__main__":
                 np.array(prior.distribution.support()[1][infer_mask]),
             ),
             file_path=args.experiment_dir / "posterior.pdf",
-            ground_truth=target_spectrum["theta"][infer_mask],
+            ground_truth=(
+                None if target_spectrum.theta is None else
+                target_spectrum.theta[infer_mask]
+            ),
         )
         log("Done!")
 

@@ -23,7 +23,7 @@ from yaml import safe_load
 
 from fm4ar.models.build_model import FMPEModel, build_model
 from fm4ar.nn.mlp import MLP
-from fm4ar.target_spectrum import load_target_spectrum
+from fm4ar.target_spectrum import TargetSpectrum, load_target_spectrum
 from fm4ar.torchutils.dataloaders import get_number_of_workers
 from fm4ar.utils.hdf import load_from_hdf, save_to_hdf
 from fm4ar.utils.paths import expand_env_variables_in_path as expand_path
@@ -40,7 +40,7 @@ def draw_samples_from_fmpe_model(config: dict) -> dict[float, torch.Tensor]:
 
     # Initialize the model and target spectrum
     model: FMPEModel | None = None
-    target_spectrum: dict | None = None
+    target_spectrum: TargetSpectrum | None = None
 
     # Draw samples with different tolerances
     samples: dict[float, torch.Tensor] = {}
@@ -89,7 +89,7 @@ def draw_samples_from_fmpe_model(config: dict) -> dict[float, torch.Tensor]:
 
             # Construct the basic context (with batch size = 1)
             context = {
-                k: torch.from_numpy(target_spectrum[k]).float()
+                k: torch.from_numpy(target_spectrum.__dict__[k]).float()
                 for k in ["wlen", "flux", "error_bars"]
             }
 

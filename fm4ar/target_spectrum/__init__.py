@@ -3,6 +3,7 @@ Everything related to the target spectrum used for importance sampling
 or nested sampling.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import h5py
@@ -27,10 +28,23 @@ class TargetSpectrumConfig(BaseModel):
     )
 
 
+@dataclass
+class TargetSpectrum:
+    """
+    A target spectrum. We use a dataclass instead of a dictionary for
+    better type hinting.
+    """
+
+    wlen: np.ndarray
+    flux: np.ndarray
+    error_bars: np.ndarray
+    theta: np.ndarray | None = None
+
+
 def load_target_spectrum(
     file_path: Path,
     index: int = 0,
-) -> dict[str, np.ndarray]:
+) -> TargetSpectrum:
     """
     Load a target spectrum from a file.
 
@@ -41,27 +55,32 @@ def load_target_spectrum(
             spectra, e.g., when using a proper test set.
 
     Returns:
-        A dictionary containing the wavelength, flux and error bars
-        (i.e., assumed noise level) of the target spectrum, as well as
-        the ground truth theta (if available).
+        A dataclass object containing the wavelengths, flux and error
+        bars (i.e., assumed noise level) of the target spectrum, as well
+        as the ground truth theta (if available).
     """
 
     file_path = expand_env_variables_in_path(file_path)
 
-    target = dict()
+    # Load the target spectrum from the HDF file
     with h5py.File(file_path, "r") as f:
 
         # Load the target spectrum (wavelength, flux, error bars)
-        target["wlen"] = np.array(f["wlen"])
-        target["flux"] = np.atleast_2d(f["flux"])[index]
-        target["error_bars"] = np.atleast_2d(f["error_bars"])[index]
+        wlen = np.array(f["wlen"]).astype(np.float32)
+        flux = np.atleast_2d(f["flux"])[index].astype(np.float32)
+        error_bars = np.atleast_2d(f["error_bars"])[index].astype(np.float32)
 
         # If available, load the ground truth theta
         # This is of course not available for real observations
         if "theta" in f.keys():
-            target["theta"] = np.atleast_2d(f["theta"])[index]
+            theta = np.atleast_2d(f["theta"])[index].astype(np.float32)
+        else:
+            theta = None
 
-    for key, value in target.items():
-        target[key] = value.astype(np.float32)
-
-    return target
+    # Return the target spectrum as a dataclass object
+    return TargetSpectrum(
+        wlen=wlen,
+        flux=flux,
+        error_bars=error_bars,
+        theta=theta,
+    )

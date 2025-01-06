@@ -61,9 +61,9 @@ if __name__ == "__main__":
         amount = i / (len(sigmas) - 1) * 0.8
         color = adjust_lightness(color=config["color"], amount=amount)
         ax.fill_between(
-            target_spectrum["wlen"],
-            target_spectrum["flux"] - sigma,
-            target_spectrum["flux"] + sigma,
+            target_spectrum.wlen,
+            target_spectrum.flux - sigma,
+            target_spectrum.flux + sigma,
             step="pre",
             fc=color,
             ec="none",
@@ -77,8 +77,8 @@ if __name__ == "__main__":
 
     # Plot the spectrum
     ax.step(
-        target_spectrum["wlen"],
-        target_spectrum["flux"],
+        target_spectrum.wlen,
+        target_spectrum.flux,
         color="k",
         lw=0.5,
         solid_joinstyle='miter',
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     )
 
     # Set the axis limits
-    ax.set_xlim(min(target_spectrum["wlen"]), max(target_spectrum["wlen"]))
+    ax.set_xlim(min(target_spectrum.wlen), max(target_spectrum.wlen))
     ax.set_ylim(0, None)
 
     # Adjust the tick label sizes

@@ -399,14 +399,14 @@ if __name__ == "__main__":
                 file_path=config.target_spectrum.file_path,
                 index=config.target_spectrum.index,
             )
-            n_bins = len(target["flux"])
+            n_bins = len(target.flux)
 
             # Set up prior, simulator, and likelihood distribution
             prior = get_prior(config=config.prior)
             simulator = get_simulator(config=config.simulator)
             likelihood_distribution = get_likelihood_distribution(
-                flux_obs=target["flux"],
-                error_bars=target["error_bars"],
+                flux_obs=target.flux,
+                error_bars=target.error_bars,
             )
 
             # Set up a counter for the number of simulator timeouts.

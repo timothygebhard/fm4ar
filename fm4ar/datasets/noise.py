@@ -143,7 +143,7 @@ class TargetSpectrumNoiseGenerator(NoiseGenerator):
         self.rng = np.random.default_rng(random_seed)
 
     def sample_error_bars(self, wlen: np.ndarray) -> np.ndarray:
-        return self.target_spectrum["error_bars"]
+        return self.target_spectrum.error_bars
 
     def sample_noise(self, error_bars: np.ndarray) -> np.ndarray:
         """

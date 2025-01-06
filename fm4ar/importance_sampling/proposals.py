@@ -2,6 +2,7 @@
 Methods for drawing samples from a proposal distribution.
 """
 
+from dataclasses import asdict
 from argparse import Namespace
 from pathlib import Path
 from typing import Any
@@ -69,21 +70,21 @@ def draw_proposal_samples(
         mask = np.array(
             experiment_config["dataset"].get(
                 "parameters",
-                np.ones(target_spectrum["theta"].shape[0]),
+                np.ones(target_spectrum.theta.shape[0]),
             ),
             dtype=bool,
         )
-        target_spectrum["theta"] = target_spectrum["theta"][mask]
+        target_spectrum.theta = target_spectrum.theta[mask]
 
         # Construct the context for the model from the target spectrum
         context = {
             k: torch.from_numpy(v).float().reshape(1, -1) for k, v in
-            target_spectrum.items() if k not in ["theta"]
+            target_spectrum.__dict__.items() if k not in ["theta"]
         }
 
         print(f"Running for ML model ({model_type})!\n")
         results = draw_samples_from_ml_model(
-            theta_true=target_spectrum["theta"],
+            theta_true=target_spectrum.theta,
             context=context,
             experiment_dir=args.experiment_dir,
             checkpoint_file_name=config.checkpoint_file_name,

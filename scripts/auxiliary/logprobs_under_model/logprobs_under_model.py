@@ -204,7 +204,7 @@ if __name__ == "__main__":
         )
         context = {
             k: torch.from_numpy(v).float().reshape(1, -1)
-            for k, v in target_spectrum.items()
+            for k, v in target_spectrum.__dict__.items()
             if k not in ["theta"]
         }
     else:
