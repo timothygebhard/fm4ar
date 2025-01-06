@@ -3,8 +3,12 @@ Methods for generating noise that can be added to the target spectrum.
 """
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 import numpy as np
+
+from fm4ar.target_spectrum import load_target_spectrum
+from fm4ar.utils.paths import expand_env_variables_in_path
 
 
 class NoiseGenerator(ABC):
@@ -95,6 +99,65 @@ class DefaultNoiseGenerator(NoiseGenerator):
         return self.rng.normal(loc=0, scale=error_bars)
 
 
+class TargetSpectrumNoiseGenerator(NoiseGenerator):
+    """
+    Noise generator for a specific target spectrum that produces noise
+    from a Gaussian with mean zero and a standard deviation that matches
+    the error bars from the given target spectrum.
+    For now, this cannot be used to train noise-level-conditional models
+    since the noise level is fixed to the target spectrum's error bars.
+    """
+
+    def __init__(
+        self,
+        file_path: Path | str,
+        index: int = 0,
+        random_seed: int = 42,
+    ) -> None:
+        """
+        Create a new instance of the target spectrum noise generator.
+
+        Args:
+            file_path: Path to the target spectrum HDF file. This file
+                should contain the following keys: "wlen", "flux", and
+                "error_bars" (although only "error_bars" is used here).
+            random_seed: Random seed for reproducibility.
+        """
+
+        # Convert `file_path` to a `Path` object if necessary
+        # This is needed because in practice, the file path may come from a
+        # configuration file, in which case it is a string and not a `Path`.
+        if not isinstance(file_path, Path):
+            file_path = Path(file_path)
+
+        # Expand environment variables in the file path
+        file_path = expand_env_variables_in_path(file_path)
+
+        # Load the target spectrum
+        self.target_spectrum = load_target_spectrum(
+            file_path=file_path,
+            index=index,
+        )
+
+        # Initialize the RNG
+        self.rng = np.random.default_rng(random_seed)
+
+    def sample_error_bars(self, wlen: np.ndarray) -> np.ndarray:
+        return self.target_spectrum["error_bars"]
+
+    def sample_noise(self, error_bars: np.ndarray) -> np.ndarray:
+        """
+        Sample a noise realization from a Gaussian distribution with
+        the given `error_bars`. Bins are assumed to be independent for
+        now; sampling noise that respects the covariance structure is
+        left for future work.
+        """
+
+        # Draw noise with mean 0 and standard deviation equal to `error_bars`
+        # noinspection PyTypeChecker
+        return self.rng.normal(loc=0, scale=error_bars)
+
+
 def get_noise_generator(config: dict) -> NoiseGenerator:
     """
     Create a noise generator based on the given `config`.
@@ -111,5 +174,7 @@ def get_noise_generator(config: dict) -> NoiseGenerator:
     # Create the noise generator
     if noise_generator_type == "DefaultNoiseGenerator":
         return DefaultNoiseGenerator(**noise_generator_kwargs)
+    elif noise_generator_type == "TargetSpectrumNoiseGenerator":
+        return TargetSpectrumNoiseGenerator(**noise_generator_kwargs)
     else:
         raise ValueError(f"Unknown noise generator: {noise_generator_type}")
