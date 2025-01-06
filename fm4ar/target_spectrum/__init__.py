@@ -43,17 +43,23 @@ def load_target_spectrum(
     Returns:
         A dictionary containing the wavelength, flux and error bars
         (i.e., assumed noise level) of the target spectrum, as well as
-        the ground truth theta.
+        the ground truth theta (if available).
     """
 
     file_path = expand_env_variables_in_path(file_path)
 
     target = dict()
     with h5py.File(file_path, "r") as f:
+
+        # Load the target spectrum (wavelength, flux, error bars)
         target["wlen"] = np.array(f["wlen"])
         target["flux"] = np.atleast_2d(f["flux"])[index]
         target["error_bars"] = np.atleast_2d(f["error_bars"])[index]
-        target["theta"] = np.atleast_2d(f["theta"])[index]
+
+        # If available, load the ground truth theta
+        # This is of course not available for real observations
+        if "theta" in f.keys():
+            target["theta"] = np.atleast_2d(f["theta"])[index]
 
     for key, value in target.items():
         target[key] = value.astype(np.float32)
