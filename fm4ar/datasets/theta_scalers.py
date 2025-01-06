@@ -153,7 +153,10 @@ def get_theta_scaler(
             raise ValueError(f"Unknown feature scaling method: {method}")
 
     # Create mask for the parameters, if necessary
-    if dataset_config is not None and dataset_config["parameters"] is not None:
+    if (
+        dataset_config is not None
+        and dataset_config.get("parameters", None) is not None
+    ):
         mask = np.array(dataset_config["parameters"], dtype=bool)
         if isinstance(scaler, MeanStdScaler):
             scaler.mean = scaler.mean[mask]
