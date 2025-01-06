@@ -120,7 +120,9 @@ def load_model(
         raise ValueError(f"Unknown model type: {model_type}!")
 
     # Construct the theta scaler
-    theta_scaler = get_theta_scaler(config=experiment_config["theta_scaler"])
+    theta_scaler = get_theta_scaler(
+        theta_scaler_config=experiment_config["theta_scaler"]
+    )
 
     # Construct keyword arguments for the model's log_prob method
     model_kwargs = {"tolerance": 5e-5} if model_type == "fmpe" else {}
