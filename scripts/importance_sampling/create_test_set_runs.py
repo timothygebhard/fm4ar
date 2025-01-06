@@ -146,6 +146,7 @@ if __name__ == "__main__":
                 "--working-dir",
                 run_dir.as_posix()
             ]
+            cmd = [c for c in cmd if c]  # Remove empty strings
             run(cmd, check=True, capture_output=True)
             print("Done!", flush=True)
             print()
