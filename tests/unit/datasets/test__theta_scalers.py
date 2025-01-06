@@ -35,12 +35,29 @@ def test__theta_scalers() -> None:
     assert not DeepDiff(scaler.inverse(sample), sample)
 
     # Test the identity scaler (explicit)
-    scaler = get_theta_scaler({"method": "identity"})
+    scaler = get_theta_scaler(theta_scaler_config={"method": "identity"})
     assert isinstance(scaler, IdentityScaler)
 
     # Test the MeanStdScaler
     scaler = get_theta_scaler(
-        {"method": "mean_std", "kwargs": {"dataset": "vasist_2023"}}
+        theta_scaler_config={
+            "method": "mean_std",
+            "kwargs": {"dataset": "vasist_2023"},
+        },
+    )
+    assert isinstance(scaler, MeanStdScaler)
+    transformed = scaler.forward(sample)
+    assert transformed["theta"].shape == (16,)
+    for key in sample:
+        assert np.allclose(scaler.inverse(transformed)[key], sample[key])
+
+    # Test the MeanStdScaler also with explicit parameters
+    scaler = get_theta_scaler(
+        theta_scaler_config={
+            "method": "mean_std",
+            "kwargs": {"dataset": "vasist_2023"},
+        },
+        dataset_config={"parameters": [True] * 16},
     )
     assert isinstance(scaler, MeanStdScaler)
     transformed = scaler.forward(sample)
@@ -50,7 +67,10 @@ def test__theta_scalers() -> None:
 
     # Test the MinMaxScaler
     scaler = get_theta_scaler(
-        {"method": "min_max", "kwargs": {"dataset": "vasist_2023"}}
+        theta_scaler_config={
+            "method": "min_max",
+            "kwargs": {"dataset": "vasist_2023"},
+        },
     )
     assert isinstance(scaler, MinMaxScaler)
     transformed = scaler.forward(sample)

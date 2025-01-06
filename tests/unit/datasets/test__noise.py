@@ -130,7 +130,7 @@ def test__get_noise_generator(path_to_target_spectrum: Path) -> None:
         config=dict(
             type="TargetSpectrumNoiseGenerator",
             kwargs=dict(
-                file_path=path_to_target_spectrum,
+                file_path=path_to_target_spectrum.as_posix(),
                 index=0,
             ),
         )

@@ -129,7 +129,7 @@ def compute_effective_sample_size(
     # came out as zero (e.g., because the simulation failed or timed out).
     if log_prior_values is not None:
         n_simulator_calls = float(np.sum(log_prior_values > -np.inf))
-        if n_simulator_calls == 0:
+        if n_simulator_calls == 0:  # pragma: no cover
             print(
                 "Warning: n_simulator_calls == 0",
                 flush=True,
