@@ -74,13 +74,14 @@ def load_target_spectrum(
         # This is of course not available for real observations
         if "theta" in f.keys():
             theta = np.atleast_2d(f["theta"])[index].astype(np.float32)
+            theta = theta.squeeze()
         else:
             theta = None
 
     # Return the target spectrum as a dataclass object
     return TargetSpectrum(
-        wlen=wlen,
-        flux=flux,
-        error_bars=error_bars,
+        wlen=wlen.squeeze(),
+        flux=flux.squeeze(),
+        error_bars=error_bars.squeeze(),
         theta=theta,
     )
