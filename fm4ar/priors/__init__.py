@@ -14,6 +14,9 @@ def get_prior(config: PriorConfig) -> BasePrior:
     if config.dataset == "vasist_2023":
         from fm4ar.datasets.vasist_2023.prior import Prior
         return Prior(random_seed=config.random_seed)
+    elif config.dataset == "HR8799e":
+        from fm4ar.datasets.HR8799e.prior import Prior
+        return Prior(random_seed=config.random_seed)
 
     # This should never happen, because the `config` object is validated
     raise ValueError("Unknown prior dataset!")  # pragma: no cover

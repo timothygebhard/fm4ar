@@ -14,6 +14,9 @@ def get_simulator(config: SimulatorConfig) -> BaseSimulator:
     if config.dataset == "vasist_2023":
         from fm4ar.datasets.vasist_2023.simulator import Simulator
         return Simulator(**config.kwargs)
+    elif config.dataset == "HR8799e":
+        from fm4ar.datasets.HR8799e.simulator import Simulator
+        return Simulator(**config.kwargs)
 
     # This should never happen, because the `config` object is validated
     raise ValueError("Unknown simulator dataset!")  # pragma: no cover
