@@ -2,7 +2,6 @@
 Methods for drawing samples from a proposal distribution.
 """
 
-from dataclasses import asdict
 from argparse import Namespace
 from pathlib import Path
 from typing import Any
@@ -67,14 +66,9 @@ def draw_proposal_samples(
         # Select the subsect of theta that was used to train the model
         # This is needed in case where we only train a partial model (i.e.,
         # a model that only infers a subset of the parameters)
-        mask = np.array(
-            experiment_config["dataset"].get(
-                "parameters",
-                np.ones(target_spectrum.theta.shape[0]),
-            ),
-            dtype=bool,
-        )
-        target_spectrum.theta = target_spectrum.theta[mask]
+        if (n := experiment_config["dataset"].get("parameters")) is not None:
+            mask = np.array(n, dtype=bool)
+            target_spectrum.theta = target_spectrum.theta[mask]
 
         # Construct the context for the model from the target spectrum
         context = {
