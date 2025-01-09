@@ -12,7 +12,7 @@ class SimulatorConfig(BaseModel):
     Configuration for the simulator.
     """
 
-    dataset: Literal["vasist_2023"] = Field(
+    dataset: Literal["vasist_2023", "HR799e"] = Field(
         default="vasist_2023",
         description="Name of the dataset whose simulator we use.",
     )

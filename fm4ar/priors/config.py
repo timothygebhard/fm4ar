@@ -12,7 +12,7 @@ class PriorConfig(BaseModel):
     Configuration for the prior distribution.
     """
 
-    dataset: Literal["vasist_2023"] = Field(
+    dataset: Literal["vasist_2023", "HR8799e"] = Field(
         default="vasist_2023",
         description="Name of the dataset whose prior distribution we use.",
     )
