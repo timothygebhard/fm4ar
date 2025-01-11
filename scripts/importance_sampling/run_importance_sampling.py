@@ -221,7 +221,7 @@ def backup_target_spectrum(
         target_spectrum = load_from_hdf(file_path=src_file_path)
         for key in target_spectrum:
             if key != "wlen":
-                target_spectrum[key] = target_spectrum[key][idx]
+                target_spectrum[key] = np.atleast_2d(target_spectrum[key])[idx]
             else:
                 target_spectrum[key] = target_spectrum[key].flatten()
 
