@@ -134,6 +134,14 @@ def initialize_stage(
         model.stage_epoch = 0
         model.stage_name = stage_name
 
+    # TODO: Double-check if this is working as intended
+    # Add the current epoch to the random seed for the stage that adds noise
+    # to the flux. This ensures that we do not start generating the same noise
+    # realization when resuming training from a checkpoint.
+    for transform in stage_config.data_transforms:
+        if transform.type == "AddNoise":
+            transform.kwargs["kwargs"]["random_seed"] += model.epoch
+
     # Construct stage-specific transforms for the dataset
     # These are the transforms that will be applied to the dataset in
     # __getitem__() and that are specific to the current stage (e.g.,
